@@ -218,7 +218,8 @@ export default function CondoTrackApp() {
         unit: resident.unit,
         name: resident.name,
         phone: resident.phone || '',
-        document: resident.document || null
+        document: resident.document || null,
+        pin: resident.pin || null
       };
       const { error } = await supabase
         .from('residents')
@@ -229,7 +230,7 @@ export default function CondoTrackApp() {
     } catch (err) {
       // Fallback: se a coluna 'document' não existir, tenta sem ela
       const message = String(err?.message || '');
-      if (message.includes('column') && message.includes('document')) {
+      if (message.includes('column') && (message.includes('document') || message.includes('pin'))) {
         try {
           const { error: err2 } = await supabase
             .from('residents')
@@ -239,7 +240,7 @@ export default function CondoTrackApp() {
               phone: resident.phone || ''
             }]);
           if (err2) throw err2;
-          showNotification('Morador cadastrado! (sem documento)');
+          showNotification('Morador cadastrado! (sem documento/pin)');
           fetchResidents();
           return;
         } catch (e2) {
@@ -278,6 +279,9 @@ export default function CondoTrackApp() {
       if (typeof updates.document !== 'undefined') {
         payload.document = updates.document || null;
       }
+      if (typeof updates.pin !== 'undefined') {
+        payload.pin = updates.pin || null;
+      }
       const { error } = await supabase
         .from('residents')
         .update(payload)
@@ -287,7 +291,7 @@ export default function CondoTrackApp() {
       fetchResidents();
     } catch (err) {
       const message = String(err?.message || '');
-      if (message.includes('column') && message.includes('document')) {
+      if (message.includes('column') && (message.includes('document') || message.includes('pin'))) {
         try {
           const { error: err2 } = await supabase
             .from('residents')
@@ -298,7 +302,7 @@ export default function CondoTrackApp() {
             })
             .eq('id', residentId);
           if (err2) throw err2;
-          showNotification('Morador atualizado! (sem documento)');
+          showNotification('Morador atualizado! (sem documento/pin)');
           fetchResidents();
           return;
         } catch (e2) {
@@ -391,6 +395,7 @@ export default function CondoTrackApp() {
           <ResidentView
             packages={packages}
             onCollect={handleCollectPackage}
+            residentsIndex={residentsIndex}
           />
         )}
       </main>
@@ -621,10 +626,10 @@ function ConciergeView({ onAdd, packages, onDelete, residents, residentsIndex, o
 }
 
 function ResidentsManager({ residents, onAddResident, onDeleteResident, onUpdateResident }) {
-  const [form, setForm] = useState({ unit: '', name: '', phone: '', document: '' });
+  const [form, setForm] = useState({ unit: '', name: '', phone: '', document: '', pin: '' });
   const [errors, setErrors] = useState({});
   const [editId, setEditId] = useState(null);
-  const [editForm, setEditForm] = useState({ unit: '', name: '', phone: '', document: '' });
+  const [editForm, setEditForm] = useState({ unit: '', name: '', phone: '', document: '', pin: '' });
   const [editErrors, setEditErrors] = useState({});
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -633,6 +638,7 @@ function ResidentsManager({ residents, onAddResident, onDeleteResident, onUpdate
     if (!isValidFullName(form.name)) newErrors.name = 'Digite nome e sobrenome';
     if (!isValidPhone11(form.phone)) newErrors.phone = 'Telefone deve ter 11 dígitos';
     if (!form.document) newErrors.document = 'Documento (RG/CPF) é obrigatório';
+    if (extractDigits(form.pin).length !== 4) newErrors.pin = 'PIN deve ter 4 dígitos';
     setErrors(newErrors);
     if (Object.keys(newErrors).length > 0) return;
 
@@ -640,9 +646,10 @@ function ResidentsManager({ residents, onAddResident, onDeleteResident, onUpdate
       unit: form.unit,
       name: form.name.trim(),
       phone: extractDigits(form.phone),
-      document: String(form.document).trim()
+      document: String(form.document).trim(),
+      pin: extractDigits(form.pin)
     });
-    setForm({ unit: '', name: '', phone: '', document: '' });
+    setForm({ unit: '', name: '', phone: '', document: '', pin: '' });
     setErrors({});
   };
 
@@ -652,13 +659,14 @@ function ResidentsManager({ residents, onAddResident, onDeleteResident, onUpdate
       unit: r.unit || '',
       name: r.name || '',
       phone: formatPhoneMask(r.phone || ''),
-      document: r.document || ''
+      document: r.document || '',
+      pin: r.pin || ''
     });
     setEditErrors({});
   };
   const cancelEdit = () => {
     setEditId(null);
-    setEditForm({ unit: '', name: '', phone: '', document: '' });
+    setEditForm({ unit: '', name: '', phone: '', document: '', pin: '' });
     setEditErrors({});
   };
   const saveEdit = (e) => {
@@ -668,6 +676,7 @@ function ResidentsManager({ residents, onAddResident, onDeleteResident, onUpdate
     if (!isValidFullName(editForm.name)) errs.name = 'Digite nome e sobrenome';
     if (!isValidPhone11(editForm.phone)) errs.phone = 'Telefone deve ter 11 dígitos';
     if (!editForm.document) errs.document = 'Documento (RG/CPF) é obrigatório';
+    if (extractDigits(editForm.pin).length !== 4) errs.pin = 'PIN deve ter 4 dígitos';
     setEditErrors(errs);
     if (Object.keys(errs).length > 0) return;
 
@@ -675,7 +684,8 @@ function ResidentsManager({ residents, onAddResident, onDeleteResident, onUpdate
       unit: editForm.unit,
       name: editForm.name.trim(),
       phone: extractDigits(editForm.phone),
-      document: String(editForm.document).trim()
+      document: String(editForm.document).trim(),
+      pin: extractDigits(editForm.pin)
     });
     cancelEdit();
   };
@@ -685,7 +695,7 @@ function ResidentsManager({ residents, onAddResident, onDeleteResident, onUpdate
         <h2 className="font-semibold text-slate-900">Gerir Moradores</h2>
       </div>
       <div className="p-6 space-y-6">
-        <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-5 gap-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Unidade *</label>
             <input type="text" placeholder="Ex: 104" className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-slate-500 outline-none" value={form.unit} onChange={e => setForm({ ...form, unit: e.target.value })} required />
@@ -706,7 +716,12 @@ function ResidentsManager({ residents, onAddResident, onDeleteResident, onUpdate
             <input type="text" placeholder="RG ou CPF" className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-slate-500 outline-none" value={form.document} onChange={e => setForm({ ...form, document: e.target.value })} required />
             {errors.document && <p className="text-red-600 text-xs mt-1">{errors.document}</p>}
           </div>
-          <div className="md:col-span-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">PIN (4 dígitos) *</label>
+            <input type="password" inputMode="numeric" maxLength={4} placeholder="0000" className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-slate-500 outline-none" value={form.pin} onChange={e => setForm({ ...form, pin: extractDigits(e.target.value).slice(0,4) })} required />
+            {errors.pin && <p className="text-red-600 text-xs mt-1">{errors.pin}</p>}
+          </div>
+          <div className="md:col-span-5">
             <button className="w-full bg-slate-700 hover:bg-slate-800 text-white font-semibold py-2.5 rounded-lg shadow-sm">Salvar Morador</button>
           </div>
         </form>
@@ -720,7 +735,7 @@ function ResidentsManager({ residents, onAddResident, onDeleteResident, onUpdate
               {residents.map(r => (
                 <div key={r.id} className="py-3">
                   {editId === r.id ? (
-                    <form onSubmit={saveEdit} className="grid grid-cols-1 md:grid-cols-4 gap-2 items-center">
+                    <form onSubmit={saveEdit} className="grid grid-cols-1 md:grid-cols-5 gap-2 items-center">
                       <div>
                         <input type="text" className="w-full px-3 py-2 border rounded" value={editForm.unit} onChange={e => setEditForm({ ...editForm, unit: e.target.value })} />
                         {editErrors.unit && <p className="text-red-600 text-xs mt-1">{editErrors.unit}</p>}
@@ -737,7 +752,11 @@ function ResidentsManager({ residents, onAddResident, onDeleteResident, onUpdate
                         <input type="text" className="w-full px-3 py-2 border rounded" value={editForm.document} onChange={e => setEditForm({ ...editForm, document: e.target.value })} />
                         {editErrors.document && <p className="text-red-600 text-xs mt-1">{editErrors.document}</p>}
                       </div>
-                      <div className="md:col-span-4 flex gap-2 mt-2">
+                      <div>
+                        <input type="password" inputMode="numeric" maxLength={4} className="w-full px-3 py-2 border rounded" value={editForm.pin} onChange={e => setEditForm({ ...editForm, pin: extractDigits(e.target.value).slice(0,4) })} />
+                        {editErrors.pin && <p className="text-red-600 text-xs mt-1">{editErrors.pin}</p>}
+                      </div>
+                      <div className="md:col-span-5 flex gap-2 mt-2">
                         <button type="submit" className="px-3 py-2 rounded bg-slate-700 text-white text-sm">Salvar</button>
                         <button type="button" onClick={cancelEdit} className="px-3 py-2 rounded bg-gray-200 text-gray-800 text-sm">Cancelar</button>
                       </div>
@@ -771,13 +790,49 @@ function ResidentsManager({ residents, onAddResident, onDeleteResident, onUpdate
   );
 }
 
-function ResidentView({ packages, onCollect }) {
-  const [searchUnit, setSearchUnit] = useState('');
+function ResidentView({ packages, onCollect, residentsIndex }) {
+  const [unitInput, setUnitInput] = useState('');
+  const [authorizedUnit, setAuthorizedUnit] = useState(null);
+  const [pinModalUnit, setPinModalUnit] = useState(null);
+  const [pinInput, setPinInput] = useState('');
+  const [pinError, setPinError] = useState('');
   const [showModalFor, setShowModalFor] = useState(null);
   const [collectorName, setCollectorName] = useState('');
   const [collectorDoc, setCollectorDoc] = useState('');
+  const [notFound, setNotFound] = useState(false);
 
-  const myPackages = packages.filter(p => searchUnit && p.unit.toLowerCase().includes(searchUnit.toLowerCase()));
+  const startSearch = () => {
+    const key = String(unitInput || '').toLowerCase();
+    const res = residentsIndex[key];
+    if (res) {
+      setPinModalUnit(key);
+      setPinInput('');
+      setPinError('');
+      setNotFound(false);
+    } else {
+      setNotFound(true);
+    }
+  };
+  const submitPin = () => {
+    const key = pinModalUnit;
+    const res = residentsIndex[key];
+    const expected = String(res?.pin || '0000');
+    if (extractDigits(pinInput).padStart(4,'0') === extractDigits(expected).padStart(4,'0')) {
+      setAuthorizedUnit(key);
+      setPinModalUnit(null);
+      setPinInput('');
+      setPinError('');
+    } else {
+      setPinError('PIN inválido');
+    }
+  };
+  const logoutUnit = () => {
+    setAuthorizedUnit(null);
+    setUnitInput('');
+    setNotFound(false);
+  };
+
+  const myPackages = packages.filter(p => authorizedUnit && String(p.unit).toLowerCase().includes(String(authorizedUnit)));
 
   const confirm = (pkgId) => {
     if (!collectorName || !collectorDoc) return;
@@ -789,18 +844,34 @@ function ResidentView({ packages, onCollect }) {
 
   return (
     <div className="space-y-6">
-      <div className="bg-white p-8 rounded-xl shadow-sm border border-gray-200 text-center">
-        <h2 className="text-2xl font-bold text-gray-800 mb-2">Área do Morador</h2>
-        <p className="text-gray-500 mb-6">Verifique se há correspondências para sua unidade.</p>
-        <div className="max-w-md mx-auto relative">
-          <input type="text" placeholder="Digite sua unidade (Ex: 104)" className="w-full pl-12 pr-4 py-4 text-lg border-2 border-gray-200 rounded-full focus:border-emerald-500 outline-none transition-colors" value={searchUnit} onChange={e => setSearchUnit(e.target.value)} />
-          <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400" size={24} />
+      {!authorizedUnit && (
+        <div className="bg-white p-8 rounded-xl shadow-sm border border-gray-200 text-center">
+          <h2 className="text-2xl font-bold text-gray-800 mb-2">Área do Morador</h2>
+          <p className="text-gray-500 mb-6">Digite sua unidade para acessar.</p>
+          <div className="max-w-md mx-auto relative flex gap-2">
+            <div className="relative flex-1">
+              <input
+                type="text"
+                placeholder="Ex: 104"
+                className="w-full pl-12 pr-4 py-4 text-lg border-2 border-gray-200 rounded-full focus:border-emerald-500 outline-none transition-colors"
+                value={unitInput}
+                onChange={e => setUnitInput(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' ? startSearch() : null}
+              />
+              <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400" size={24} />
+            </div>
+            <button onClick={startSearch} className="px-6 py-3 rounded-full bg-emerald-600 text-white font-semibold">Buscar</button>
+          </div>
+          {notFound && <div className="text-red-600 text-sm mt-3">Unidade não encontrada.</div>}
         </div>
-      </div>
+      )}
 
-      {searchUnit && (
+      {authorizedUnit && (
         <div className="animate-fade-in">
-          <h3 className="text-lg font-bold text-gray-800 mb-4">Resultados para "{searchUnit}"</h3>
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-bold text-gray-800">Encomendas da unidade "{authorizedUnit}"</h3>
+            <button onClick={logoutUnit} className="text-sm px-3 py-2 bg-gray-200 rounded">Trocar Unidade</button>
+          </div>
           {myPackages.length === 0 ? (
             <div className="bg-white p-6 rounded-lg shadow-sm text-center text-gray-500">Nada consta para esta unidade.</div>
           ) : (
@@ -835,6 +906,30 @@ function ResidentView({ packages, onCollect }) {
               ))}
             </div>
           )}
+        </div>
+      )}
+
+      {pinModalUnit && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+          <div className="bg-white rounded-xl shadow-xl p-6 w-full max-w-sm">
+            <h3 className="text-lg font-semibold text-gray-800 mb-2">Digite seu PIN</h3>
+            <p className="text-sm text-gray-600 mb-4">Para acessar a unidade "{pinModalUnit.toUpperCase()}", informe o PIN de 4 dígitos.</p>
+            <input
+              type="password"
+              inputMode="numeric"
+              maxLength={4}
+              className="w-full px-4 py-2 border rounded mb-2"
+              placeholder="0000"
+              value={pinInput}
+              onChange={(e) => setPinInput(extractDigits(e.target.value).slice(0,4))}
+              autoFocus
+            />
+            {pinError && <div className="text-red-600 text-sm mb-3">{pinError}</div>}
+            <div className="flex justify-end gap-2">
+              <button onClick={() => setPinModalUnit(null)} className="px-3 py-2 rounded bg-gray-200 text-gray-800 text-sm">Cancelar</button>
+              <button onClick={submitPin} className="px-3 py-2 rounded bg-emerald-600 text-white text-sm">Acessar</button>
+            </div>
+          </div>
         </div>
       )}
     </div>

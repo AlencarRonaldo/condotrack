@@ -350,8 +350,7 @@ function ConciergeView({ onAdd, packages, onDelete }) {
             <h3 className="text-lg font-bold text-gray-600 mb-4">Entregas Recentes</h3>
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 divide-y">
                 {historyPackages.slice(0, 5).map(pkg => (
-                    <div key={pkg.id} className="p-3 flex justify-between items-center text-sm">
-                        <span className="text-gray-600 font-medium">Apt {pkg.unit} - {pkg.recipient}</span>
+==                        <span className="text-gray-600 font-medium">Apt {pkg.unit} - {pkg.recipient}</span>
                         <div className="flex flex-col text-right">
                             <span className="text-green-600 flex items-center justify-end gap-1"><CheckCircle size={14}/> Entregue</span>
                             <span className="text-xs text-gray-400">Retirado por: {pkg.collected_by}</span>
