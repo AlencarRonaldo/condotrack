@@ -1,0 +1,34 @@
+# ==================================================================================
+# 🚀 CONDOTRACK PRO - CONFIGURAÇÃO NETLIFY
+# ==================================================================================
+
+[build]
+  # Comando de build
+  command = "npm run build"
+  # Pasta de output
+  publish = "dist"
+
+# Redireciona todas as rotas para index.html (SPA)
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
+# Headers de segurança
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Frame-Options = "DENY"
+    X-Content-Type-Options = "nosniff"
+    X-XSS-Protection = "1; mode=block"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+
+# Cache para assets estáticos
+[[headers]]
+  for = "/assets/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+# Variáveis de ambiente (configure no painel do Netlify)
+# VITE_SUPABASE_URL = "https://seu-projeto.supabase.co"
+# VITE_SUPABASE_ANON_KEY = "sua-anon-key"
