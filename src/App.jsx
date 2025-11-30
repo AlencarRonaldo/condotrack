@@ -6,25 +6,62 @@ import {
 } from 'lucide-react';
 
 // ==================================================================================
+// 🚀 CONDOTRACK PRO - CONFIGURAÇÃO PARA PRODUÇÃO (VERCEL/NETLIFY)
+// ==================================================================================
+//
+// 📋 INSTRUÇÕES DE DEPLOY:
+//
+// 1. Configure as seguintes variáveis de ambiente no painel do Vercel/Netlify:
+//
+//    VITE_SUPABASE_URL=https://seu-projeto.supabase.co
+//    VITE_SUPABASE_ANON_KEY=sua-anon-key-publica
+//
+// 2. No Supabase, crie as seguintes tabelas:
+//    - packages (encomendas)
+//    - residents (moradores)
+//    - staff (funcionários)
+//    - settings (configurações do condomínio)
+//
+// 3. Execute os scripts SQL fornecidos na documentação para criar as tabelas.
+//
+// 4. Sem as variáveis de ambiente, o app usará localStorage (modo demo).
+//
+// ==================================================================================
+
+// ==================================================================================
 // 🖼️ LOGO DO CONDOTRACK
 // ==================================================================================
 const LOGO_PATH = '/assets/condotrack_logo.png';
 
 // ==================================================================================
-// ⚠️ CÓDIGO REAL DO SUPABASE (USADO SE EXISTIREM VARIÁVEIS DE AMBIENTE)
+// ⚠️ SUPABASE CLIENT - PRODUÇÃO
 // ==================================================================================
 import { createClient } from '@supabase/supabase-js';
 
 // ==================================================================================
-// 🛠️ MOCK SUPABASE (TESTE IMEDIATO NO NAVEGADOR) - USA localStorage
+// 🔧 VARIÁVEIS DE AMBIENTE (Vite usa import.meta.env)
+// ==================================================================================
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || '';
+const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
+
+// Flag para identificar se está em modo produção (com Supabase real)
+const IS_PRODUCTION = Boolean(SUPABASE_URL && SUPABASE_ANON_KEY);
+
+// Log para debug (apenas em desenvolvimento)
+if (import.meta.env.DEV) {
+  console.log('🔧 CondoTrack Pro - Modo:', IS_PRODUCTION ? 'PRODUÇÃO (Supabase)' : 'DEMO (localStorage)');
+}
+
+// ==================================================================================
+// 🛠️ MOCK SUPABASE (MODO DEMO - USA localStorage)
 // ==================================================================================
 const mockSupabase = (() => {
-  const keyFor = (table) => `mock_${table}`;
+  const keyFor = (table) => `condotrack_${table}`;
   const read = (table) => JSON.parse(localStorage.getItem(keyFor(table)) || '[]');
   const write = (table, data) => localStorage.setItem(keyFor(table), JSON.stringify(data));
   const ensureId = (row) => ({ id: Date.now() + Math.floor(Math.random() * 1000), ...row });
 
-  // seed staff with default admin if empty
+  // Seed staff com admin padrão se vazio
   if (!localStorage.getItem(keyFor('staff'))) {
     const now = new Date().toISOString();
     write('staff', [{
@@ -37,7 +74,7 @@ const mockSupabase = (() => {
     }]);
   }
 
-  // seed settings with default condo name if empty
+  // Seed settings com nome do condomínio padrão se vazio
   if (!localStorage.getItem(keyFor('settings'))) {
     const now = new Date().toISOString();
     write('settings', [{
@@ -52,13 +89,19 @@ const mockSupabase = (() => {
 
   const api = {
     channel: () => ({
-      on: () => api, // encadeia
+      on: () => api,
       subscribe: () => ({}),
     }),
     removeChannel: () => {},
     from: (table) => ({
       select: () => ({
-        order: (_col, _opts) => Promise.resolve({ data: read(table), error: null })
+        order: (_col, _opts) => Promise.resolve({ data: read(table), error: null }),
+        eq: (field, value) => ({
+          single: () => {
+            const data = read(table).find(item => item[field] === value);
+            return Promise.resolve({ data, error: null });
+          }
+        })
       }),
       insert: (rows) => {
         const now = new Date().toISOString();
@@ -74,6 +117,8 @@ const mockSupabase = (() => {
                   receiver_doc: null,
                   notified_at: null,
                   notified_by: null,
+                  deleted_at: null,
+                  deleted_by: null,
                 }
               : table === 'residents'
               ? { created_at: now }
@@ -105,10 +150,14 @@ const mockSupabase = (() => {
   return api;
 })();
 
-// Seleciona Supabase real (se env existir) ou mock
-const ENV_URL = typeof import.meta !== 'undefined' && import.meta.env ? import.meta.env.VITE_SUPABASE_URL : undefined;
-const ENV_KEY = typeof import.meta !== 'undefined' && import.meta.env ? import.meta.env.VITE_SUPABASE_ANON_KEY : undefined;
-const supabase = (ENV_URL && ENV_KEY) ? createClient(ENV_URL, ENV_KEY) : mockSupabase;
+// ==================================================================================
+// 🔌 INICIALIZAÇÃO DO CLIENTE SUPABASE
+// ==================================================================================
+// Se as variáveis de ambiente existirem, usa Supabase real
+// Caso contrário, usa o mock com localStorage (modo demo)
+const supabase = IS_PRODUCTION
+  ? createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
+  : mockSupabase;
 
 // ==================================================================================
 // 🚀 SINGLE FILE COMPONENT: CondoTrack
@@ -154,6 +203,7 @@ export default function CondoTrackApp() {
   const [condoSettings, setCondoSettings] = useState({ condo_name: 'CondoTrack', condo_address: '', condo_phone: '' });
   const [loading, setLoading] = useState(true);
   const [notification, setNotification] = useState(null);
+  const [showInactivityModal, setShowInactivityModal] = useState(false);
   const pendingCount = packages.filter(p => p.status === 'pending').length;
   const residentsIndex = useMemo(() => {
     const idx = {};
@@ -220,21 +270,21 @@ export default function CondoTrackApp() {
     if (!isConciergeAuthed || !currentUser) return;
     let idleTimerId;
     const TIMEOUT_MS = 15 * 60 * 1000;
-    const reset = () => {
+    const resetTimer = () => {
       if (idleTimerId) clearTimeout(idleTimerId);
       idleTimerId = setTimeout(() => {
         try { localStorage.removeItem(SESSION_KEY); } catch {}
         setIsConciergeAuthed(false);
         setCurrentUser(null);
-        alert('Sessão encerrada por inatividade');
+        setShowInactivityModal(true);
       }, TIMEOUT_MS);
     };
     const events = ['mousemove','mousedown','keydown','touchstart','scroll','click'];
-    events.forEach(evt => window.addEventListener(evt, reset, { passive: true }));
-    reset();
+    events.forEach(evt => window.addEventListener(evt, resetTimer, { passive: true }));
+    resetTimer();
     return () => {
       if (idleTimerId) clearTimeout(idleTimerId);
-      events.forEach(evt => window.removeEventListener(evt, reset));
+      events.forEach(evt => window.removeEventListener(evt, resetTimer));
     };
   }, [isConciergeAuthed, currentUser]);
 
@@ -374,9 +424,17 @@ export default function CondoTrackApp() {
     }
   };
 
-  const handleDeletePackage = async (pkgId) => {
+  const handleDeletePackage = async (pkgId, deletedBy) => {
     try {
-      const { error } = await supabase.from('packages').delete().eq('id', pkgId);
+      // Soft delete: marca como deleted com registro de quem excluiu
+      const { error } = await supabase
+        .from('packages')
+        .update({
+          status: 'deleted',
+          deleted_at: new Date().toISOString(),
+          deleted_by: deletedBy || 'Sistema'
+        })
+        .eq('id', pkgId);
       if (error) throw error;
       showNotification('Registro excluído.');
       fetchPackages();
@@ -525,6 +583,25 @@ export default function CondoTrackApp() {
         <div className={`fixed top-4 right-4 z-50 px-6 py-3 rounded shadow-lg text-white flex items-center gap-2 animate-bounce-in ${notification.type === 'error' ? 'bg-red-500' : 'bg-green-600'}`}>
           {notification.type === 'error' ? <AlertTriangle size={18} /> : <CheckCircle size={18} />}
           {notification.message}
+        </div>
+      )}
+
+      {/* Modal de Sessão Encerrada por Inatividade */}
+      {showInactivityModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm px-4">
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl p-6 max-w-sm w-full animate-fade-in text-center">
+            <div className="inline-flex items-center justify-center w-16 h-16 bg-amber-100 dark:bg-amber-900/50 rounded-full mb-4">
+              <Clock size={32} className="text-amber-600 dark:text-amber-400" />
+            </div>
+            <h3 className="text-lg font-bold text-gray-800 dark:text-white mb-2">Sessão Encerrada</h3>
+            <p className="text-gray-600 dark:text-gray-300 mb-6">Sua sessão foi encerrada por inatividade. Por favor, faça login novamente.</p>
+            <button
+              onClick={() => setShowInactivityModal(false)}
+              className="w-full px-4 py-3 rounded-lg bg-slate-700 hover:bg-slate-800 text-white font-medium shadow-md"
+            >
+              Entendido
+            </button>
+          </div>
         </div>
       )}
 
@@ -686,16 +763,26 @@ function ConciergeLogin({ onSuccess }) {
     e.preventDefault();
     setError('');
     try {
-      // Busca usuários da tabela staff
-      const { data, error: err } = await supabase.from('staff').select('*');
-      if (err) throw err;
-      const list = Array.isArray(data) ? data : [];
-      const user = list.find(u => String(u.username) === String(username) && String(u.password) === String(password));
-      if (!user) {
+      // Busca usuário específico pelo username (não expõe senha no select)
+      const { data, error: err } = await supabase
+        .from('staff')
+        .select('id, name, role, username, password')
+        .eq('username', username)
+        .single();
+
+      if (err || !data) {
         setError('Usuário ou senha inválidos.');
         return;
       }
-      onSuccess({ id: user.id, name: user.name, role: user.role, username: user.username });
+
+      // Valida senha (em produção, usar hash bcrypt no backend)
+      if (String(data.password) !== String(password)) {
+        setError('Usuário ou senha inválidos.');
+        return;
+      }
+
+      // Não passa a senha para o estado
+      onSuccess({ id: data.id, name: data.name, role: data.role, username: data.username });
     } catch (ex) {
       console.error(ex);
       setError('Erro ao autenticar.');
@@ -747,6 +834,8 @@ function ConciergeView({ onAdd, packages, onDelete, onCollect, residents, reside
   const [collectTarget, setCollectTarget] = useState(null); // pkg id
   const [collectName, setCollectName] = useState('');
   const [collectDoc, setCollectDoc] = useState('');
+  const [deleteConfirmPassword, setDeleteConfirmPassword] = useState('');
+  const [deletePasswordError, setDeletePasswordError] = useState('');
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -771,23 +860,44 @@ function ConciergeView({ onAdd, packages, onDelete, onCollect, residents, reside
     setForm(prev => ({ ...prev, phone: formatPhoneMask(v) }));
   };
 
-  const confirmDelete = () => {
-    if (deleteTarget) {
-      onDelete(deleteTarget);
+  const confirmDelete = async () => {
+    if (!deleteTarget) return;
+
+    // Valida senha do usuário atual antes de excluir
+    try {
+      const { data } = await supabase
+        .from('staff')
+        .select('password')
+        .eq('username', currentUser?.username)
+        .single();
+
+      if (!data || String(data.password) !== String(deleteConfirmPassword)) {
+        setDeletePasswordError('Senha incorreta');
+        return;
+      }
+
+      // Passa o nome do usuário que está excluindo para registro
+      onDelete(deleteTarget, currentUser?.name || currentUser?.username || 'Desconhecido');
       setDeleteTarget(null);
+      setDeleteConfirmPassword('');
+      setDeletePasswordError('');
+    } catch {
+      setDeletePasswordError('Erro ao validar senha');
     }
   };
 
-  const pendingPackages = packages.filter(p => p.status === 'pending');
+  // Filtra pacotes deletados de todas as listagens
+  const activePackages = packages.filter(p => p.status !== 'deleted');
+  const pendingPackages = activePackages.filter(p => p.status === 'pending');
   const filteredPackages = filterType === 'Todos'
     ? pendingPackages
     : pendingPackages.filter(p => p.type === filterType);
   const countByType = (type) => pendingPackages.filter(p => p.type === type).length;
-  const historyPackages = packages.filter(p => p.status === 'collected');
+  const historyPackages = activePackages.filter(p => p.status === 'collected');
 
   return (
     <div className="space-y-6">
-      {/* Modal de Exclusão */}
+      {/* Modal de Exclusão com confirmação de senha */}
       {deleteTarget && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm px-4">
           <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl p-6 max-w-sm w-full animate-fade-in">
@@ -795,10 +905,21 @@ function ConciergeView({ onAdd, packages, onDelete, onCollect, residents, reside
               <AlertTriangle size={24} />
               <h3 className="text-lg font-bold">Confirmar Exclusão</h3>
             </div>
-            <p className="text-gray-600 dark:text-gray-300 mb-6">Deseja realmente apagar este registro? Esta ação é irreversível.</p>
+            <p className="text-gray-600 dark:text-gray-300 mb-4">Deseja realmente apagar este registro? Esta ação é irreversível.</p>
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Digite sua senha para confirmar</label>
+              <input
+                type="password"
+                className="w-full px-3 py-2 border dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 dark:text-white focus:ring-2 focus:ring-red-500 outline-none"
+                value={deleteConfirmPassword}
+                onChange={(e) => { setDeleteConfirmPassword(e.target.value); setDeletePasswordError(''); }}
+                placeholder="Sua senha"
+              />
+              {deletePasswordError && <p className="text-red-500 text-sm mt-1">{deletePasswordError}</p>}
+            </div>
             <div className="flex justify-end gap-3">
-              <button onClick={() => setDeleteTarget(null)} className="px-4 py-2 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 font-medium">Cancelar</button>
-              <button onClick={confirmDelete} className="px-4 py-2 rounded-lg bg-red-600 text-white hover:bg-red-700 font-medium shadow-md">Sim, excluir</button>
+              <button onClick={() => { setDeleteTarget(null); setDeleteConfirmPassword(''); setDeletePasswordError(''); }} className="px-4 py-2 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 font-medium">Cancelar</button>
+              <button onClick={confirmDelete} disabled={!deleteConfirmPassword} className="px-4 py-2 rounded-lg bg-red-600 text-white hover:bg-red-700 font-medium shadow-md disabled:opacity-50">Sim, excluir</button>
             </div>
           </div>
         </div>
@@ -810,15 +931,13 @@ function ConciergeView({ onAdd, packages, onDelete, onCollect, residents, reside
           <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl p-6 w-full max-w-sm animate-fade-in">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-bold text-slate-800 dark:text-white">Confirmar Retirada</h3>
-              {currentUser?.role === 'admin' && (
-                <button
+              <button
                   title="Excluir encomenda"
-                  onClick={() => { onDelete(collectTarget); setCollectTarget(null); }}
+                  onClick={() => { setDeleteTarget(collectTarget); setCollectTarget(null); }}
                   className="text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30 p-2 rounded"
                 >
                   <Trash2 size={18} />
                 </button>
-              )}
             </div>
             <div className="space-y-3">
               <div>
@@ -1721,15 +1840,15 @@ function ReportQueryManager({ packages }) {
   const exportToCSV = () => {
     if (results.length === 0) return;
 
-    const headers = ['Unidade', 'Destinatário', 'Tipo', 'Status', 'Data Chegada', 'Retirado por', 'Documento', 'Data Retirada'];
+    const headers = ['Unidade', 'Destinatário', 'Tipo', 'Status', 'Data Chegada', 'Retirado/Excluído por', 'Documento/Data Exclusão', 'Data Retirada'];
     const rows = results.map(p => [
       p.unit || '',
       p.recipient || '',
       p.type || '',
-      p.status === 'pending' ? 'Pendente' : 'Retirado',
+      p.status === 'pending' ? 'Pendente' : p.status === 'deleted' ? 'Excluído' : 'Retirado',
       p.created_at ? new Date(p.created_at).toLocaleString('pt-BR') : '',
-      p.collected_by || '',
-      p.receiver_doc || '',
+      p.status === 'deleted' ? (p.deleted_by || '') : (p.collected_by || ''),
+      p.status === 'deleted' ? (p.deleted_at ? new Date(p.deleted_at).toLocaleString('pt-BR') : '') : (p.receiver_doc || ''),
       p.collected_at ? new Date(p.collected_at).toLocaleString('pt-BR') : ''
     ]);
 
@@ -1754,13 +1873,15 @@ function ReportQueryManager({ packages }) {
       unidade: p.unit,
       destinatario: p.recipient,
       tipo: p.type,
-      status: p.status === 'pending' ? 'Pendente' : 'Retirado',
+      status: p.status === 'pending' ? 'Pendente' : p.status === 'deleted' ? 'Excluído' : 'Retirado',
       descricao: p.description || '',
       telefone: p.phone || '',
       data_chegada: p.created_at,
       retirado_por: p.collected_by || null,
       documento_retirada: p.receiver_doc || null,
       data_retirada: p.collected_at || null,
+      excluido_por: p.deleted_by || null,
+      data_exclusao: p.deleted_at || null,
       notificado_em: p.notified_at || null,
       notificado_por: p.notified_by || null
     }));
@@ -1793,6 +1914,7 @@ function ReportQueryManager({ packages }) {
           tr:nth-child(even) { background-color: #f8fafc; }
           .status-pending { color: #f59e0b; font-weight: bold; }
           .status-collected { color: #10b981; font-weight: bold; }
+          .status-deleted { color: #ef4444; font-weight: bold; }
           .footer { margin-top: 30px; text-align: center; color: #94a3b8; font-size: 11px; }
         </style>
       </head>
@@ -1810,8 +1932,8 @@ function ReportQueryManager({ packages }) {
               <th>Tipo</th>
               <th>Status</th>
               <th>Data Chegada</th>
-              <th>Retirado por</th>
-              <th>Documento</th>
+              <th>Retirado/Excluído por</th>
+              <th>Documento/Data Exclusão</th>
             </tr>
           </thead>
           <tbody>
@@ -1820,12 +1942,12 @@ function ReportQueryManager({ packages }) {
                 <td>${p.unit || '-'}</td>
                 <td>${p.recipient || '-'}</td>
                 <td>${p.type || '-'}</td>
-                <td class="${p.status === 'pending' ? 'status-pending' : 'status-collected'}">
-                  ${p.status === 'pending' ? 'Pendente' : 'Retirado'}
+                <td class="${p.status === 'pending' ? 'status-pending' : p.status === 'deleted' ? 'status-deleted' : 'status-collected'}">
+                  ${p.status === 'pending' ? 'Pendente' : p.status === 'deleted' ? 'Excluído' : 'Retirado'}
                 </td>
                 <td>${p.created_at ? new Date(p.created_at).toLocaleString('pt-BR') : '-'}</td>
-                <td>${p.collected_by || '-'}</td>
-                <td>${p.receiver_doc || '-'}</td>
+                <td>${p.status === 'deleted' ? (p.deleted_by || '-') : (p.collected_by || '-')}</td>
+                <td>${p.status === 'deleted' ? (p.deleted_at ? new Date(p.deleted_at).toLocaleString('pt-BR') : '-') : (p.receiver_doc || '-')}</td>
               </tr>
             `).join('')}
           </tbody>
@@ -1886,6 +2008,7 @@ function ReportQueryManager({ packages }) {
                 <option value="todos">Todos</option>
                 <option value="pending">Pendente</option>
                 <option value="collected">Retirado</option>
+                <option value="deleted">Excluído</option>
               </select>
             </div>
             <div className="flex items-end gap-2">
@@ -1972,16 +2095,30 @@ function ReportQueryManager({ packages }) {
                         <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
                           pkg.status === 'pending'
                             ? 'bg-amber-100 dark:bg-amber-900/50 text-amber-700 dark:text-amber-400'
+                            : pkg.status === 'deleted'
+                            ? 'bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-400'
                             : 'bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-400'
                         }`}>
-                          {pkg.status === 'pending' ? 'Pendente' : 'Retirado'}
+                          {pkg.status === 'pending' ? 'Pendente' : pkg.status === 'deleted' ? 'Excluído' : 'Retirado'}
                         </span>
                       </td>
                       <td className="px-4 py-3 text-gray-600 dark:text-gray-400">
                         {pkg.created_at ? new Date(pkg.created_at).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : '-'}
                       </td>
-                      <td className="px-4 py-3 text-gray-600 dark:text-gray-400">{pkg.collected_by || '-'}</td>
-                      <td className="px-4 py-3 text-gray-600 dark:text-gray-400">{pkg.receiver_doc || '-'}</td>
+                      <td className="px-4 py-3 text-gray-600 dark:text-gray-400">
+                        {pkg.status === 'deleted' ? (
+                          <span className="text-red-600 dark:text-red-400">{pkg.deleted_by || '-'}</span>
+                        ) : (
+                          pkg.collected_by || '-'
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-gray-600 dark:text-gray-400">
+                        {pkg.status === 'deleted' ? (
+                          pkg.deleted_at ? new Date(pkg.deleted_at).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : '-'
+                        ) : (
+                          pkg.receiver_doc || '-'
+                        )}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
