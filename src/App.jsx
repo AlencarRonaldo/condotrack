@@ -610,23 +610,26 @@ export default function CondoTrackApp() {
           {/* Linha 1: Logo + Tema + Toggle */}
           <div className="flex justify-between items-center gap-2">
             <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-              <img
-                src={LOGO_PATH}
-                alt="CondoTrack Logo"
-                className="h-16 sm:h-20 w-auto flex-shrink-0 -my-3 cursor-pointer hover:opacity-80 transition-opacity"
-                onClick={() => window.location.reload()}
-                onError={(e) => { e.target.style.display = 'none'; }}
-              />
+              <a href="/" className="flex-shrink-0">
+                <img
+                  src={LOGO_PATH}
+                  alt="CondoTrack Logo"
+                  className="h-16 sm:h-20 w-auto -my-3 cursor-pointer hover:opacity-80 transition-opacity"
+                  onError={(e) => { e.target.style.display = 'none'; }}
+                />
+              </a>
               <div className="min-w-0">
-                <h1 className="text-base sm:text-xl font-bold flex items-center flex-wrap gap-1">
-                  <span>CondoTrack</span>
-                  <span className="text-[10px] sm:text-xs font-normal opacity-70">| Gestão de Encomendas</span>
+                <div className="flex items-center flex-wrap gap-1">
+                  <a href="/" className="text-base sm:text-xl font-bold flex items-center gap-1 hover:opacity-80 transition-opacity">
+                    <span>CondoTrack</span>
+                    <span className="text-[10px] sm:text-xs font-normal opacity-70">| Gestão de Encomendas</span>
+                  </a>
                   {isConcierge && (
                     <span className="inline-flex items-center justify-center text-[10px] font-bold bg-slate-700 text-white px-1.5 py-0.5 rounded-full">
                       {pendingCount}
                     </span>
                   )}
-                </h1>
+                </div>
               </div>
             </div>
 
