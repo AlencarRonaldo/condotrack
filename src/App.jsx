@@ -654,31 +654,33 @@ export default function CondoTrackApp() {
                   <User size={14} /> Morador
                 </button>
               </div>
+
+              {/* Usuário logado - na mesma linha */}
+              {isConcierge && isConciergeAuthed && currentUser && (
+                <div className="flex items-center gap-2 bg-white/10 border border-white/20 rounded-lg px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm">
+                  {currentUser.role === 'admin' ? (
+                    <Briefcase size={14} className="text-white/90 flex-shrink-0" />
+                  ) : (
+                    <User size={14} className="text-white/90 flex-shrink-0" />
+                  )}
+                  <span className="hidden sm:inline truncate max-w-[120px]">
+                    {currentUser.name}
+                  </span>
+                  <span className="text-white/60 hidden sm:inline">•</span>
+                  <span className="text-white/80 text-[10px] sm:text-xs">
+                    {currentUser.role === 'admin' ? 'Admin' : 'Porteiro'}
+                  </span>
+                  <button
+                    title="Sair"
+                    onClick={handleLogout}
+                    className="ml-1 inline-flex items-center justify-center rounded hover:bg-white/10 p-1 text-white flex-shrink-0"
+                  >
+                    <LogOut size={14} />
+                  </button>
+                </div>
+              )}
             </div>
           </div>
-
-          {/* Linha 2: Usuário logado (se houver) */}
-          {isConcierge && isConciergeAuthed && currentUser && (
-            <div className="mt-3 flex justify-center sm:justify-end">
-              <div className="flex items-center gap-2 bg-white/10 border border-white/20 rounded-lg px-3 py-1.5 sm:py-2 text-xs sm:text-sm">
-                {currentUser.role === 'admin' ? (
-                  <Briefcase size={14} className="text-white/90 flex-shrink-0" />
-                ) : (
-                  <User size={14} className="text-white/90 flex-shrink-0" />
-                )}
-                <span className="truncate max-w-[150px] sm:max-w-none">
-                  {currentUser.name} - {currentUser.role === 'admin' ? 'Admin' : 'Porteiro'}
-                </span>
-                <button
-                  title="Sair"
-                  onClick={handleLogout}
-                  className="ml-1 inline-flex items-center justify-center rounded hover:bg-white/10 p-1 text-white flex-shrink-0"
-                >
-                  <LogOut size={14} />
-                </button>
-              </div>
-            </div>
-          )}
         </div>
       </header>
 
@@ -827,7 +829,7 @@ function ConciergeLogin({ onSuccess }) {
 }
 
 function ConciergeView({ onAdd, packages, onDelete, onCollect, residents, residentsIndex, onAddResident, onDeleteResident, onUpdateResident, currentUser, staff, onAddStaff, onDeleteStaff, condoSettings, onUpdateSettings }) {
-  const [tab, setTab] = useState('packages'); // 'packages' | 'residents' | 'team' | 'settings'
+  const [tab, setTab] = useState('home'); // 'home' | 'packages' | 'residents' | 'team' | 'settings' | 'reports'
   const [form, setForm] = useState({ unit: '', recipient: '', phone: '', type: 'Caixa', description: '' });
   const [filterType, setFilterType] = useState('Todos');
   const [deleteTarget, setDeleteTarget] = useState(null);
@@ -894,6 +896,12 @@ function ConciergeView({ onAdd, packages, onDelete, onCollect, residents, reside
     : pendingPackages.filter(p => p.type === filterType);
   const countByType = (type) => pendingPackages.filter(p => p.type === type).length;
   const historyPackages = activePackages.filter(p => p.status === 'collected');
+
+  // Entregas do dia (apenas hoje)
+  const today = new Date().toDateString();
+  const todayDeliveries = historyPackages.filter(p =>
+    p.collected_at && new Date(p.collected_at).toDateString() === today
+  );
 
   return (
     <div className="space-y-6">
@@ -975,7 +983,13 @@ function ConciergeView({ onAdd, packages, onDelete, onCollect, residents, reside
       )}
 
       {/* Tabs dentro da Portaria */}
-      <div className="grid grid-cols-3 sm:flex gap-1.5 sm:gap-2 sm:flex-wrap">
+      <div className="flex justify-center gap-1.5 sm:gap-2 flex-wrap">
+        <button
+          onClick={() => setTab('home')}
+          className={`px-2 sm:px-3 py-2 sm:py-1.5 rounded-md text-xs sm:text-sm font-medium transition-colors ${tab === 'home' ? 'bg-slate-700 text-white shadow-sm' : 'bg-white dark:bg-gray-800 border dark:border-gray-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-gray-700'}`}
+        >
+          🏠 Início
+        </button>
         <button
           onClick={() => setTab('packages')}
           className={`px-2 sm:px-3 py-2 sm:py-1.5 rounded-md text-xs sm:text-sm font-medium transition-colors ${tab === 'packages' ? 'bg-slate-700 text-white shadow-sm' : 'bg-white dark:bg-gray-800 border dark:border-gray-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-gray-700'}`}
@@ -1020,6 +1034,90 @@ function ConciergeView({ onAdd, packages, onDelete, onCollect, residents, reside
         </div>
       </div>
 
+      {/* ABA INÍCIO - Tela inicial da portaria */}
+      {tab === 'home' && (
+        <div className="space-y-6">
+          {/* Encomendas Pendentes */}
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
+            <div className="bg-amber-50 dark:bg-amber-900/30 px-4 sm:px-6 py-3 sm:py-4 border-b border-amber-100 dark:border-amber-800 flex items-center gap-2">
+              <Clock className="text-amber-600 dark:text-amber-400" size={20} />
+              <h2 className="font-semibold text-amber-800 dark:text-amber-200">Encomendas Pendentes</h2>
+              <span className="ml-auto bg-amber-600 text-white text-xs font-bold px-2 py-0.5 rounded-full">{pendingPackages.length}</span>
+            </div>
+            <div className="p-4 sm:p-6">
+              {pendingPackages.length === 0 ? (
+                <div className="text-center py-8 text-gray-400 dark:text-gray-500">
+                  <Package size={40} className="mx-auto mb-2 opacity-50" />
+                  <p>Nenhuma encomenda pendente</p>
+                </div>
+              ) : (
+                <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
+                  {pendingPackages.map(pkg => (
+                    <div
+                      key={pkg.id}
+                      onClick={() => setCollectTarget(pkg.id)}
+                      className="bg-gradient-to-br from-amber-50 to-orange-50 dark:from-gray-700 dark:to-gray-600 rounded-lg p-4 border border-amber-200 dark:border-amber-700 cursor-pointer hover:shadow-md transition-all hover:scale-[1.02]"
+                    >
+                      <div className="flex justify-between items-start mb-2">
+                        <span className="font-bold text-amber-800 dark:text-amber-200 text-lg">Apt {pkg.unit}</span>
+                        <span className="text-xs bg-amber-200 dark:bg-amber-700 text-amber-800 dark:text-amber-200 px-2 py-0.5 rounded-full">{pkg.type}</span>
+                      </div>
+                      <p className="text-gray-700 dark:text-gray-300 text-sm font-medium">{pkg.recipient}</p>
+                      <p className="text-gray-500 dark:text-gray-400 text-xs mt-1">
+                        {new Date(pkg.arrived_at).toLocaleDateString('pt-BR')} às {new Date(pkg.arrived_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                      </p>
+                      {pkg.description && <p className="text-gray-400 dark:text-gray-500 text-xs mt-1 truncate">{pkg.description}</p>}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Entregas do Dia */}
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
+            <div className="bg-green-50 dark:bg-green-900/30 px-4 sm:px-6 py-3 sm:py-4 border-b border-green-100 dark:border-green-800 flex items-center gap-2">
+              <CheckCircle className="text-green-600 dark:text-green-400" size={20} />
+              <h2 className="font-semibold text-green-800 dark:text-green-200">Entregas de Hoje</h2>
+              <span className="ml-auto bg-green-600 text-white text-xs font-bold px-2 py-0.5 rounded-full">{todayDeliveries.length}</span>
+            </div>
+            <div className="p-4 sm:p-6">
+              {todayDeliveries.length === 0 ? (
+                <div className="text-center py-8 text-gray-400 dark:text-gray-500">
+                  <CheckCircle size={40} className="mx-auto mb-2 opacity-50" />
+                  <p>Nenhuma entrega realizada hoje</p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {todayDeliveries.map(pkg => (
+                    <div key={pkg.id} className="bg-green-50 dark:bg-green-900/20 rounded-lg p-3 border border-green-100 dark:border-green-800">
+                      <div className="flex justify-between items-start">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-bold text-green-800 dark:text-green-200">Apt {pkg.unit}</span>
+                            <span className="text-gray-600 dark:text-gray-300 truncate">- {pkg.recipient}</span>
+                          </div>
+                        </div>
+                        <span className="text-xs bg-green-200 dark:bg-green-700 text-green-800 dark:text-green-200 px-2 py-0.5 rounded ml-2 flex-shrink-0">{pkg.type}</span>
+                      </div>
+                      <div className="flex items-center gap-2 mt-2 text-sm">
+                        <CheckCircle size={14} className="text-green-600 dark:text-green-400 flex-shrink-0" />
+                        <span className="text-green-700 dark:text-green-300 font-medium">
+                          {new Date(pkg.collected_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                        {pkg.collected_by && (
+                          <span className="text-gray-500 dark:text-gray-400 text-xs">por {pkg.collected_by}</span>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {tab === 'packages' && (
         <>
           {/* Formulário Encomenda */}
@@ -1045,7 +1143,7 @@ function ConciergeView({ onAdd, packages, onDelete, onCollect, residents, reside
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Tipo</label>
                   <select className="w-full px-4 py-2 border dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-slate-500 outline-none bg-white dark:bg-gray-700 dark:text-white" value={form.type} onChange={e => setForm({ ...form, type: e.target.value })}>
-                    <option>Caixa</option><option>Envelope</option><option>Delivery / Comida</option><option>Outro</option>
+                    <option>Caixa</option><option>Pacote</option><option>Envelope</option><option>Mercado Livre/Shopee</option><option>Delivery / Comida</option><option>Outro</option>
                   </select>
                 </div>
                 <div className="md:col-span-2">
@@ -1068,7 +1166,7 @@ function ConciergeView({ onAdd, packages, onDelete, onCollect, residents, reside
                 <Clock size={20} className="text-slate-600 dark:text-slate-400" /> Pendentes ({pendingPackages.length})
               </h3>
               <div className="flex gap-2 overflow-x-auto pb-2 w-full sm:w-auto">
-                {['Todos', 'Caixa', 'Envelope', 'Delivery / Comida', 'Outro'].map(type => (
+                {['Todos', 'Caixa', 'Pacote', 'Envelope', 'Mercado Livre/Shopee', 'Delivery / Comida', 'Outro'].map(type => (
                   <button
                     key={type}
                     onClick={() => setFilterType(type)}
@@ -1099,29 +1197,6 @@ function ConciergeView({ onAdd, packages, onDelete, onCollect, residents, reside
             </div>
           </div>
 
-          {/* Histórico apenas na aba Encomendas */}
-          {historyPackages.length > 0 && (
-            <div className="mt-8 opacity-75">
-              <h3 className="text-lg font-bold text-gray-600 dark:text-gray-300 mb-4">Entregas Recentes</h3>
-              <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 divide-y dark:divide-gray-700">
-                {historyPackages.slice(0, 5).map(pkg => (
-                  <div key={pkg.id} className="p-3 flex justify-between items-center text-sm">
-                    <span className="text-gray-600 dark:text-gray-300 font-medium">Apt {pkg.unit} - {pkg.recipient}</span>
-                    <div className="flex flex-col text-right">
-                      <span className="text-green-600 dark:text-green-400 flex items-center justify-end gap-1"><CheckCircle size={14}/> Entregue</span>
-                      <span className="text-xs text-gray-400 dark:text-gray-500">
-                        Retirado por: {pkg.collected_by}
-                        {pkg.receiver_doc && <> • Doc: {pkg.receiver_doc}</>}
-                        {pkg.collected_at && (
-                          <> • Em: {new Date(pkg.collected_at).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}</>
-                        )}
-                      </span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
         </>
       )}
 
