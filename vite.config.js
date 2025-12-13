@@ -19,6 +19,9 @@ export default defineConfig({
       input: {
         main: resolve(__dirname, 'index.html'),
         app: resolve(__dirname, 'app.html'),
+        register: resolve(__dirname, 'register.html'),
+        register_success: resolve(__dirname, 'register_success.html'),
+        billing: resolve(__dirname, 'billing.html'),
       },
       output: {
         manualChunks: {

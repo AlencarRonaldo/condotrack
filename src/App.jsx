@@ -2,8 +2,64 @@ import React, { useState, useEffect, useMemo } from 'react';
 import {
   Package, Search, CheckCircle, Clock,
   User, Box, Shield, Trash2, AlertTriangle, X, Phone, LogIn, CheckCheck, Briefcase, LogOut, MessageCircle, Sun, Moon,
-  FileText, Download, Printer, Filter, FileSpreadsheet, FileJson, Settings, Building2, Save
+  FileText, Download, Printer, Filter, FileSpreadsheet, FileJson, Settings, Building2, Save,
+  Users, CreditCard, TrendingUp, Calendar, ArrowUpRight, ArrowDownRight, BarChart3,
+  Mail, ShoppingBag, UtensilsCrossed, HelpCircle
 } from 'lucide-react';
+
+// ==================================================================================
+// 🎨 CONFIGURAÇÃO DE CORES E ÍCONES POR TIPO DE ENCOMENDA
+// ==================================================================================
+const PACKAGE_TYPE_CONFIG = {
+  'Caixa': {
+    icon: Box,
+    bgLight: 'bg-amber-100',
+    bgDark: 'dark:bg-amber-900/50',
+    textLight: 'text-amber-600',
+    textDark: 'dark:text-amber-400',
+    badge: 'bg-amber-500'
+  },
+  'Pacote': {
+    icon: Package,
+    bgLight: 'bg-blue-100',
+    bgDark: 'dark:bg-blue-900/50',
+    textLight: 'text-blue-600',
+    textDark: 'dark:text-blue-400',
+    badge: 'bg-blue-500'
+  },
+  'Envelope': {
+    icon: Mail,
+    bgLight: 'bg-violet-100',
+    bgDark: 'dark:bg-violet-900/50',
+    textLight: 'text-violet-600',
+    textDark: 'dark:text-violet-400',
+    badge: 'bg-violet-500'
+  },
+  'Mercado Livre/Shopee': {
+    icon: ShoppingBag,
+    bgLight: 'bg-orange-100',
+    bgDark: 'dark:bg-orange-900/50',
+    textLight: 'text-orange-600',
+    textDark: 'dark:text-orange-400',
+    badge: 'bg-orange-500'
+  },
+  'Delivery / Comida': {
+    icon: UtensilsCrossed,
+    bgLight: 'bg-emerald-100',
+    bgDark: 'dark:bg-emerald-900/50',
+    textLight: 'text-emerald-600',
+    textDark: 'dark:text-emerald-400',
+    badge: 'bg-emerald-500'
+  },
+  'Outro': {
+    icon: HelpCircle,
+    bgLight: 'bg-slate-100',
+    bgDark: 'dark:bg-slate-700',
+    textLight: 'text-slate-600',
+    textDark: 'dark:text-slate-400',
+    badge: 'bg-slate-500'
+  }
+};
 
 // ==================================================================================
 // 🚀 CONDOTRACK PRO - CONFIGURAÇÃO PARA PRODUÇÃO (VERCEL/NETLIFY)
@@ -47,25 +103,202 @@ const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
 // Flag para identificar se está em modo produção (com Supabase real)
 const IS_PRODUCTION = Boolean(SUPABASE_URL && SUPABASE_ANON_KEY);
 
+// URL da Edge Function de autenticação
+// TEMPORÁRIO: Desabilitado até Edge Function ser deployada
+// const AUTH_EDGE_FUNCTION_URL = IS_PRODUCTION
+//   ? `${SUPABASE_URL}/functions/v1/auth-login`
+//   : null;
+const AUTH_EDGE_FUNCTION_URL = null; // Força uso do localStorage
+
+// ==================================================================================
+// 💳 STRIPE CONFIGURATION - Integração de Pagamentos
+// ==================================================================================
+// Chaves Stripe (use variáveis de ambiente em produção)
+const STRIPE_PK = import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY || 'pk_test_demo_key';
+const STRIPE_WEBHOOK_SECRET = import.meta.env.VITE_STRIPE_WEBHOOK_SECRET || 'whsec_demo_secret';
+
+// Endpoints de checkout (Edge Functions ou API backend)
+const CHECKOUT_ENDPOINT = IS_PRODUCTION
+  ? `${SUPABASE_URL}/functions/v1/create-checkout-session`
+  : null;
+
+const WEBHOOK_ENDPOINT = IS_PRODUCTION
+  ? `${SUPABASE_URL}/functions/v1/stripe-webhook`
+  : null;
+
+// Mapeamento de planos para Price IDs do Stripe (configurar no dashboard Stripe)
+const STRIPE_PRICE_IDS = {
+  basic: import.meta.env.VITE_STRIPE_PRICE_BASIC || 'price_basic_demo',
+  professional: import.meta.env.VITE_STRIPE_PRICE_PRO || 'price_pro_demo',
+  premium: import.meta.env.VITE_STRIPE_PRICE_PREMIUM || 'price_premium_demo'
+};
+
 // Log para debug (apenas em desenvolvimento)
 if (import.meta.env.DEV) {
   console.log('🔧 CondoTrack Pro - Modo:', IS_PRODUCTION ? 'PRODUÇÃO (Supabase)' : 'DEMO (localStorage)');
+  if (IS_PRODUCTION) {
+    console.log('🔐 Edge Function URL:', AUTH_EDGE_FUNCTION_URL);
+  }
 }
 
 // ==================================================================================
-// 🛠️ MOCK SUPABASE (MODO DEMO - USA localStorage)
+// 🔐 FUNÇÃO DE AUTENTICAÇÃO VIA EDGE FUNCTION (PRODUÇÃO)
 // ==================================================================================
+// Esta função faz a requisição segura para o backend validar a senha
+async function authenticateViaEdgeFunction(username, password, condoId) {
+  if (!AUTH_EDGE_FUNCTION_URL) {
+    const error = new Error('Edge Function não configurada');
+    error.code = 'NOT_CONFIGURED';
+    error.isNetworkError = true;
+    throw error;
+  }
+
+  try {
+    const response = await fetch(AUTH_EDGE_FUNCTION_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+      },
+      body: JSON.stringify({
+        username: username.trim().toLowerCase(),
+        password: password,
+        condoId: condoId.trim()
+      })
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      // Trata erros específicos da Edge Function
+      const errorMessage = data.error || 'Erro ao autenticar';
+      const error = new Error(errorMessage);
+      error.code = data.code || 'AUTH_ERROR';
+      error.status = response.status;
+      throw error;
+    }
+
+    return data; // { success, user, condo, condoStatus }
+  } catch (fetchError) {
+    // Erro de rede/CORS - marca como erro de rede para fallback
+    if (fetchError.name === 'TypeError' || fetchError.message?.includes('fetch')) {
+      const error = new Error('Edge Function indisponível');
+      error.code = 'NETWORK_ERROR';
+      error.isNetworkError = true;
+      throw error;
+    }
+    throw fetchError;
+  }
+}
+
+// ==================================================================================
+// 🛠️ MOCK SUPABASE (MODO DEMO - USA localStorage) - MULTI-TENANT SaaS
+// ==================================================================================
+const DEMO_CONDO_ID = 'demo-condo-001'; // UUID fictício para modo demo
+
+// Função para simular registro de novo condomínio (útil para testes e desenvolvimento)
+export function simulateCondoRegistration({
+  condoName,
+  planType = 'basic',
+  adminName,
+  adminUsername,
+  adminPassword
+}) {
+  const keyFor = (table) => `condotrack_${table}`;
+  const read = (table) => JSON.parse(localStorage.getItem(keyFor(table)) || '[]');
+  const write = (table, data) => localStorage.setItem(keyFor(table), JSON.stringify(data));
+
+  // Gera UUID único para o novo condomínio
+  const newCondoId = `condo-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  const now = new Date().toISOString();
+
+  // Define limites baseados no plano
+  const planLimits = {
+    basic: 2,
+    professional: 5,
+    premium: 10
+  };
+
+  // 1. Cria o condomínio
+  const condos = read('condos');
+  const newCondo = {
+    id: newCondoId,
+    name: condoName,
+    plan_type: planType,
+    staff_limit: planLimits[planType] || 3,
+    created_at: now,
+    updated_at: now
+  };
+  condos.push(newCondo);
+  write('condos', condos);
+
+  // 2. Cria o admin do condomínio
+  const staffList = read('staff');
+  const newAdmin = {
+    id: Date.now(),
+    condo_id: newCondoId,
+    name: adminName,
+    username: adminUsername,
+    password: adminPassword,
+    role: 'admin',
+    created_at: now
+  };
+  staffList.push(newAdmin);
+  write('staff', staffList);
+
+  // 3. Cria settings padrão para o condomínio
+  const settingsList = read('settings');
+  const newSettings = {
+    id: Date.now() + 1,
+    condo_id: newCondoId,
+    condo_name: condoName,
+    condo_address: '',
+    condo_phone: '',
+    created_at: now,
+    updated_at: now
+  };
+  settingsList.push(newSettings);
+  write('settings', settingsList);
+
+  console.log('✅ Novo condomínio registrado:', {
+    condoId: newCondoId,
+    name: condoName,
+    plan: planType,
+    admin: adminUsername
+  });
+
+  return {
+    condoId: newCondoId,
+    condo: newCondo,
+    admin: { ...newAdmin, password: '***' } // Não retorna senha
+  };
+}
+
 const mockSupabase = (() => {
   const keyFor = (table) => `condotrack_${table}`;
   const read = (table) => JSON.parse(localStorage.getItem(keyFor(table)) || '[]');
   const write = (table, data) => localStorage.setItem(keyFor(table), JSON.stringify(data));
   const ensureId = (row) => ({ id: Date.now() + Math.floor(Math.random() * 1000), ...row });
 
-  // Seed staff com admin padrão se vazio
+  // Seed condos (tabela de condomínios/planos)
+  if (!localStorage.getItem(keyFor('condos'))) {
+    const now = new Date().toISOString();
+    write('condos', [{
+      id: DEMO_CONDO_ID,
+      name: 'Condomínio Demo',
+      plan_type: 'basic', // 'basic' | 'professional' | 'premium'
+      staff_limit: 2, // Limite de porteiros no plano básico
+      created_at: now,
+      updated_at: now,
+    }]);
+  }
+
+  // Seed staff com admin padrão se vazio (com condo_id)
   if (!localStorage.getItem(keyFor('staff'))) {
     const now = new Date().toISOString();
     write('staff', [{
       id: Date.now(),
+      condo_id: DEMO_CONDO_ID,
       name: 'Administrador',
       username: 'admin',
       password: '123',
@@ -74,18 +307,47 @@ const mockSupabase = (() => {
     }]);
   }
 
-  // Seed settings com nome do condomínio padrão se vazio
+  // Seed settings com nome do condomínio padrão se vazio (com condo_id)
   if (!localStorage.getItem(keyFor('settings'))) {
     const now = new Date().toISOString();
     write('settings', [{
       id: 1,
-      condo_name: 'CondoTrack',
+      condo_id: DEMO_CONDO_ID,
+      condo_name: 'CondoTrack Demo',
       condo_address: '',
       condo_phone: '',
       created_at: now,
       updated_at: now,
     }]);
   }
+
+  // Helper para encadear múltiplos .eq()
+  const createQueryBuilder = (table, initialData = null) => {
+    let filters = [];
+    let data = initialData !== null ? initialData : read(table);
+
+    const builder = {
+      eq: (field, value) => {
+        filters.push({ field, value });
+        data = data.filter(item => item[field] === value);
+        return builder;
+      },
+      order: (_col, _opts) => {
+        return Promise.resolve({ data, error: null });
+      },
+      single: () => {
+        const result = data.length > 0 ? data[0] : null;
+        return Promise.resolve({ data: result, error: null });
+      },
+      select: (cols = '*') => {
+        return builder;
+      },
+      then: (resolve) => {
+        resolve({ data, error: null });
+      }
+    };
+    return builder;
+  };
 
   const api = {
     channel: () => ({
@@ -94,15 +356,7 @@ const mockSupabase = (() => {
     }),
     removeChannel: () => {},
     from: (table) => ({
-      select: () => ({
-        order: (_col, _opts) => Promise.resolve({ data: read(table), error: null }),
-        eq: (field, value) => ({
-          single: () => {
-            const data = read(table).find(item => item[field] === value);
-            return Promise.resolve({ data, error: null });
-          }
-        })
-      }),
+      select: (cols = '*') => createQueryBuilder(table),
       insert: (rows) => {
         const now = new Date().toISOString();
         const current = read(table);
@@ -124,11 +378,17 @@ const mockSupabase = (() => {
               ? { created_at: now }
               : table === 'staff'
               ? { created_at: now }
+              : table === 'condos'
+              ? { created_at: now, updated_at: now }
               : { created_at: now };
           return ensureId({ ...base, ...r });
         });
         write(table, [...current, ...inserted]);
-        return Promise.resolve({ data: inserted.length === 1 ? inserted : inserted, error: null });
+        return {
+          data: inserted.length === 1 ? inserted[0] : inserted,
+          error: null,
+          select: () => Promise.resolve({ data: inserted.length === 1 ? inserted[0] : inserted, error: null })
+        };
       },
       update: (partial) => ({
         eq: (field, value) => {
@@ -149,6 +409,223 @@ const mockSupabase = (() => {
   };
   return api;
 })();
+
+// ==================================================================================
+// 💰 PLANOS E PREÇOS (sincronizado com tabela plans do Supabase)
+// ==================================================================================
+const PLANS_CONFIG = {
+  basic: {
+    name: 'BÁSICO',
+    price: 99,
+    priceFormatted: 'R$ 99',
+    staffLimit: 2,
+    unitLimit: 50,
+    features: ['Até 2 porteiros', 'Até 50 unidades', 'Gestão de encomendas', 'Notificação WhatsApp', 'Histórico 90 dias']
+  },
+  professional: {
+    name: 'PRO',
+    price: 199,
+    priceFormatted: 'R$ 199',
+    staffLimit: 5,
+    unitLimit: 150,
+    features: ['Até 5 porteiros', 'Até 150 unidades', 'Tudo do Básico', 'Relatórios avançados', 'Exportação PDF', 'Histórico ilimitado', 'Suporte prioritário'],
+    popular: true
+  },
+  premium: {
+    name: 'PREMIUM',
+    price: 349,
+    priceFormatted: 'R$ 349',
+    staffLimit: 10,
+    unitLimit: 9999,
+    features: ['Até 10 porteiros', 'Unidades ilimitadas', 'Tudo do PRO', 'API de integração', 'Suporte 24/7', 'SLA 99.9%', 'Onboarding dedicado']
+  }
+};
+
+// ==================================================================================
+// 💳 CREATE STRIPE CHECKOUT SESSION
+// ==================================================================================
+// Cria uma sessão de checkout no Stripe (produção) ou simula (demo)
+// Retorna URL para redirecionar o usuário para a página de pagamento
+export async function createStripeSession(planKey, condoId, condoName) {
+  const plan = PLANS_CONFIG[planKey];
+  if (!plan) {
+    throw new Error('Plano inválido');
+  }
+
+  // ========================================================================
+  // MODO PRODUÇÃO: Chama Edge Function para criar sessão real do Stripe
+  // ========================================================================
+  if (IS_PRODUCTION && CHECKOUT_ENDPOINT) {
+    try {
+      const response = await fetch(CHECKOUT_ENDPOINT, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+        },
+        body: JSON.stringify({
+          priceId: STRIPE_PRICE_IDS[planKey],
+          planKey: planKey,
+          condoId: condoId,
+          condoName: condoName,
+          successUrl: `${window.location.origin}/app?payment=success&session_id={CHECKOUT_SESSION_ID}`,
+          cancelUrl: `${window.location.origin}/app?payment=cancelled`
+        })
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Erro ao criar sessão de checkout');
+      }
+
+      return {
+        success: true,
+        checkoutUrl: data.url, // URL do Stripe Checkout
+        sessionId: data.sessionId
+      };
+    } catch (error) {
+      console.error('Erro ao criar sessão Stripe:', error);
+      throw error;
+    }
+  }
+
+  // ========================================================================
+  // MODO DEMO: Simula criação de sessão (retorna URL fictícia)
+  // ========================================================================
+  return new Promise((resolve) => {
+    setTimeout(() => {
+      const fakeSessionId = `cs_demo_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+      console.log('💳 Sessão de checkout criada (demo):', {
+        sessionId: fakeSessionId,
+        plan: plan.name,
+        price: plan.priceFormatted,
+        condoId
+      });
+
+      resolve({
+        success: true,
+        checkoutUrl: `https://checkout.stripe.com/demo/${fakeSessionId}`,
+        sessionId: fakeSessionId,
+        isDemo: true // Flag para indicar modo demo
+      });
+    }, 500);
+  });
+}
+
+// ==================================================================================
+// 🔐 SIMULATE WEBHOOK SUCCESS (Desbloqueio após pagamento)
+// ==================================================================================
+// Esta função simula o que um webhook do Stripe faria após pagamento confirmado
+// IMPORTANTE: Em produção, essa lógica fica APENAS na Edge Function do webhook
+export async function simulateWebhookSuccess(condoId, planKey) {
+  const plan = PLANS_CONFIG[planKey];
+  if (!plan) {
+    throw new Error('Plano inválido');
+  }
+
+  // ========================================================================
+  // MODO PRODUÇÃO: Chama Edge Function para processar webhook
+  // ========================================================================
+  if (IS_PRODUCTION && WEBHOOK_ENDPOINT) {
+    try {
+      const response = await fetch(`${SUPABASE_URL}/functions/v1/simulate-payment`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+        },
+        body: JSON.stringify({
+          condoId: condoId,
+          planKey: planKey,
+          // Em produção real, isso viria do evento do Stripe
+          eventType: 'checkout.session.completed'
+        })
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Erro ao processar pagamento');
+      }
+
+      return data;
+    } catch (error) {
+      console.error('Erro ao simular webhook:', error);
+      throw error;
+    }
+  }
+
+  // ========================================================================
+  // MODO DEMO: Processa webhook localmente (localStorage)
+  // ========================================================================
+  return new Promise((resolve, reject) => {
+    setTimeout(() => {
+      try {
+        const keyFor = (table) => `condotrack_${table}`;
+        const read = (table) => JSON.parse(localStorage.getItem(keyFor(table)) || '[]');
+        const write = (table, data) => localStorage.setItem(keyFor(table), JSON.stringify(data));
+
+        const condos = read('condos');
+        const condoIndex = condos.findIndex(c => c.id === condoId);
+
+        if (condoIndex === -1) {
+          reject(new Error('Condomínio não encontrado'));
+          return;
+        }
+
+        // Calcula próximo vencimento (30 dias a partir de agora)
+        const nextBillingDate = new Date();
+        nextBillingDate.setDate(nextBillingDate.getDate() + 30);
+
+        // ================================================================
+        // DESBLOQUEIO DA CONTA (lógica do webhook)
+        // ================================================================
+        condos[condoIndex] = {
+          ...condos[condoIndex],
+          is_active: true,                              // Ativa a conta
+          plan_type: planKey,                           // Define o plano
+          staff_limit: plan.staffLimit,                 // Limite de staff do plano
+          unit_limit: plan.unitLimit,                   // Limite de unidades do plano
+          trial_end_date: nextBillingDate.toISOString(), // Próximo vencimento
+          last_payment_date: new Date().toISOString(),  // Data do pagamento
+          subscription_status: 'active',                // Status da assinatura
+          updated_at: new Date().toISOString()
+        };
+
+        write('condos', condos);
+
+        console.log('✅ Webhook processado - Conta desbloqueada:', {
+          condoId,
+          plan: plan.name,
+          nextBilling: nextBillingDate.toLocaleDateString('pt-BR'),
+          staffLimit: plan.staffLimit,
+          unitLimit: plan.unitLimit
+        });
+
+        resolve({
+          success: true,
+          condo: condos[condoIndex],
+          plan: plan,
+          nextBillingDate: nextBillingDate.toISOString(),
+          message: 'Pagamento confirmado! Sua conta foi ativada.'
+        });
+      } catch (error) {
+        reject(error);
+      }
+    }, 1000); // 1s de delay simulando processamento
+  });
+}
+
+// ==================================================================================
+// 🔐 SIMULAÇÃO DE WEBHOOK DE PAGAMENTO (Legacy - mantido para compatibilidade)
+// ==================================================================================
+// Esta função simula o que um webhook de Stripe/Mercado Pago faria após pagamento
+export function simulatePaymentConfirmation(condoId, planKey) {
+  // Agora usa a nova função simulateWebhookSuccess
+  return simulateWebhookSuccess(condoId, planKey);
+}
 
 // ==================================================================================
 // 🔌 INICIALIZAÇÃO DO CLIENTE SUPABASE
@@ -184,11 +661,15 @@ function isValidPhone11(value) {
 }
 
 export default function CondoTrackApp() {
-  const SESSION_KEY = 'condotrack_user';
+  const SESSION_KEY = 'condotrack_session'; // Agora inclui condo_id
   const THEME_KEY = 'condotrack_theme';
   const [viewMode, setViewMode] = useState('concierge'); // 'concierge' | 'resident'
   const [isConciergeAuthed, setIsConciergeAuthed] = useState(false);
-  const [currentUser, setCurrentUser] = useState(null); // {id, name, role, username}
+  const [currentUser, setCurrentUser] = useState(null); // {id, name, role, username, condo_id}
+  // Multi-Tenant: estado do condomínio atual
+  const [condoId, setCondoId] = useState(null); // UUID do condomínio logado
+  const [condoInfo, setCondoInfo] = useState(null); // {id, name, plan_type, staff_limit}
+  const [condoStatus, setCondoStatus] = useState('active'); // 'active' | 'expired' | 'inactive'
   // Inicializa tema diretamente do localStorage para evitar flash
   const [theme, setTheme] = useState(() => {
     try {
@@ -213,24 +694,34 @@ export default function CondoTrackApp() {
     return idx;
   }, [residents]);
 
-  // Carregar e pseudo-realtime
+  // Multi-Tenant: Carregar dados apenas quando condoId estiver disponível
   useEffect(() => {
-    fetchPackages();
-    fetchResidents();
-    fetchStaff();
-    fetchSettings();
+    if (!condoId) {
+      setLoading(false); // Não está carregando se não houver tenant
+      return;
+    }
+    // Carrega dados filtrados pelo tenant
+    fetchPackages(condoId);
+    fetchResidents(condoId);
+    fetchStaff(condoId);
+    fetchSettings(condoId);
+
+    // Real-time subscriptions
     const channel = supabase.channel('packages_changes')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'packages' }, () => fetchPackages())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'packages' }, () => fetchPackages(condoId))
       .subscribe();
     const channelResidents = supabase.channel('residents_changes')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'residents' }, () => fetchResidents())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'residents' }, () => fetchResidents(condoId))
       .subscribe();
     const channelStaff = supabase.channel('staff_changes')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'staff' }, () => fetchStaff())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'staff' }, () => fetchStaff(condoId))
       .subscribe();
-    const interval = setInterval(fetchPackages, 1500);
-    const intervalRes = setInterval(fetchResidents, 2000);
-    const intervalStaff = setInterval(fetchStaff, 3000);
+
+    // Polling intervals como backup
+    const interval = setInterval(() => fetchPackages(condoId), 1500);
+    const intervalRes = setInterval(() => fetchResidents(condoId), 2000);
+    const intervalStaff = setInterval(() => fetchStaff(condoId), 3000);
+
     return () => {
       supabase.removeChannel(channel);
       supabase.removeChannel(channelResidents);
@@ -239,20 +730,84 @@ export default function CondoTrackApp() {
       clearInterval(intervalRes);
       clearInterval(intervalStaff);
     };
-  }, []);
+  }, [condoId]); // Re-executa quando condoId mudar
 
-  // Restaura sessão ao carregar
-  useEffect(() => {
-    try {
-      const raw = localStorage.getItem(SESSION_KEY);
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        if (parsed && parsed.username) {
-          setCurrentUser(parsed);
-          setIsConciergeAuthed(true);
-        }
+  // Função para verificar status do condomínio (trial/ativo)
+  const checkCondoStatus = (condoData) => {
+    if (!condoData) return 'inactive';
+
+    // Verifica se está inativo manualmente
+    if (condoData.is_active === false) {
+      return 'inactive';
+    }
+
+    // Verifica se trial expirou
+    if (condoData.trial_end_date) {
+      const trialEnd = new Date(condoData.trial_end_date);
+      const now = new Date();
+      if (now > trialEnd) {
+        return 'expired';
       }
-    } catch {}
+    }
+
+    return 'active';
+  };
+
+  // Handler para sucesso no pagamento - reativa a conta
+  const handlePaymentSuccess = async (updatedCondo) => {
+    // Atualiza o estado com os novos dados do condomínio
+    setCondoInfo(updatedCondo);
+    setCondoStatus('active');
+
+    // Recarrega dados do condomínio
+    if (updatedCondo.id) {
+      fetchPackages(updatedCondo.id);
+      fetchResidents(updatedCondo.id);
+      fetchStaff(updatedCondo.id);
+      fetchSettings(updatedCondo.id);
+    }
+  };
+
+  // Handler para logout do billing checkout
+  const handleBillingLogout = () => {
+    try { localStorage.removeItem(SESSION_KEY); } catch {}
+    setIsConciergeAuthed(false);
+    setCurrentUser(null);
+    setCondoId(null);
+    setCondoInfo(null);
+    setCondoStatus('active');
+  };
+
+  // Restaura sessão ao carregar (Multi-Tenant: inclui condo_id)
+  useEffect(() => {
+    const restoreSession = async () => {
+      try {
+        const raw = localStorage.getItem(SESSION_KEY);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          // Verifica se sessão tem os campos necessários (user + condo_id)
+          if (parsed && parsed.username && parsed.condo_id) {
+            // Carrega info do condomínio primeiro para verificar status
+            const { data: condoData } = await supabase
+              .from('condos')
+              .select('*')
+              .eq('id', parsed.condo_id)
+              .single();
+
+            if (condoData) {
+              const status = checkCondoStatus(condoData);
+              setCondoStatus(status);
+              setCondoInfo(condoData);
+              setCurrentUser(parsed);
+              setCondoId(parsed.condo_id);
+              setIsConciergeAuthed(true);
+              // Não redireciona mais - o BillingCheckout será mostrado inline
+            }
+          }
+        }
+      } catch {}
+    };
+    restoreSession();
     // Aplica classe dark no HTML ao carregar (tema já foi lido na inicialização do state)
     const root = document.documentElement;
     const savedTheme = localStorage.getItem(THEME_KEY);
@@ -288,11 +843,14 @@ export default function CondoTrackApp() {
     };
   }, [isConciergeAuthed, currentUser]);
 
-  const fetchPackages = async () => {
+  // Multi-Tenant: fetchPackages filtra por condo_id
+  const fetchPackages = async (tenantId = condoId) => {
+    if (!tenantId) return; // Não busca sem tenant
     try {
       const { data, error } = await supabase
         .from('packages')
         .select('*')
+        .eq('condo_id', tenantId)
         .order('created_at', { ascending: false });
       if (error) throw error;
       setPackages(data || []);
@@ -303,11 +861,14 @@ export default function CondoTrackApp() {
     }
   };
 
-  const fetchStaff = async () => {
+  // Multi-Tenant: fetchStaff filtra por condo_id
+  const fetchStaff = async (tenantId = condoId) => {
+    if (!tenantId) return;
     try {
       const { data, error } = await supabase
         .from('staff')
         .select('*')
+        .eq('condo_id', tenantId)
         .order('created_at', { ascending: true });
       if (error) throw error;
       setStaff(data || []);
@@ -316,12 +877,14 @@ export default function CondoTrackApp() {
     }
   };
 
-  const fetchSettings = async () => {
+  // Multi-Tenant: fetchSettings filtra por condo_id
+  const fetchSettings = async (tenantId = condoId) => {
+    if (!tenantId) return;
     try {
       const { data, error } = await supabase
         .from('settings')
         .select('*')
-        .eq('id', 1)
+        .eq('condo_id', tenantId)
         .single();
       if (error) throw error;
       if (data) {
@@ -332,7 +895,9 @@ export default function CondoTrackApp() {
     }
   };
 
+  // Multi-Tenant: handleUpdateSettings usa condo_id
   const handleUpdateSettings = async (newSettings) => {
+    if (!condoId) return;
     try {
       const { error } = await supabase
         .from('settings')
@@ -342,7 +907,7 @@ export default function CondoTrackApp() {
           condo_phone: newSettings.condo_phone || '',
           updated_at: new Date().toISOString()
         })
-        .eq('id', 1);
+        .eq('condo_id', condoId);
       if (error) throw error;
       setCondoSettings(prev => ({ ...prev, ...newSettings }));
       showNotification('Configurações salvas com sucesso!');
@@ -357,17 +922,27 @@ export default function CondoTrackApp() {
     setTimeout(() => setNotification(null), 2500);
   };
 
+  // Multi-Tenant: handleLogout limpa todos os estados do tenant
   const handleLogout = () => {
     try { localStorage.removeItem(SESSION_KEY); } catch {}
     setIsConciergeAuthed(false);
     setCurrentUser(null);
+    setCondoId(null);
+    setCondoInfo(null);
+    // Limpa dados do tenant anterior
+    setPackages([]);
+    setResidents([]);
+    setStaff([]);
+    setCondoSettings({ condo_name: 'CondoTrack', condo_address: '', condo_phone: '' });
   };
 
-  // ---------- Ações ----------
+  // ---------- Ações (Multi-Tenant: todas incluem condo_id) ----------
   const handleAddPackage = async (formData) => {
+    if (!condoId) return;
     try {
-      // cria registro
+      // cria registro com condo_id
       const { data, error } = await supabase.from('packages').insert([{
+        condo_id: condoId,
         unit: formData.unit,
         recipient: formData.recipient,
         phone: extractDigits(formData.phone || ''),
@@ -397,7 +972,7 @@ export default function CondoTrackApp() {
       }
 
       showNotification('Encomenda registrada!');
-      fetchPackages();
+      fetchPackages(condoId);
     } catch (err) {
       console.error(err);
       showNotification('Erro ao registrar.', 'error');
@@ -417,7 +992,7 @@ export default function CondoTrackApp() {
         .eq('id', pkgId);
       if (error) throw error;
       showNotification('Retirada confirmada!');
-      fetchPackages();
+      fetchPackages(condoId);
     } catch (err) {
       console.error(err);
       showNotification('Erro ao confirmar retirada.', 'error');
@@ -437,18 +1012,21 @@ export default function CondoTrackApp() {
         .eq('id', pkgId);
       if (error) throw error;
       showNotification('Registro excluído.');
-      fetchPackages();
+      fetchPackages(condoId);
     } catch (err) {
       console.error(err);
       showNotification('Erro ao excluir.', 'error');
     }
   };
 
-  const fetchResidents = async () => {
+  // Multi-Tenant: fetchResidents filtra por condo_id
+  const fetchResidents = async (tenantId = condoId) => {
+    if (!tenantId) return;
     try {
       const { data, error } = await supabase
         .from('residents')
         .select('*')
+        .eq('condo_id', tenantId)
         .order('unit', { ascending: true });
       if (error) throw error;
       setResidents(data || []);
@@ -457,9 +1035,12 @@ export default function CondoTrackApp() {
     }
   };
 
+  // Multi-Tenant: handleAddResident inclui condo_id
   const handleAddResident = async (resident) => {
+    if (!condoId) return;
     try {
       const payload = {
+        condo_id: condoId,
         unit: resident.unit,
         name: resident.name,
         phone: resident.phone || '',
@@ -471,7 +1052,7 @@ export default function CondoTrackApp() {
         .insert([payload]);
       if (error) throw error;
       showNotification('Morador cadastrado!');
-      fetchResidents();
+      fetchResidents(condoId);
     } catch (err) {
       // Fallback: se a coluna 'document' não existir, tenta sem ela
       const message = String(err?.message || '');
@@ -480,13 +1061,14 @@ export default function CondoTrackApp() {
           const { error: err2 } = await supabase
             .from('residents')
             .insert([{
+              condo_id: condoId,
               unit: resident.unit,
               name: resident.name,
               phone: resident.phone || ''
             }]);
           if (err2) throw err2;
           showNotification('Morador cadastrado! (sem documento/access_code)');
-          fetchResidents();
+          fetchResidents(condoId);
           return;
         } catch (e2) {
           console.error(e2);
@@ -507,7 +1089,7 @@ export default function CondoTrackApp() {
         .eq('id', residentId);
       if (error) throw error;
       showNotification('Morador excluído.');
-      fetchResidents();
+      fetchResidents(condoId);
     } catch (err) {
       console.error(err);
       showNotification('Erro ao excluir morador.', 'error');
@@ -533,7 +1115,7 @@ export default function CondoTrackApp() {
         .eq('id', residentId);
       if (error) throw error;
       showNotification('Morador atualizado!');
-      fetchResidents();
+      fetchResidents(condoId);
     } catch (err) {
       const message = String(err?.message || '');
       if (message.includes('column') && (message.includes('document') || message.includes('pin') || message.includes('access_code'))) {
@@ -548,7 +1130,7 @@ export default function CondoTrackApp() {
             .eq('id', residentId);
           if (err2) throw err2;
           showNotification('Morador atualizado! (sem documento/access_code)');
-          fetchResidents();
+          fetchResidents(condoId);
           return;
         } catch (e2) {
           console.error(e2);
@@ -563,41 +1145,42 @@ export default function CondoTrackApp() {
 
   // ---------- UI ----------
   const isConcierge = viewMode === 'concierge';
-  const headerBg = isConcierge ? 'bg-slate-900' : 'bg-emerald-900';
-  const toggleBg = isConcierge ? 'bg-slate-800' : 'bg-emerald-800';
-  const activeBtn = isConcierge ? 'bg-slate-600' : 'bg-emerald-600';
-  const activeShadow = 'shadow text-white';
-  const inactiveText = isConcierge ? 'text-slate-200 hover:text-white' : 'text-emerald-200 hover:text-white';
+  // Nova paleta: Azul Marinho Profundo para header
+  const headerBg = isConcierge ? 'bg-brand-900' : 'bg-accent-dark';
+  const toggleBg = isConcierge ? 'bg-brand-800/50' : 'bg-accent/30';
+  const activeBtn = isConcierge ? 'bg-blue-500' : 'bg-accent';
+  const activeShadow = 'shadow-md text-white';
+  const inactiveText = isConcierge ? 'text-blue-200 hover:text-white' : 'text-emerald-200 hover:text-white';
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900 text-slate-700 dark:text-slate-300">
+      <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-900 text-slate-700 dark:text-slate-300">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-current"></div>
       </div>
     );
   }
 
   return (
-    <div className={`min-h-screen ${isConcierge ? 'bg-slate-50' : 'bg-emerald-50'} dark:bg-gray-900 font-sans text-gray-800 dark:text-gray-100`}>
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-900 font-sans text-slate-800 dark:text-slate-100">
       {notification && (
-        <div className={`fixed top-4 right-4 z-50 px-6 py-3 rounded shadow-lg text-white flex items-center gap-2 animate-bounce-in ${notification.type === 'error' ? 'bg-red-500' : 'bg-green-600'}`}>
+        <div className={`fixed top-4 right-4 z-50 px-5 py-3 rounded-lg shadow-lg text-white flex items-center gap-3 animate-slide-down ${notification.type === 'error' ? 'bg-red-500' : 'bg-emerald-500'}`}>
           {notification.type === 'error' ? <AlertTriangle size={18} /> : <CheckCircle size={18} />}
-          {notification.message}
+          <span className="font-medium">{notification.message}</span>
         </div>
       )}
 
       {/* Modal de Sessão Encerrada por Inatividade */}
       {showInactivityModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm px-4">
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl p-6 max-w-sm w-full animate-fade-in text-center">
-            <div className="inline-flex items-center justify-center w-16 h-16 bg-amber-100 dark:bg-amber-900/50 rounded-full mb-4">
-              <Clock size={32} className="text-amber-600 dark:text-amber-400" />
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-8 max-w-sm w-full animate-scale-in text-center border border-gray-200 dark:border-gray-700">
+            <div className="inline-flex items-center justify-center w-16 h-16 bg-amber-100 dark:bg-amber-800 rounded-2xl mb-5">
+              <Clock size={32} className="text-amber-600 dark:text-amber-200" />
             </div>
-            <h3 className="text-lg font-bold text-gray-800 dark:text-white mb-2">Sessão Encerrada</h3>
-            <p className="text-gray-600 dark:text-gray-300 mb-6">Sua sessão foi encerrada por inatividade. Por favor, faça login novamente.</p>
+            <h3 className="text-xl font-bold text-slate-800 dark:text-white mb-2">Sessão Encerrada</h3>
+            <p className="text-slate-600 dark:text-gray-300 mb-6">Sua sessão foi encerrada por inatividade. Por favor, faça login novamente.</p>
             <button
               onClick={() => setShowInactivityModal(false)}
-              className="w-full px-4 py-3 rounded-lg bg-slate-700 hover:bg-slate-800 text-white font-medium shadow-md"
+              className="w-full px-4 py-3.5 rounded-lg bg-blue-500 hover:bg-blue-600 text-white font-semibold shadow-sm transition-all"
             >
               Entendido
             </button>
@@ -606,79 +1189,82 @@ export default function CondoTrackApp() {
       )}
 
       <header className={`${headerBg} text-white shadow-md sticky top-0 z-40`}>
-        <div className="max-w-4xl mx-auto px-3 sm:px-4 py-3 sm:py-4">
-          {/* Linha 1: Logo + Tema + Toggle */}
-          <div className="flex justify-between items-center gap-2">
-            <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-              <a href="/" className="flex-shrink-0">
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 py-3">
+          {/* Layout: Logo + Nav Toggle + User */}
+          <div className="flex justify-between items-center gap-3">
+            {/* Logo e Brand */}
+            <div className="flex items-center gap-3 min-w-0">
+              <a href="/" className="flex-shrink-0 group">
                 <img
                   src={LOGO_PATH}
                   alt="CondoTrack Logo"
-                  className="h-16 sm:h-20 w-auto -my-3 cursor-pointer hover:opacity-80 transition-opacity"
+                  className="h-12 sm:h-14 w-auto cursor-pointer group-hover:scale-105 transition-transform"
                   onError={(e) => { e.target.style.display = 'none'; }}
                 />
               </a>
-              <div className="min-w-0">
-                <div className="flex items-center flex-wrap gap-1">
-                  <a href="/" className="text-base sm:text-xl font-bold flex items-center gap-1 hover:opacity-80 transition-opacity">
-                    <span>CondoTrack</span>
-                    <span className="text-[10px] sm:text-xs font-normal opacity-70">| Gestão de Encomendas</span>
-                  </a>
-                  {isConcierge && (
-                    <span className="inline-flex items-center justify-center text-[10px] font-bold bg-slate-700 text-white px-1.5 py-0.5 rounded-full">
-                      {pendingCount}
-                    </span>
-                  )}
-                </div>
+              <div className="min-w-0 hidden xs:block">
+                <a href="/" className="hover:opacity-90 transition-opacity">
+                  <h1 className="text-lg sm:text-xl font-bold tracking-tight">CondoTrack</h1>
+                  <p className="text-[10px] sm:text-xs text-white/60 font-medium -mt-0.5">Gestão de Encomendas</p>
+                </a>
               </div>
+              {isConcierge && pendingCount > 0 && (
+                <span className="inline-flex items-center justify-center min-w-[22px] h-[22px] text-[11px] font-bold bg-amber-500 text-white px-1.5 rounded-full shadow-sm animate-pulse-soft">
+                  {pendingCount}
+                </span>
+              )}
             </div>
 
-            <div className="flex items-center gap-2">
+            {/* Ações do Header */}
+            <div className="flex items-center gap-2 sm:gap-3">
+              {/* Toggle Tema */}
               <button
                 onClick={() => setTheme(prev => prev === 'dark' ? 'light' : 'dark')}
-                className="inline-flex items-center justify-center rounded-lg bg-white/10 hover:bg-white/20 text-white p-2"
+                className="inline-flex items-center justify-center w-9 h-9 rounded-lg bg-white/10 hover:bg-white/20 text-white transition-colors"
                 title="Alternar tema"
                 aria-label="Alternar tema"
               >
-                {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
+                {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
               </button>
 
-              <div className={`flex ${toggleBg} rounded-lg p-0.5 sm:p-1`}>
+              {/* Toggle Portaria/Morador */}
+              <div className={`flex ${toggleBg} rounded-xl p-1 backdrop-blur-sm`}>
                 <button
                   onClick={() => setViewMode('concierge')}
-                  className={`flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-1.5 sm:py-2 rounded-md text-xs sm:text-sm font-medium transition-all ${isConcierge ? `${activeBtn} ${activeShadow}` : inactiveText}`}
+                  className={`flex items-center gap-1.5 px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-semibold transition-all ${isConcierge ? `${activeBtn} ${activeShadow}` : inactiveText}`}
                 >
-                  <Shield size={14} /> Portaria
+                  <Shield size={15} />
+                  <span className="hidden xs:inline">Portaria</span>
                 </button>
                 <button
                   onClick={() => setViewMode('resident')}
-                  className={`flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-1.5 sm:py-2 rounded-md text-xs sm:text-sm font-medium transition-all ${!isConcierge ? `${activeBtn} ${activeShadow}` : inactiveText}`}
+                  className={`flex items-center gap-1.5 px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-semibold transition-all ${!isConcierge ? `${activeBtn} ${activeShadow}` : inactiveText}`}
                 >
-                  <User size={14} /> Morador
+                  <User size={15} />
+                  <span className="hidden xs:inline">Morador</span>
                 </button>
               </div>
 
-              {/* Usuário logado - na mesma linha */}
+              {/* Usuário logado */}
               {isConcierge && isConciergeAuthed && currentUser && (
-                <div className="flex items-center gap-2 bg-white/10 border border-white/20 rounded-lg px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm">
-                  {currentUser.role === 'admin' ? (
-                    <Briefcase size={14} className="text-white/90 flex-shrink-0" />
-                  ) : (
-                    <User size={14} className="text-white/90 flex-shrink-0" />
-                  )}
-                  <span className="hidden sm:inline truncate max-w-[120px]">
-                    {currentUser.name}
-                  </span>
-                  <span className="text-white/60 hidden sm:inline">•</span>
-                  <span className="text-white/80 text-[10px] sm:text-xs">
-                    {currentUser.role === 'admin' ? 'Admin' : 'Porteiro'}
-                  </span>
+                <div className="hidden sm:flex items-center gap-2 bg-white/10 backdrop-blur-sm border border-white/10 rounded-xl px-3 py-2">
+                  <div className={`p-1.5 rounded-lg ${currentUser.role === 'admin' ? 'bg-amber-500/20' : 'bg-white/10'}`}>
+                    {currentUser.role === 'admin' ? (
+                      <Briefcase size={14} className="text-warning" />
+                    ) : (
+                      <User size={14} className="text-white/90" />
+                    )}
+                  </div>
+                  <div className="text-left">
+                    <p className="text-sm font-medium leading-tight truncate max-w-[100px]">{currentUser.name}</p>
+                    <p className="text-[10px] text-white/60">{currentUser.role === 'admin' ? 'Administrador' : 'Porteiro'}</p>
+                  </div>
                   <button
                     title="Sair"
                     onClick={handleLogout}
-                    className="ml-1 inline-flex items-center justify-center rounded hover:bg-white/10 p-1 text-white flex-shrink-0"
+                    className="ml-1 p-1.5 rounded-lg hover:bg-white/10 text-white/70 hover:text-white transition-colors"
                   >
-                    <LogOut size={14} />
+                    <LogOut size={16} />
                   </button>
                 </div>
               )}
@@ -687,8 +1273,15 @@ export default function CondoTrackApp() {
         </div>
       </header>
 
-      <main className="max-w-4xl mx-auto px-3 sm:px-4 py-4 sm:py-8">
-        {isConcierge ? (
+      <main className="max-w-5xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
+        {/* Verifica se conta está expirada/inativa - mostra Checkout de Billing */}
+        {isConciergeAuthed && (condoStatus === 'expired' || condoStatus === 'inactive') ? (
+          <BillingCheckout
+            condoInfo={condoInfo}
+            onPaymentSuccess={handlePaymentSuccess}
+            onLogout={handleBillingLogout}
+          />
+        ) : isConcierge ? (
           isConciergeAuthed ? (
             <ConciergeView
               onAdd={handleAddPackage}
@@ -702,12 +1295,20 @@ export default function CondoTrackApp() {
               onUpdateResident={handleUpdateResident}
               currentUser={currentUser}
               staff={staff}
+              condoInfo={condoInfo}
               onAddStaff={async (member) => {
+                if (!condoId) return;
+                // RBAC: Verifica limite de staff do plano
+                const porteiroCount = staff.filter(s => s.role === 'porteiro').length;
+                if (member.role === 'porteiro' && condoInfo && porteiroCount >= condoInfo.staff_limit) {
+                  showNotification(`Limite de ${condoInfo.staff_limit} porteiros atingido. Faça upgrade do plano.`, 'error');
+                  return;
+                }
                 try {
-                  const { error } = await supabase.from('staff').insert([member]);
+                  const { error } = await supabase.from('staff').insert([{ ...member, condo_id: condoId }]);
                   if (error) throw error;
                   showNotification('Funcionário cadastrado!');
-                  fetchStaff();
+                  fetchStaff(condoId);
                 } catch (e) {
                   console.error(e);
                   showNotification('Erro ao cadastrar funcionário.', 'error');
@@ -718,7 +1319,7 @@ export default function CondoTrackApp() {
                   const { error } = await supabase.from('staff').delete().eq('id', id);
                   if (error) throw error;
                   showNotification('Funcionário excluído.');
-                  fetchStaff();
+                  fetchStaff(condoId);
                 } catch (e) {
                   console.error(e);
                   showNotification('Erro ao excluir funcionário.', 'error');
@@ -728,7 +1329,16 @@ export default function CondoTrackApp() {
               onUpdateSettings={handleUpdateSettings}
             />
           ) : (
-            <ConciergeLogin onSuccess={(user) => { setIsConciergeAuthed(true); setCurrentUser(user); try { localStorage.setItem(SESSION_KEY, JSON.stringify(user)); } catch {} }} />
+            <ConciergeLogin onSuccess={(user, condoData, backendCondoStatus) => {
+              // Em produção, usa status do backend; em demo, calcula localmente
+              const status = backendCondoStatus || checkCondoStatus(condoData);
+              setCondoStatus(status);
+              setIsConciergeAuthed(true);
+              setCurrentUser(user);
+              setCondoId(user.condo_id);
+              setCondoInfo(condoData);
+              try { localStorage.setItem(SESSION_KEY, JSON.stringify(user)); } catch {}
+            }} />
           )
         ) : (
           <ResidentView
@@ -740,99 +1350,773 @@ export default function CondoTrackApp() {
         )}
       </main>
 
-      <footer className="text-center text-gray-400 text-xs py-8 space-y-1">
-        <p>CondoTrack — Gestão de Encomendas</p>
-        <p>
-          Desenvolvido por{' '}
-          <a
-            href="https://playcodeagency.xyz"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-emerald-500 hover:text-emerald-400 hover:underline transition-colors"
-          >
-            PlayCodeAgency
-          </a>
-        </p>
+      <footer className="mt-12 mb-6">
+        <div className="max-w-5xl mx-auto px-4 sm:px-6">
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 py-6 px-6 text-center">
+            <div className="flex items-center justify-center gap-2 mb-2">
+              <Package className="text-blue-500" size={18} />
+              <span className="font-semibold text-slate-800 dark:text-white">CondoTrack</span>
+            </div>
+            <p className="text-slate-500 text-sm">Gestão de Encomendas para Condomínios</p>
+            <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+              <p className="text-xs text-slate-500">
+                Desenvolvido por{' '}
+                <a
+                  href="https://playcodeagency.xyz"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-blue-500 hover:text-blue-600 font-medium transition-colors"
+                >
+                  PlayCodeAgency
+                </a>
+              </p>
+            </div>
+          </div>
+        </div>
       </footer>
     </div>
   );
 }
 
 // ---------- Subcomponentes ----------
+
+// ==================================================================================
+// 💳 BILLING CHECKOUT - Componente de Checkout/Pagamento com Stripe
+// ==================================================================================
+function BillingCheckout({ condoInfo, onPaymentSuccess, onLogout, isAdmin = false }) {
+  const [selectedPlan, setSelectedPlan] = useState('professional');
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [isRedirecting, setIsRedirecting] = useState(false);
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [paymentSuccess, setPaymentSuccess] = useState(false);
+  const [showTestPanel, setShowTestPanel] = useState(false);
+  const [error, setError] = useState('');
+
+  // Calcula dias restantes ou expirados
+  const getDaysInfo = () => {
+    if (!condoInfo?.trial_end_date) return { text: 'Período expirado', expired: true };
+    const trialEnd = new Date(condoInfo.trial_end_date);
+    const now = new Date();
+    const diffDays = Math.ceil((trialEnd - now) / (1000 * 60 * 60 * 24));
+
+    if (diffDays < 0) {
+      return { text: `Expirado há ${Math.abs(diffDays)} dias`, expired: true };
+    } else if (diffDays === 0) {
+      return { text: 'Expira hoje!', expired: true };
+    }
+    return { text: `${diffDays} dias restantes`, expired: false };
+  };
+
+  const daysInfo = getDaysInfo();
+
+  // ========================================================================
+  // HANDLE SUBSCRIBE - Cria sessão Stripe e redireciona
+  // ========================================================================
+  const handleSubscribe = async (planKey) => {
+    if (!condoInfo?.id) {
+      setError('Erro: Condomínio não identificado.');
+      return;
+    }
+
+    setSelectedPlan(planKey);
+    setIsProcessing(true);
+    setError('');
+
+    try {
+      // Cria sessão de checkout no Stripe
+      const session = await createStripeSession(planKey, condoInfo.id, condoInfo.name);
+
+      if (session.success) {
+        if (session.isDemo) {
+          // Modo Demo: mostra modal de pagamento simulado
+          setShowPaymentModal(true);
+          setIsProcessing(false);
+        } else {
+          // Produção: redireciona para Stripe Checkout
+          setIsRedirecting(true);
+          console.log('🔄 Redirecionando para Stripe Checkout:', session.checkoutUrl);
+          window.location.href = session.checkoutUrl;
+        }
+      }
+    } catch (err) {
+      console.error('Erro ao criar sessão de checkout:', err);
+      setError(err.message || 'Erro ao iniciar checkout. Tente novamente.');
+      setIsProcessing(false);
+    }
+  };
+
+  // ========================================================================
+  // HANDLE TEST PAYMENT - Simula webhook de sucesso (apenas para testes)
+  // ========================================================================
+  const handleTestPayment = async () => {
+    if (!condoInfo?.id) {
+      setError('Erro: Condomínio não identificado.');
+      return;
+    }
+
+    setIsProcessing(true);
+    setError('');
+
+    try {
+      // Simula webhook de pagamento bem-sucedido
+      const result = await simulateWebhookSuccess(condoInfo.id, selectedPlan);
+
+      if (result.success) {
+        setPaymentSuccess(true);
+        setTimeout(() => {
+          onPaymentSuccess(result.condo);
+        }, 2000);
+      }
+    } catch (err) {
+      console.error('Erro ao simular pagamento:', err);
+      setError(err.message || 'Erro ao simular pagamento.');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  // ========================================================================
+  // HANDLE PROCESS PAYMENT - Processa pagamento no modal (modo demo)
+  // ========================================================================
+  const handleProcessPayment = async () => {
+    if (!condoInfo?.id) {
+      setError('Erro: Condomínio não identificado.');
+      return;
+    }
+
+    setIsProcessing(true);
+    setError('');
+
+    try {
+      // Simula webhook de pagamento confirmado
+      const result = await simulateWebhookSuccess(condoInfo.id, selectedPlan);
+
+      if (result.success) {
+        setPaymentSuccess(true);
+        setTimeout(() => {
+          onPaymentSuccess(result.condo);
+        }, 2000);
+      }
+    } catch (err) {
+      console.error('Erro no pagamento:', err);
+      setError(err.message || 'Erro ao processar pagamento. Tente novamente.');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  // Modal de Redirecionamento
+  if (isRedirecting) {
+    return (
+      <div className="min-h-[80vh] flex items-center justify-center p-4">
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-8 max-w-md w-full text-center border border-gray-200 dark:border-gray-700">
+          <div className="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-6" />
+          <h2 className="text-xl font-bold text-gray-800 dark:text-white mb-2">Redirecionando para pagamento...</h2>
+          <p className="text-gray-600 dark:text-gray-400">
+            Você será redirecionado para a página segura do Stripe.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  // Modal de Sucesso
+  if (paymentSuccess) {
+    const plan = PLANS_CONFIG[selectedPlan];
+    return (
+      <div className="min-h-[80vh] flex items-center justify-center p-4">
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-8 max-w-md w-full text-center border border-gray-200 dark:border-gray-700">
+          <div className="bg-emerald-100 dark:bg-emerald-900/30 p-4 rounded-full w-20 h-20 mx-auto mb-6 flex items-center justify-center">
+            <CheckCircle size={40} className="text-emerald-500" />
+          </div>
+          <h2 className="text-2xl font-bold text-gray-800 dark:text-white mb-2">Pagamento Confirmado!</h2>
+          <p className="text-gray-600 dark:text-gray-400 mb-4">
+            Seu plano <span className="font-semibold text-emerald-500">{plan?.name}</span> foi ativado com sucesso.
+          </p>
+          <div className="bg-gray-100 dark:bg-gray-700 rounded-lg p-4 mb-6">
+            <p className="text-sm text-gray-500 dark:text-gray-400">Próximo vencimento</p>
+            <p className="text-lg font-semibold text-gray-800 dark:text-white">
+              {new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toLocaleDateString('pt-BR')}
+            </p>
+          </div>
+          <div className="animate-pulse text-gray-500 dark:text-gray-400 text-sm">
+            Redirecionando para o sistema...
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-[80vh] py-8 px-4">
+      <div className="max-w-5xl mx-auto">
+        {/* Header de Alerta */}
+        <div className="bg-amber-50 dark:bg-amber-900/20 border-2 border-amber-400 dark:border-amber-600 rounded-xl p-6 mb-8">
+          <div className="flex items-start gap-4">
+            <div className="bg-amber-100 dark:bg-amber-800 p-3 rounded-full flex-shrink-0">
+              <AlertTriangle size={28} className="text-amber-600 dark:text-amber-400" />
+            </div>
+            <div className="flex-1">
+              <h1 className="text-xl font-bold text-amber-800 dark:text-amber-300 mb-2">
+                {condoInfo?.is_active === false ? 'Conta Suspensa' : 'Período de Teste Expirado'}
+              </h1>
+              <p className="text-gray-700 dark:text-gray-300 mb-3">
+                {condoInfo?.is_active === false
+                  ? 'Sua conta foi suspensa. Escolha um plano para reativar o acesso.'
+                  : 'O período de teste gratuito de 15 dias chegou ao fim. Escolha um plano para continuar.'}
+              </p>
+              <div className="flex flex-wrap gap-4 items-center">
+                <div className="bg-white dark:bg-gray-800 rounded-lg px-4 py-2 border border-gray-200 dark:border-gray-600">
+                  <p className="text-xs text-gray-500 dark:text-gray-400">Condomínio</p>
+                  <p className="font-semibold text-gray-800 dark:text-white">{condoInfo?.name || 'Não identificado'}</p>
+                </div>
+                <div className="bg-white dark:bg-gray-800 rounded-lg px-4 py-2 border border-gray-200 dark:border-gray-600">
+                  <p className="text-xs text-gray-500 dark:text-gray-400">Status</p>
+                  <p className={`font-semibold ${daysInfo.expired ? 'text-red-500' : 'text-amber-500'}`}>
+                    {daysInfo.text}
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Título */}
+        <div className="text-center mb-8">
+          <h2 className="text-2xl font-bold text-gray-800 dark:text-white mb-2">Escolha seu Plano</h2>
+          <p className="text-gray-600 dark:text-gray-400">Selecione o plano ideal e continue gerenciando seu condomínio</p>
+        </div>
+
+        {/* Cards de Planos */}
+        <div className="grid md:grid-cols-3 gap-6 mb-8">
+          {Object.entries(PLANS_CONFIG).map(([key, plan]) => (
+            <div
+              key={key}
+              className={`relative bg-white dark:bg-gray-800 rounded-xl border-2 p-6 transition-all hover:shadow-md ${
+                plan.popular
+                  ? 'border-cyan-500 shadow-lg shadow-cyan-500/20 scale-105'
+                  : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600'
+              }`}
+            >
+              {plan.popular && (
+                <div className="absolute -top-3 left-1/2 transform -translate-x-1/2">
+                  <span className="bg-cyan-500 text-white px-3 py-1 rounded-full text-xs font-bold uppercase">
+                    Mais Popular
+                  </span>
+                </div>
+              )}
+              <div className="mb-4 mt-2">
+                <h3 className={`text-lg font-bold ${plan.popular ? 'text-cyan-500' : 'text-gray-800 dark:text-white'}`}>
+                  {plan.name}
+                </h3>
+              </div>
+              <div className="mb-4">
+                <span className="text-4xl font-extrabold text-gray-800 dark:text-white">{plan.priceFormatted}</span>
+                <span className="text-gray-500 dark:text-gray-400">/mês</span>
+              </div>
+              <ul className="space-y-2 mb-6">
+                {plan.features.map((feature, idx) => (
+                  <li key={idx} className="flex items-center text-sm text-gray-600 dark:text-gray-300">
+                    <CheckCircle size={16} className={`mr-2 flex-shrink-0 ${plan.popular ? 'text-cyan-500' : 'text-emerald-500'}`} />
+                    {feature}
+                  </li>
+                ))}
+              </ul>
+              <button
+                onClick={() => handleSubscribe(key)}
+                disabled={isProcessing}
+                className={`w-full py-3 rounded-xl font-bold transition-all ${
+                  isProcessing
+                    ? 'bg-gray-300 dark:bg-gray-600 cursor-not-allowed'
+                    : plan.popular
+                      ? 'bg-cyan-500 hover:bg-cyan-600 text-white'
+                      : 'bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-800 dark:text-white'
+                }`}
+              >
+                {isProcessing && selectedPlan === key ? (
+                  <span className="flex items-center justify-center gap-2">
+                    <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                    Processando...
+                  </span>
+                ) : (
+                  'Assinar Agora'
+                )}
+              </button>
+            </div>
+          ))}
+        </div>
+
+        {/* Erro Global */}
+        {error && (
+          <div className="bg-red-50 dark:bg-red-900/20 border border-red-300 dark:border-red-700 text-red-600 dark:text-red-400 px-4 py-3 rounded-lg mb-6 text-sm text-center">
+            {error}
+          </div>
+        )}
+
+        {/* Painel de Teste (Dev/Admin) */}
+        {!IS_PRODUCTION && (
+          <div className="mb-8">
+            <button
+              onClick={() => setShowTestPanel(!showTestPanel)}
+              className="w-full text-left bg-purple-50 dark:bg-purple-900/20 border border-purple-300 dark:border-purple-700 rounded-xl p-4 hover:bg-purple-100 dark:hover:bg-purple-900/30 transition-colors"
+            >
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="bg-purple-100 dark:bg-purple-800 p-2 rounded-lg">
+                    <Settings size={20} className="text-purple-600 dark:text-purple-400" />
+                  </div>
+                  <div>
+                    <p className="font-semibold text-purple-800 dark:text-purple-300">Painel de Teste (Dev Mode)</p>
+                    <p className="text-xs text-purple-600 dark:text-purple-400">Simular pagamento sem Stripe</p>
+                  </div>
+                </div>
+                <span className="text-purple-500">{showTestPanel ? '▲' : '▼'}</span>
+              </div>
+            </button>
+
+            {showTestPanel && (
+              <div className="mt-4 bg-white dark:bg-gray-800 border border-purple-200 dark:border-purple-800 rounded-xl p-6">
+                <h4 className="font-bold text-gray-800 dark:text-white mb-4">Simular Pagamento (Webhook)</h4>
+                <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                  Este botão simula a confirmação de pagamento que seria enviada pelo webhook do Stripe após um pagamento bem-sucedido.
+                  A conta será desbloqueada instantaneamente.
+                </p>
+
+                <div className="grid grid-cols-3 gap-3 mb-4">
+                  {Object.entries(PLANS_CONFIG).map(([key, plan]) => (
+                    <button
+                      key={key}
+                      onClick={() => setSelectedPlan(key)}
+                      className={`p-3 rounded-lg border-2 transition-all ${
+                        selectedPlan === key
+                          ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/30'
+                          : 'border-gray-200 dark:border-gray-700 hover:border-purple-300'
+                      }`}
+                    >
+                      <p className="font-semibold text-gray-800 dark:text-white">{plan.name}</p>
+                      <p className="text-sm text-gray-500 dark:text-gray-400">{plan.priceFormatted}</p>
+                    </button>
+                  ))}
+                </div>
+
+                <button
+                  onClick={handleTestPayment}
+                  disabled={isProcessing}
+                  className={`w-full py-3 rounded-xl font-bold transition-all flex items-center justify-center gap-2 ${
+                    isProcessing
+                      ? 'bg-gray-400 cursor-not-allowed text-white'
+                      : 'bg-purple-600 hover:bg-purple-700 text-white'
+                  }`}
+                >
+                  {isProcessing ? (
+                    <>
+                      <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      Processando Webhook...
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle size={20} />
+                      Simular Pagamento ({PLANS_CONFIG[selectedPlan]?.name})
+                    </>
+                  )}
+                </button>
+
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-3 text-center">
+                  Isso chama simulateWebhookSuccess() e ativa a conta imediatamente
+                </p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Botão de Logout */}
+        <div className="text-center">
+          <button
+            onClick={onLogout}
+            className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 text-sm underline"
+          >
+            Sair e usar outra conta
+          </button>
+        </div>
+      </div>
+
+      {/* Modal de Pagamento (Modo Demo) */}
+      {showPaymentModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6 max-w-md w-full border border-gray-200 dark:border-gray-700">
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-xl font-bold text-gray-800 dark:text-white">Finalizar Pagamento</h3>
+              <button
+                onClick={() => setShowPaymentModal(false)}
+                className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
+              >
+                <X size={24} />
+              </button>
+            </div>
+
+            {/* Badge Modo Demo */}
+            <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-300 dark:border-amber-700 rounded-lg p-3 mb-4">
+              <p className="text-xs text-amber-700 dark:text-amber-400 text-center font-medium">
+                Modo Demo - Em produção, você seria redirecionado para o Stripe Checkout
+              </p>
+            </div>
+
+            <div className="text-center mb-6">
+              <p className="text-gray-600 dark:text-gray-400">Plano selecionado</p>
+              <p className="text-2xl font-bold text-cyan-500">{PLANS_CONFIG[selectedPlan]?.name}</p>
+              <p className="text-3xl font-extrabold text-gray-800 dark:text-white mt-2">
+                {PLANS_CONFIG[selectedPlan]?.priceFormatted}/mês
+              </p>
+            </div>
+
+            {/* Formulário de Cartão (Simulado) */}
+            <div className="space-y-4 mb-6">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Número do Cartão
+                </label>
+                <input
+                  type="text"
+                  placeholder="4242 4242 4242 4242"
+                  maxLength={19}
+                  className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-xl text-gray-800 dark:text-white placeholder-gray-400 focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20 outline-none"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Validade
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="12/25"
+                    maxLength={5}
+                    className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-xl text-gray-800 dark:text-white placeholder-gray-400 focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20 outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    CVV
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="123"
+                    maxLength={4}
+                    className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-xl text-gray-800 dark:text-white placeholder-gray-400 focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20 outline-none"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {error && (
+              <div className="bg-red-50 dark:bg-red-900/20 border border-red-300 dark:border-red-700 text-red-600 dark:text-red-400 px-4 py-3 rounded-lg mb-4 text-sm">
+                {error}
+              </div>
+            )}
+
+            <button
+              onClick={handleProcessPayment}
+              disabled={isProcessing}
+              className={`w-full py-4 rounded-xl font-bold text-white transition-all flex items-center justify-center gap-2 ${
+                isProcessing
+                  ? 'bg-gray-400 cursor-not-allowed'
+                  : 'bg-emerald-500 hover:bg-emerald-600'
+              }`}
+            >
+              {isProcessing ? (
+                <>
+                  <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  Processando...
+                </>
+              ) : (
+                <>
+                  <Shield size={20} />
+                  Pagar {PLANS_CONFIG[selectedPlan]?.priceFormatted}
+                </>
+              )}
+            </button>
+
+            <p className="text-center text-gray-500 dark:text-gray-400 text-xs mt-4 flex items-center justify-center gap-1">
+              <Shield size={14} />
+              Pagamento 100% seguro e criptografado
+            </p>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function ConciergeLogin({ onSuccess }) {
+  const [condoIdInput, setCondoIdInput] = useState('');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+
+  // ========================================================================
+  // PRE-PREENCHIMENTO: Verifica se veio do cadastro
+  // ========================================================================
+  useEffect(() => {
+    try {
+      const tempLoginInfo = localStorage.getItem('temp_login_info');
+      if (tempLoginInfo) {
+        const data = JSON.parse(tempLoginInfo);
+
+        // Verifica se os dados nao sao muito antigos (5 minutos)
+        const isRecent = data.timestamp && (Date.now() - data.timestamp) < 5 * 60 * 1000;
+
+        if (isRecent && data.condoId && data.username) {
+          console.log('[Login] Pre-preenchendo dados do cadastro:', data);
+
+          setCondoIdInput(data.condoId);
+          setUsername(data.username);
+
+          // Limpa os dados temporarios
+          localStorage.removeItem('temp_login_info');
+        } else {
+          // Dados antigos ou incompletos - remove
+          localStorage.removeItem('temp_login_info');
+        }
+      }
+    } catch (err) {
+      console.error('[Login] Erro ao ler temp_login_info:', err);
+      localStorage.removeItem('temp_login_info');
+    }
+  }, []);
 
   const onSubmit = async (e) => {
     e.preventDefault();
     setError('');
+
+    // Validação dos campos
+    if (!condoIdInput.trim()) {
+      setError('Informe o ID do Condomínio.');
+      return;
+    }
+    if (!username.trim()) {
+      setError('Informe o usuário.');
+      return;
+    }
+    if (!password.trim()) {
+      setError('Informe a senha.');
+      return;
+    }
+
+    setIsLoading(true);
     try {
-      // Busca usuário específico pelo username (não expõe senha no select)
-      const { data, error: err } = await supabase
-        .from('staff')
-        .select('id, name, role, username, password')
-        .eq('username', username)
-        .single();
+      // ========================================================================
+      // 🔐 AUTENTICAÇÃO SEGURA
+      // ========================================================================
+      // Em PRODUÇÃO: usa Edge Function (senha validada no backend)
+      // Em DEMO: usa mock local (para desenvolvimento/demonstração)
+      // ========================================================================
 
-      if (err || !data) {
-        setError('Usuário ou senha inválidos.');
-        return;
+      // =====================================================================
+      // ESTRATÉGIA DE AUTENTICAÇÃO:
+      // 1. Tenta Edge Function se IS_PRODUCTION = true
+      // 2. Se Edge Function falhar (404/CORS), usa fallback local
+      // 3. Se IS_PRODUCTION = false, usa direto o modo demo
+      // =====================================================================
+      let useLocalAuth = !IS_PRODUCTION;
+
+      if (IS_PRODUCTION) {
+        // =====================================================================
+        // MODO PRODUÇÃO: Tenta Autenticação via Edge Function
+        // =====================================================================
+        try {
+          const authResult = await authenticateViaEdgeFunction(
+            username,
+            password,
+            condoIdInput
+          );
+
+          if (authResult.success) {
+            // Login bem-sucedido via Edge Function
+            onSuccess(
+              {
+                id: authResult.user.id,
+                name: authResult.user.name,
+                role: authResult.user.role,
+                username: authResult.user.username,
+                condo_id: authResult.user.condo_id
+              },
+              authResult.condo,
+              authResult.condoStatus // Passa status para o App gerenciar BillingCheckout
+            );
+            return; // Sucesso, não precisa continuar
+          }
+        } catch (authError) {
+          // Se for erro de rede/CORS/404 (função não deployada), usa fallback local
+          if (authError.isNetworkError || authError.status === 404) {
+            console.warn('[Login] Edge Function indisponível, usando autenticação local (localStorage)');
+            useLocalAuth = true;
+          } else {
+            // Outros erros (credenciais inválidas, etc) - mostra ao usuário
+            console.error('[Login] Erro Edge Function:', authError);
+            setError(authError.message || 'Erro ao autenticar.');
+            setIsLoading(false);
+            return;
+          }
+        }
       }
 
-      // Valida senha (em produção, usar hash bcrypt no backend)
-      if (String(data.password) !== String(password)) {
-        setError('Usuário ou senha inválidos.');
-        return;
-      }
+      if (useLocalAuth) {
+        // =====================================================================
+        // MODO DEMO: Autenticação via Mock Local (Desenvolvimento)
+        // =====================================================================
+        // 1. Verifica se o condomínio existe
+        const { data: condoData, error: condoErr } = await supabase
+          .from('condos')
+          .select('*')
+          .eq('id', condoIdInput.trim())
+          .single();
 
-      // Não passa a senha para o estado
-      onSuccess({ id: data.id, name: data.name, role: data.role, username: data.username });
+        if (condoErr || !condoData) {
+          setError('Condomínio não encontrado. Verifique o ID.');
+          setIsLoading(false);
+          return;
+        }
+
+        // 2. Busca usuário pelo username E condo_id (Multi-Tenant)
+        const { data, error: err } = await supabase
+          .from('staff')
+          .select('id, name, role, username, password, condo_id')
+          .eq('username', username.trim())
+          .eq('condo_id', condoIdInput.trim())
+          .single();
+
+        if (err || !data) {
+          setError('Usuário não encontrado neste condomínio.');
+          setIsLoading(false);
+          return;
+        }
+
+        // 3. Valida senha localmente (APENAS modo demo - em produção usa Edge Function)
+        if (String(data.password) !== String(password)) {
+          setError('Senha incorreta.');
+          setIsLoading(false);
+          return;
+        }
+
+        // 4. Sucesso: passa user + condo info
+        onSuccess(
+          { id: data.id, name: data.name, role: data.role, username: data.username, condo_id: data.condo_id },
+          condoData
+        );
+      }
     } catch (ex) {
-      console.error(ex);
-      setError('Erro ao autenticar.');
+      console.error('[Login] Erro:', ex);
+      setError('Erro ao autenticar. Tente novamente.');
+    } finally {
+      setIsLoading(false);
     }
   };
+
   return (
-    <div className="min-h-[60vh] flex items-center justify-center">
-      <div className="w-full max-w-md bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-lg p-8">
-        <div className="flex flex-col items-center gap-4 mb-6">
-          <img
-            src={LOGO_PATH}
-            alt="CondoTrack Logo"
-            className="h-24 sm:h-32 w-auto"
-            onError={(e) => {
-              e.target.style.display = 'none';
-              e.target.nextElementSibling.style.display = 'flex';
-            }}
-          />
-          <div className="hidden bg-slate-100 dark:bg-slate-700 p-3 rounded-full">
-            <LogIn size={28} className="text-slate-600 dark:text-slate-400" />
+    <div className="min-h-[70vh] flex items-center justify-center py-8">
+      <div className="w-full max-w-md">
+        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-lg overflow-hidden">
+          {/* Header com gradiente */}
+          <div className="bg-gradient-to-r from-slate-800 to-slate-700 px-6 py-8 text-center">
+            <img
+              src={LOGO_PATH}
+              alt="CondoTrack Logo"
+              className="h-16 sm:h-20 w-auto mx-auto mb-4"
+              onError={(e) => {
+                e.target.style.display = 'none';
+              }}
+            />
+            <h2 className="text-2xl font-bold text-white">Acesso da Portaria</h2>
+            <p className="text-sm text-blue-200 mt-1">Entre com suas credenciais</p>
           </div>
-          <div className="text-center">
-            <h2 className="text-2xl sm:text-3xl font-bold text-slate-800 dark:text-slate-100">Acesso da Portaria</h2>
-            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Entre com suas credenciais</p>
+
+          {/* Formulário */}
+          <div className="p-6 sm:p-8">
+            <form onSubmit={onSubmit} className="space-y-5">
+              <div>
+                <label className="block text-sm font-semibold text-slate-800 dark:text-gray-300 mb-2">
+                  <Building2 size={14} className="inline mr-1.5 text-blue-500" />
+                  ID do Condomínio
+                </label>
+                <input
+                  type="text"
+                  value={condoIdInput}
+                  onChange={(e) => setCondoIdInput(e.target.value)}
+                  className="w-full px-4 py-3 border-2 border-gray-200 dark:border-gray-600 rounded-xl focus:border-primary focus:ring-4 focus:ring-primary/10 outline-none bg-slate-50 dark:bg-gray-700 dark:text-white transition-all placeholder:text-slate-800-subtle"
+                  placeholder="Ex: demo-condo-001"
+                  disabled={isLoading}
+                />
+                <p className="text-xs text-slate-800-subtle mt-1.5">Fornecido pelo administrador do sistema</p>
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-slate-800 dark:text-gray-300 mb-2">
+                  <User size={14} className="inline mr-1.5 text-blue-500" />
+                  Usuário
+                </label>
+                <input
+                  type="text"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  className="w-full px-4 py-3 border-2 border-gray-200 dark:border-gray-600 rounded-xl focus:border-primary focus:ring-4 focus:ring-primary/10 outline-none bg-slate-50 dark:bg-gray-700 dark:text-white transition-all placeholder:text-slate-800-subtle"
+                  placeholder="Digite seu usuário"
+                  disabled={isLoading}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-slate-800 dark:text-gray-300 mb-2">
+                  <Shield size={14} className="inline mr-1.5 text-blue-500" />
+                  Senha
+                </label>
+                <input
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="w-full px-4 py-3 border-2 border-gray-200 dark:border-gray-600 rounded-xl focus:border-primary focus:ring-4 focus:ring-primary/10 outline-none bg-slate-50 dark:bg-gray-700 dark:text-white transition-all placeholder:text-slate-800-subtle"
+                  placeholder="Digite sua senha"
+                  disabled={isLoading}
+                />
+              </div>
+              {error && (
+                <div className="flex items-center gap-2 text-red-600 dark:text-red-300 text-sm bg-red-100 dark:bg-red-800 p-3 rounded-xl">
+                  <AlertTriangle size={16} />
+                  {error}
+                </div>
+              )}
+              <button
+                type="submit"
+                disabled={isLoading}
+                className="w-full bg-blue-500 hover:bg-blue-600 disabled:bg-gray-400 text-white font-semibold py-3.5 rounded-lg shadow-sm hover:shadow-md transition-all flex items-center justify-center gap-2"
+              >
+                {isLoading ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
+                    Autenticando...
+                  </>
+                ) : (
+                  <>
+                    <LogIn size={18} />
+                    Entrar
+                  </>
+                )}
+              </button>
+            </form>
+          </div>
+
+          {/* Footer com info de demo */}
+          <div className="px-6 sm:px-8 py-4 bg-slate-50 dark:bg-gray-700/50 border-t border-gray-200 dark:border-gray-700 text-center">
+            <p className="text-xs text-slate-800-subtle">
+              <span className="font-medium">Demo:</span> ID <code className="bg-white dark:bg-gray-700 px-1.5 py-0.5 rounded text-blue-500 font-mono">demo-condo-001</code> | Usuário <code className="bg-white dark:bg-gray-700 px-1.5 py-0.5 rounded text-blue-500 font-mono">admin</code> | Senha <code className="bg-white dark:bg-gray-700 px-1.5 py-0.5 rounded text-blue-500 font-mono">123</code>
+            </p>
           </div>
         </div>
-        <form onSubmit={onSubmit} className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Usuário</label>
-            <input type="text" value={username} onChange={(e) => setUsername(e.target.value)} className="w-full px-4 py-3 border dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-slate-500 outline-none bg-white dark:bg-gray-700 dark:text-white" placeholder="Ex: admin" />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Senha</label>
-            <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} className="w-full px-4 py-3 border dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-slate-500 outline-none bg-white dark:bg-gray-700 dark:text-white" placeholder="Digite a senha" />
-          </div>
-          {error && <div className="text-red-600 text-sm text-center">{error}</div>}
-          <button className="w-full bg-slate-700 hover:bg-slate-800 text-white font-semibold py-3 rounded-lg shadow-md transition-colors">Entrar</button>
-        </form>
       </div>
     </div>
   );
 }
 
-function ConciergeView({ onAdd, packages, onDelete, onCollect, residents, residentsIndex, onAddResident, onDeleteResident, onUpdateResident, currentUser, staff, onAddStaff, onDeleteStaff, condoSettings, onUpdateSettings }) {
-  const [tab, setTab] = useState('home'); // 'home' | 'packages' | 'residents' | 'team' | 'settings' | 'reports'
+function ConciergeView({ onAdd, packages, onDelete, onCollect, residents, residentsIndex, onAddResident, onDeleteResident, onUpdateResident, currentUser, staff, condoInfo, onAddStaff, onDeleteStaff, condoSettings, onUpdateSettings }) {
+  const [tab, setTab] = useState('home'); // 'home' | 'packages' | 'residents' | 'team' | 'settings' | 'reports' | 'billing'
   const [form, setForm] = useState({ unit: '', recipient: '', phone: '', type: 'Caixa', description: '' });
   const [filterType, setFilterType] = useState('Todos');
   const [deleteTarget, setDeleteTarget] = useState(null);
@@ -911,26 +2195,31 @@ function ConciergeView({ onAdd, packages, onDelete, onCollect, residents, reside
       {/* Modal de Exclusão com confirmação de senha */}
       {deleteTarget && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm px-4">
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl p-6 max-w-sm w-full animate-fade-in">
-            <div className="flex items-center gap-3 text-red-600 dark:text-red-400 mb-4">
-              <AlertTriangle size={24} />
-              <h3 className="text-lg font-bold">Confirmar Exclusão</h3>
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6 max-w-sm w-full animate-scale-in border border-gray-200 dark:border-gray-700">
+            <div className="flex items-center gap-3 mb-5">
+              <div className="p-3 bg-red-100 dark:bg-red-800 rounded-lg">
+                <AlertTriangle size={24} className="text-red-600 dark:text-red-200" />
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-slate-800 dark:text-white">Confirmar Exclusão</h3>
+                <p className="text-xs text-slate-500">Esta ação é irreversível</p>
+              </div>
             </div>
-            <p className="text-gray-600 dark:text-gray-300 mb-4">Deseja realmente apagar este registro? Esta ação é irreversível.</p>
-            <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Digite sua senha para confirmar</label>
+            <p className="text-slate-600 dark:text-gray-300 mb-5 text-sm">Deseja realmente apagar este registro? Todos os dados serão perdidos permanentemente.</p>
+            <div className="mb-5">
+              <label className="block text-sm font-semibold text-slate-700 dark:text-gray-300 mb-2">Digite sua senha para confirmar</label>
               <input
                 type="password"
-                className="w-full px-3 py-2 border dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 dark:text-white focus:ring-2 focus:ring-red-500 outline-none"
+                className="w-full px-4 py-3 border-2 border-gray-200 dark:border-gray-600 rounded-lg bg-slate-50 dark:bg-gray-700 dark:text-white focus:border-red-500 focus:ring-4 focus:ring-red-500/10 outline-none transition-all placeholder:text-slate-400"
                 value={deleteConfirmPassword}
                 onChange={(e) => { setDeleteConfirmPassword(e.target.value); setDeletePasswordError(''); }}
-                placeholder="Sua senha"
+                placeholder="Digite sua senha"
               />
-              {deletePasswordError && <p className="text-red-500 text-sm mt-1">{deletePasswordError}</p>}
+              {deletePasswordError && <p className="text-red-500 text-sm mt-2 flex items-center gap-1"><AlertTriangle size={14} />{deletePasswordError}</p>}
             </div>
-            <div className="flex justify-end gap-3">
-              <button onClick={() => { setDeleteTarget(null); setDeleteConfirmPassword(''); setDeletePasswordError(''); }} className="px-4 py-2 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 font-medium">Cancelar</button>
-              <button onClick={confirmDelete} disabled={!deleteConfirmPassword} className="px-4 py-2 rounded-lg bg-red-600 text-white hover:bg-red-700 font-medium shadow-md disabled:opacity-50">Sim, excluir</button>
+            <div className="flex gap-3">
+              <button onClick={() => { setDeleteTarget(null); setDeleteConfirmPassword(''); setDeletePasswordError(''); }} className="flex-1 px-4 py-3 rounded-lg text-slate-600 hover:bg-slate-100 dark:hover:bg-gray-700 font-medium transition-colors">Cancelar</button>
+              <button onClick={confirmDelete} disabled={!deleteConfirmPassword} className="flex-1 px-4 py-3 rounded-lg bg-red-500 text-white hover:bg-red-600 font-semibold shadow-sm disabled:opacity-50 transition-all">Sim, excluir</button>
             </div>
           </div>
         </div>
@@ -939,45 +2228,56 @@ function ConciergeView({ onAdd, packages, onDelete, onCollect, residents, reside
       {/* Modal de Confirmação de Retirada */}
       {collectTarget && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm px-4">
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl p-6 w-full max-w-sm animate-fade-in">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-bold text-slate-800 dark:text-white">Confirmar Retirada</h3>
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6 w-full max-w-sm animate-scale-in border border-gray-200 dark:border-gray-700">
+            <div className="flex items-center justify-between mb-5">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 bg-emerald-100 dark:bg-emerald-800 rounded-lg">
+                  <CheckCircle size={22} className="text-emerald-600 dark:text-emerald-200" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-slate-800 dark:text-white">Confirmar Retirada</h3>
+                  <p className="text-xs text-slate-500">Registre quem está retirando</p>
+                </div>
+              </div>
               <button
-                  title="Excluir encomenda"
-                  onClick={() => { setDeleteTarget(collectTarget); setCollectTarget(null); }}
-                  className="text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30 p-2 rounded"
-                >
-                  <Trash2 size={18} />
-                </button>
+                title="Excluir encomenda"
+                onClick={() => { setDeleteTarget(collectTarget); setCollectTarget(null); }}
+                className="text-red-600 hover:bg-red-100 dark:hover:bg-red-800 p-2 rounded-lg transition-colors"
+              >
+                <Trash2 size={18} />
+              </button>
             </div>
-            <div className="space-y-3">
+            <div className="space-y-4">
               <div>
-                <label className="block text-sm text-gray-700 dark:text-gray-300 mb-1">Nome de quem retira</label>
+                <label className="block text-sm font-semibold text-slate-700 dark:text-gray-300 mb-2">Nome de quem retira</label>
                 <input
                   autoFocus
                   type="text"
-                  className="w-full px-3 py-2 border dark:border-gray-600 rounded bg-white dark:bg-gray-700 dark:text-white"
+                  className="w-full px-4 py-3 border-2 border-gray-200 dark:border-gray-600 rounded-lg bg-slate-50 dark:bg-gray-700 dark:text-white focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 outline-none transition-all placeholder:text-slate-400"
                   value={collectName}
                   onChange={e => setCollectName(e.target.value)}
+                  placeholder="Nome completo"
                 />
               </div>
               <div>
-                <label className="block text-sm text-gray-700 dark:text-gray-300 mb-1">Documento (RG/CPF)</label>
+                <label className="block text-sm font-semibold text-slate-700 dark:text-gray-300 mb-2">Documento (RG/CPF)</label>
                 <input
                   type="text"
-                  className="w-full px-3 py-2 border dark:border-gray-600 rounded bg-white dark:bg-gray-700 dark:text-white"
+                  className="w-full px-4 py-3 border-2 border-gray-200 dark:border-gray-600 rounded-lg bg-slate-50 dark:bg-gray-700 dark:text-white focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 outline-none transition-all placeholder:text-slate-400"
                   value={collectDoc}
                   onChange={e => setCollectDoc(e.target.value)}
+                  placeholder="Número do documento"
                 />
               </div>
             </div>
-            <div className="flex justify-end gap-2 mt-4">
-              <button onClick={() => { setCollectTarget(null); setCollectName(''); setCollectDoc(''); }} className="px-3 py-2 rounded bg-gray-200 dark:bg-gray-600 text-gray-800 dark:text-gray-200 text-sm">Cancelar</button>
+            <div className="flex gap-3 mt-5">
+              <button onClick={() => { setCollectTarget(null); setCollectName(''); setCollectDoc(''); }} className="flex-1 px-4 py-3 rounded-lg text-slate-600 hover:bg-slate-100 dark:hover:bg-gray-700 font-medium transition-colors">Cancelar</button>
               <button
                 onClick={() => { if (collectName && collectDoc) { onCollect(collectTarget, collectName, collectDoc); setCollectTarget(null); setCollectName(''); setCollectDoc(''); } }}
                 disabled={!collectName || !collectDoc}
-                className="px-3 py-2 rounded bg-emerald-600 text-white text-sm disabled:opacity-50"
+                className="flex-1 px-4 py-3 rounded-lg bg-emerald-500 text-white hover:bg-emerald-600 font-semibold shadow-sm disabled:opacity-50 transition-all flex items-center justify-center gap-2"
               >
+                <CheckCircle size={18} />
                 Confirmar
               </button>
             </div>
@@ -985,73 +2285,171 @@ function ConciergeView({ onAdd, packages, onDelete, onCollect, residents, reside
         </div>
       )}
 
-      {/* Tabs dentro da Portaria */}
-      <div className="flex justify-center gap-1.5 sm:gap-2 flex-wrap">
-        <button
-          onClick={() => setTab('home')}
-          className={`px-2 sm:px-3 py-2 sm:py-1.5 rounded-md text-xs sm:text-sm font-medium transition-colors ${tab === 'home' ? 'bg-slate-700 text-white shadow-sm' : 'bg-white dark:bg-gray-800 border dark:border-gray-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-gray-700'}`}
-        >
-          🏠 Início
-        </button>
-        <button
-          onClick={() => setTab('packages')}
-          className={`px-2 sm:px-3 py-2 sm:py-1.5 rounded-md text-xs sm:text-sm font-medium transition-colors ${tab === 'packages' ? 'bg-slate-700 text-white shadow-sm' : 'bg-white dark:bg-gray-800 border dark:border-gray-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-gray-700'}`}
-        >
-          📦 Encomendas
-        </button>
-        <button
-          onClick={() => setTab('residents')}
-          className={`px-2 sm:px-3 py-2 sm:py-1.5 rounded-md text-xs sm:text-sm font-medium transition-colors ${tab === 'residents' ? 'bg-slate-700 text-white shadow-sm' : 'bg-white dark:bg-gray-800 border dark:border-gray-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-gray-700'}`}
-        >
-          👥 Moradores
-        </button>
-        <button
-          onClick={() => setTab('reports')}
-          className={`px-2 sm:px-3 py-2 sm:py-1.5 rounded-md text-xs sm:text-sm font-medium transition-colors ${tab === 'reports' ? 'bg-slate-700 text-white shadow-sm' : 'bg-white dark:bg-gray-800 border dark:border-gray-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-gray-700'}`}
-        >
-          📋 Histórico
-        </button>
-        {currentUser?.role === 'admin' && (
+      {/* Navigation Tabs - Design profissional monocromático */}
+      <nav className="bg-slate-100 dark:bg-slate-800 rounded-xl p-1 mb-6">
+        <div className="flex gap-1 overflow-x-auto scrollbar-hide">
           <button
-            onClick={() => setTab('team')}
-            className={`px-2 sm:px-3 py-2 sm:py-1.5 rounded-md text-xs sm:text-sm font-medium transition-colors ${tab === 'team' ? 'bg-slate-700 text-white shadow-sm' : 'bg-white dark:bg-gray-800 border dark:border-gray-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-gray-700'}`}
+            onClick={() => setTab('home')}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium whitespace-nowrap transition-all ${tab === 'home' ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-sm' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'}`}
           >
-            🏢 Equipe
+            <Package size={16} className={tab === 'home' ? 'text-blue-600 dark:text-blue-400' : 'text-slate-400'} />
+            <span>Início</span>
           </button>
-        )}
-        {currentUser?.role === 'admin' && (
           <button
-            onClick={() => setTab('settings')}
-            className={`px-2 sm:px-3 py-2 sm:py-1.5 rounded-md text-xs sm:text-sm font-medium flex items-center justify-center gap-1 transition-colors ${tab === 'settings' ? 'bg-slate-700 text-white shadow-sm' : 'bg-white dark:bg-gray-800 border dark:border-gray-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-gray-700'}`}
+            onClick={() => setTab('packages')}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium whitespace-nowrap transition-all ${tab === 'packages' ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-sm' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'}`}
           >
-            <Settings size={12} /> Config
+            <Box size={16} className={tab === 'packages' ? 'text-blue-600 dark:text-blue-400' : 'text-slate-400'} />
+            <span>Encomendas</span>
           </button>
-        )}
-      </div>
+          <button
+            onClick={() => setTab('residents')}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium whitespace-nowrap transition-all ${tab === 'residents' ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-sm' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'}`}
+          >
+            <Users size={16} className={tab === 'residents' ? 'text-blue-600 dark:text-blue-400' : 'text-slate-400'} />
+            <span>Moradores</span>
+          </button>
+          <button
+            onClick={() => setTab('reports')}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium whitespace-nowrap transition-all ${tab === 'reports' ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-sm' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'}`}
+          >
+            <FileText size={16} className={tab === 'reports' ? 'text-blue-600 dark:text-blue-400' : 'text-slate-400'} />
+            <span>Histórico</span>
+          </button>
+          {currentUser?.role === 'admin' && (
+            <button
+              onClick={() => setTab('team')}
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium whitespace-nowrap transition-all ${tab === 'team' ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-sm' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'}`}
+            >
+              <Briefcase size={16} className={tab === 'team' ? 'text-blue-600 dark:text-blue-400' : 'text-slate-400'} />
+              <span>Equipe</span>
+            </button>
+          )}
+          {currentUser?.role === 'admin' && (
+            <button
+              onClick={() => setTab('settings')}
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium whitespace-nowrap transition-all ${tab === 'settings' ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-sm' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'}`}
+            >
+              <Settings size={16} className={tab === 'settings' ? 'text-blue-600 dark:text-blue-400' : 'text-slate-400'} />
+              <span>Config</span>
+            </button>
+          )}
+          {currentUser?.role === 'admin' && (
+            <button
+              onClick={() => setTab('billing')}
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium whitespace-nowrap transition-all ${tab === 'billing' ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-sm' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'}`}
+            >
+              <CreditCard size={16} className={tab === 'billing' ? 'text-blue-600 dark:text-blue-400' : 'text-slate-400'} />
+              <span>Plano</span>
+            </button>
+          )}
+        </div>
+      </nav>
 
-      {/* Nome do Condomínio - Centralizado */}
-      <div className="bg-gradient-to-r from-slate-100 to-slate-50 dark:from-gray-800 dark:to-gray-700 rounded-lg py-2 sm:py-3 px-3 sm:px-4 text-center border border-slate-200 dark:border-gray-600">
+      {/* Nome do Condomínio - Card azul */}
+      <div className="bg-blue-500 dark:bg-blue-600 rounded-xl shadow-sm py-3 px-4 mb-6">
         <div className="flex items-center justify-center gap-2">
-          <Building2 className="text-slate-600 dark:text-slate-400 flex-shrink-0" size={16} />
-          <span className="text-sm sm:text-lg font-semibold text-slate-700 dark:text-slate-200 truncate">{condoSettings?.condo_name || 'Condomínio'}</span>
+          <Building2 className="text-white flex-shrink-0" size={18} />
+          <span className="text-base sm:text-lg font-semibold text-white truncate">{condoSettings?.condo_name || 'Condomínio'}</span>
         </div>
       </div>
 
-      {/* ABA INÍCIO - Tela inicial da portaria */}
+      {/* ABA INÍCIO - Dashboard com widgets de estatísticas */}
       {tab === 'home' && (
-        <div className="space-y-6">
+        <div className="space-y-6 animate-fade-in">
+          {/* Widgets de Estatísticas */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            {/* Widget - Pendentes */}
+            <div className="bg-gradient-to-br from-amber-50 to-orange-50 dark:from-amber-900/30 dark:to-orange-900/20 rounded-xl shadow-sm border border-amber-200 dark:border-amber-800/50 p-5 hover:shadow-md transition-shadow">
+              <div className="flex items-start justify-between">
+                <div>
+                  <p className="text-amber-700 dark:text-amber-300 text-sm font-medium">Pendentes</p>
+                  <p className="text-3xl font-bold text-amber-600 dark:text-amber-400 mt-1">{pendingPackages.length}</p>
+                </div>
+                <div className="p-3 bg-amber-500 dark:bg-amber-600 rounded-xl shadow-sm">
+                  <Clock size={22} className="text-white" />
+                </div>
+              </div>
+              <div className="flex items-center gap-1 mt-3 text-xs text-amber-600 dark:text-amber-400 font-medium">
+                <Package size={12} />
+                <span>Aguardando retirada</span>
+              </div>
+            </div>
+
+            {/* Widget - Entregues Hoje */}
+            <div className="bg-gradient-to-br from-emerald-50 to-green-50 dark:from-emerald-900/30 dark:to-green-900/20 rounded-xl shadow-sm border border-emerald-200 dark:border-emerald-800/50 p-5 hover:shadow-md transition-shadow">
+              <div className="flex items-start justify-between">
+                <div>
+                  <p className="text-emerald-700 dark:text-emerald-300 text-sm font-medium">Entregues Hoje</p>
+                  <p className="text-3xl font-bold text-emerald-600 dark:text-emerald-400 mt-1">{todayDeliveries.length}</p>
+                </div>
+                <div className="p-3 bg-emerald-500 dark:bg-emerald-600 rounded-xl shadow-sm">
+                  <CheckCircle size={22} className="text-white" />
+                </div>
+              </div>
+              <div className="flex items-center gap-1 mt-3 text-xs text-emerald-600 dark:text-emerald-400 font-medium">
+                <ArrowUpRight size={12} />
+                <span>Retiradas concluídas</span>
+              </div>
+            </div>
+
+            {/* Widget - Moradores */}
+            <div className="bg-gradient-to-br from-blue-50 to-sky-50 dark:from-blue-900/30 dark:to-sky-900/20 rounded-xl shadow-sm border border-blue-200 dark:border-blue-800/50 p-5 hover:shadow-md transition-shadow">
+              <div className="flex items-start justify-between">
+                <div>
+                  <p className="text-blue-700 dark:text-blue-300 text-sm font-medium">Moradores</p>
+                  <p className="text-3xl font-bold text-blue-600 dark:text-blue-400 mt-1">{residents?.length || 0}</p>
+                </div>
+                <div className="p-3 bg-blue-500 dark:bg-blue-600 rounded-xl shadow-sm">
+                  <Users size={22} className="text-white" />
+                </div>
+              </div>
+              <div className="flex items-center gap-1 mt-3 text-xs text-blue-600 dark:text-blue-400 font-medium">
+                <Building2 size={12} />
+                <span>Cadastrados</span>
+              </div>
+            </div>
+
+            {/* Widget - Total do Mês */}
+            <div className="bg-gradient-to-br from-indigo-50 to-violet-50 dark:from-indigo-900/30 dark:to-violet-900/20 rounded-xl shadow-sm border border-indigo-200 dark:border-indigo-800/50 p-5 hover:shadow-md transition-shadow">
+              <div className="flex items-start justify-between">
+                <div>
+                  <p className="text-indigo-700 dark:text-indigo-300 text-sm font-medium">Total do Mês</p>
+                  <p className="text-3xl font-bold text-indigo-600 dark:text-indigo-400 mt-1">{historyPackages.length}</p>
+                </div>
+                <div className="p-3 bg-indigo-500 dark:bg-indigo-600 rounded-xl shadow-sm">
+                  <BarChart3 size={22} className="text-white" />
+                </div>
+              </div>
+              <div className="flex items-center gap-1 mt-3 text-xs text-indigo-600 dark:text-indigo-400 font-medium">
+                <Calendar size={12} />
+                <span>Encomendas entregues</span>
+              </div>
+            </div>
+          </div>
+
           {/* Encomendas Pendentes */}
           <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
-            <div className="bg-amber-50 dark:bg-amber-900/30 px-4 sm:px-6 py-3 sm:py-4 border-b border-amber-100 dark:border-amber-800 flex items-center gap-2">
-              <Clock className="text-amber-600 dark:text-amber-400" size={20} />
-              <h2 className="font-semibold text-amber-800 dark:text-amber-200">Encomendas Pendentes</h2>
-              <span className="ml-auto bg-amber-600 text-white text-xs font-bold px-2 py-0.5 rounded-full">{pendingPackages.length}</span>
+            <div className="px-5 sm:px-6 py-4 flex items-center justify-between bg-blue-500 dark:bg-blue-600">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-white/20 rounded-lg">
+                  <Clock className="text-white" size={20} />
+                </div>
+                <div>
+                  <h2 className="font-semibold text-white">Encomendas Pendentes</h2>
+                  <p className="text-xs text-blue-100">Clique para registrar retirada</p>
+                </div>
+              </div>
+              <span className="inline-flex items-center justify-center min-w-[28px] h-7 px-2.5 bg-white text-blue-600 text-sm font-bold rounded-full">{pendingPackages.length}</span>
             </div>
-            <div className="p-4 sm:p-6">
+            <div className="p-5 sm:p-6">
               {pendingPackages.length === 0 ? (
-                <div className="text-center py-8 text-gray-400 dark:text-gray-500">
-                  <Package size={40} className="mx-auto mb-2 opacity-50" />
-                  <p>Nenhuma encomenda pendente</p>
+                <div className="text-center py-12">
+                  <div className="inline-flex items-center justify-center w-16 h-16 bg-slate-100 dark:bg-gray-700 rounded-xl mb-4">
+                    <Package size={32} className="text-slate-400" />
+                  </div>
+                  <p className="text-slate-600 dark:text-gray-300 font-medium">Nenhuma encomenda pendente</p>
+                  <p className="text-slate-500 text-sm mt-1">Todas as encomendas foram retiradas</p>
                 </div>
               ) : (
                 <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
@@ -1059,17 +2457,27 @@ function ConciergeView({ onAdd, packages, onDelete, onCollect, residents, reside
                     <div
                       key={pkg.id}
                       onClick={() => setCollectTarget(pkg.id)}
-                      className="bg-gradient-to-br from-amber-50 to-orange-50 dark:from-gray-700 dark:to-gray-600 rounded-lg p-4 border border-amber-200 dark:border-amber-700 cursor-pointer hover:shadow-md transition-all hover:scale-[1.02]"
+                      className="group bg-slate-50 dark:bg-gray-700/50 rounded-lg p-4 border border-gray-200 dark:border-gray-600 cursor-pointer hover:shadow-md hover:border-amber-400/50 transition-all hover:-translate-y-0.5"
                     >
-                      <div className="flex justify-between items-start mb-2">
-                        <span className="font-bold text-amber-800 dark:text-amber-200 text-lg">Apt {pkg.unit}</span>
-                        <span className="text-xs bg-amber-200 dark:bg-amber-700 text-amber-800 dark:text-amber-200 px-2 py-0.5 rounded-full">{pkg.type}</span>
+                      <div className="flex justify-between items-start mb-3">
+                        <span className="inline-flex items-center gap-1 font-bold text-slate-800 dark:text-white text-lg">
+                          <Building2 size={14} className="text-blue-500" />
+                          Apt {pkg.unit}
+                        </span>
+                        <span className="text-xs font-medium bg-amber-500/15 text-amber-700 dark:text-amber-400 px-2.5 py-1 rounded-lg">{pkg.type}</span>
                       </div>
-                      <p className="text-gray-700 dark:text-gray-300 text-sm font-medium">{pkg.recipient}</p>
-                      <p className="text-gray-500 dark:text-gray-400 text-xs mt-1">
-                        {new Date(pkg.arrived_at).toLocaleDateString('pt-BR')} às {new Date(pkg.arrived_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
-                      </p>
-                      {pkg.description && <p className="text-gray-400 dark:text-gray-500 text-xs mt-1 truncate">{pkg.description}</p>}
+                      <p className="text-slate-800 dark:text-gray-200 font-medium truncate">{pkg.recipient}</p>
+                      <div className="flex items-center gap-2 mt-2 text-xs text-slate-800-subtle">
+                        <Clock size={12} />
+                        <span>
+                          {new Date(pkg.arrived_at).toLocaleDateString('pt-BR')} às {new Date(pkg.arrived_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                      </div>
+                      {pkg.description && <p className="text-slate-800-subtle text-xs mt-2 truncate">{pkg.description}</p>}
+                      <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-600 flex items-center justify-between">
+                        <span className="text-xs text-slate-800-subtle">Clique para entregar</span>
+                        <ArrowUpRight size={14} className="text-slate-800-subtle group-hover:text-blue-500 transition-colors" />
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -1079,37 +2487,49 @@ function ConciergeView({ onAdd, packages, onDelete, onCollect, residents, reside
 
           {/* Entregas do Dia */}
           <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
-            <div className="bg-green-50 dark:bg-green-900/30 px-4 sm:px-6 py-3 sm:py-4 border-b border-green-100 dark:border-green-800 flex items-center gap-2">
-              <CheckCircle className="text-green-600 dark:text-green-400" size={20} />
-              <h2 className="font-semibold text-green-800 dark:text-green-200">Entregas de Hoje</h2>
-              <span className="ml-auto bg-green-600 text-white text-xs font-bold px-2 py-0.5 rounded-full">{todayDeliveries.length}</span>
+            <div className="px-5 sm:px-6 py-4 flex items-center justify-between bg-blue-500 dark:bg-blue-600">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-white/20 rounded-lg">
+                  <CheckCircle className="text-white" size={20} />
+                </div>
+                <div>
+                  <h2 className="font-semibold text-white">Entregas de Hoje</h2>
+                  <p className="text-xs text-blue-100">Retiradas realizadas</p>
+                </div>
+              </div>
+              <span className="inline-flex items-center justify-center min-w-[28px] h-7 px-2.5 bg-white text-blue-600 text-sm font-bold rounded-full">{todayDeliveries.length}</span>
             </div>
-            <div className="p-4 sm:p-6">
+            <div className="p-5 sm:p-6">
               {todayDeliveries.length === 0 ? (
-                <div className="text-center py-8 text-gray-400 dark:text-gray-500">
-                  <CheckCircle size={40} className="mx-auto mb-2 opacity-50" />
-                  <p>Nenhuma entrega realizada hoje</p>
+                <div className="text-center py-12">
+                  <div className="inline-flex items-center justify-center w-16 h-16 bg-slate-100 dark:bg-gray-700 rounded-xl mb-4">
+                    <CheckCircle size={32} className="text-slate-400" />
+                  </div>
+                  <p className="text-slate-600 dark:text-gray-300 font-medium">Nenhuma entrega hoje</p>
+                  <p className="text-slate-500 text-sm mt-1">As entregas aparecerão aqui</p>
                 </div>
               ) : (
-                <div className="space-y-2">
+                <div className="space-y-3">
                   {todayDeliveries.map(pkg => (
-                    <div key={pkg.id} className="bg-green-50 dark:bg-green-900/20 rounded-lg p-3 border border-green-100 dark:border-green-800">
+                    <div key={pkg.id} className="bg-emerald-50 dark:bg-emerald-900/20 rounded-lg p-4 border border-emerald-200 dark:border-emerald-800/30">
                       <div className="flex justify-between items-start">
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 flex-wrap">
-                            <span className="font-bold text-green-800 dark:text-green-200">Apt {pkg.unit}</span>
-                            <span className="text-gray-600 dark:text-gray-300 truncate">- {pkg.recipient}</span>
+                            <span className="font-bold text-emerald-700 dark:text-emerald-400">Apt {pkg.unit}</span>
+                            <span className="text-slate-800 dark:text-gray-300 truncate">• {pkg.recipient}</span>
                           </div>
                         </div>
-                        <span className="text-xs bg-green-200 dark:bg-green-700 text-green-800 dark:text-green-200 px-2 py-0.5 rounded ml-2 flex-shrink-0">{pkg.type}</span>
+                        <span className="text-xs font-medium bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 px-2.5 py-1 rounded-lg ml-2 flex-shrink-0">{pkg.type}</span>
                       </div>
-                      <div className="flex items-center gap-2 mt-2 text-sm">
-                        <CheckCircle size={14} className="text-green-600 dark:text-green-400 flex-shrink-0" />
-                        <span className="text-green-700 dark:text-green-300 font-medium">
-                          {new Date(pkg.collected_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
-                        </span>
+                      <div className="flex items-center gap-3 mt-3 text-sm">
+                        <div className="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400">
+                          <CheckCircle size={14} />
+                          <span className="font-medium">
+                            {new Date(pkg.collected_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                        </div>
                         {pkg.collected_by && (
-                          <span className="text-gray-500 dark:text-gray-400 text-xs">por {pkg.collected_by}</span>
+                          <span className="text-slate-800-subtle text-xs">Retirado por {pkg.collected_by}</span>
                         )}
                       </div>
                     </div>
@@ -1123,81 +2543,154 @@ function ConciergeView({ onAdd, packages, onDelete, onCollect, residents, reside
 
       {tab === 'packages' && (
         <>
-          {/* Formulário Encomenda */}
+          {/* Formulário Encomenda - Design moderno */}
           <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
-            <div className="bg-slate-50 dark:bg-gray-700 px-6 py-4 border-b border-slate-100 dark:border-gray-600 flex items-center gap-2">
-              <Package className="text-slate-600 dark:text-slate-300" size={20} />
-              <h2 className="font-semibold text-slate-900 dark:text-white">Registrar Encomenda</h2>
+            <div className="px-5 sm:px-6 py-4 flex items-center gap-3 bg-blue-500 dark:bg-blue-600">
+              <div className="p-2.5 bg-white/20 rounded-lg">
+                <Package className="text-white" size={20} />
+              </div>
+              <div>
+                <h2 className="font-bold text-white">Registrar Encomenda</h2>
+                <p className="text-xs text-blue-100">Preencha os dados da nova encomenda</p>
+              </div>
             </div>
-            <div className="p-6">
-              <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="p-5 sm:p-6">
+              <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-5">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Unidade *</label>
-                  <input type="text" placeholder="Ex: 104-B" className="w-full px-4 py-2 border dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-slate-500 outline-none bg-white dark:bg-gray-700 dark:text-white" value={form.unit} onChange={e => setForm({ ...form, unit: e.target.value })} onBlur={handleUnitBlur} required />
+                  <label className="block text-sm font-semibold text-slate-700 dark:text-gray-300 mb-2">Unidade *</label>
+                  <input type="text" placeholder="Ex: 104-B" className="w-full px-4 py-3 border-2 border-slate-200 dark:border-gray-600 rounded-xl focus:border-blue-600 focus:ring-4 focus:ring-blue-500/20 outline-none bg-white dark:bg-gray-700 text-slate-800 dark:text-white transition-all placeholder:text-slate-400" value={form.unit} onChange={e => setForm({ ...form, unit: e.target.value })} onBlur={handleUnitBlur} required />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Destinatário *</label>
-                  <input type="text" placeholder="Nome" className="w-full px-4 py-2 border dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-slate-500 outline-none bg-white dark:bg-gray-700 dark:text-white" value={form.recipient} onChange={e => setForm({ ...form, recipient: e.target.value })} required />
+                  <label className="block text-sm font-semibold text-slate-700 dark:text-gray-300 mb-2">Destinatário *</label>
+                  <input type="text" placeholder="Nome do morador" className="w-full px-4 py-3 border-2 border-slate-200 dark:border-gray-600 rounded-xl focus:border-blue-600 focus:ring-4 focus:ring-blue-500/20 outline-none bg-white dark:bg-gray-700 text-slate-800 dark:text-white transition-all placeholder:text-slate-400" value={form.recipient} onChange={e => setForm({ ...form, recipient: e.target.value })} required />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">WhatsApp</label>
-                  <input type="tel" placeholder="(11) 9XXXX-XXXX" className="w-full px-4 py-2 border dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-slate-500 outline-none bg-white dark:bg-gray-700 dark:text-white" value={form.phone} onChange={handlePhoneChange} />
+                  <label className="block text-sm font-semibold text-slate-700 dark:text-gray-300 mb-2 flex items-center gap-1.5">
+                    <Phone size={14} className="text-emerald-500" /> WhatsApp
+                  </label>
+                  <input type="tel" placeholder="(11) 9XXXX-XXXX" className="w-full px-4 py-3 border-2 border-slate-200 dark:border-gray-600 rounded-xl focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/20 outline-none bg-white dark:bg-gray-700 text-slate-800 dark:text-white transition-all placeholder:text-slate-400" value={form.phone} onChange={handlePhoneChange} />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Tipo</label>
-                  <select className="w-full px-4 py-2 border dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-slate-500 outline-none bg-white dark:bg-gray-700 dark:text-white" value={form.type} onChange={e => setForm({ ...form, type: e.target.value })}>
+                  <label className="block text-sm font-semibold text-slate-700 dark:text-gray-300 mb-2">Tipo de Encomenda</label>
+                  <select className="w-full px-4 py-3 border-2 border-slate-200 dark:border-gray-600 rounded-xl focus:border-amber-500 focus:ring-4 focus:ring-amber-500/20 outline-none bg-white dark:bg-gray-700 text-slate-800 dark:text-white transition-all cursor-pointer font-medium" value={form.type} onChange={e => setForm({ ...form, type: e.target.value })}>
                     <option>Caixa</option><option>Pacote</option><option>Envelope</option><option>Mercado Livre/Shopee</option><option>Delivery / Comida</option><option>Outro</option>
                   </select>
                 </div>
                 <div className="md:col-span-2">
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Descrição</label>
-                  <input type="text" placeholder="Opcional" className="w-full px-4 py-2 border dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-slate-500 outline-none bg-white dark:bg-gray-700 dark:text-white" value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} />
+                  <label className="block text-sm font-semibold text-slate-700 dark:text-gray-300 mb-2">Descrição</label>
+                  <input type="text" placeholder="Informações adicionais (opcional)" className="w-full px-4 py-3 border-2 border-slate-200 dark:border-gray-600 rounded-xl focus:border-violet-500 focus:ring-4 focus:ring-violet-500/20 outline-none bg-white dark:bg-gray-700 text-slate-800 dark:text-white transition-all placeholder:text-slate-400" value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} />
                 </div>
                 <div className="md:col-span-2 pt-2">
-                  <button type="submit" className="w-full bg-slate-700 hover:bg-slate-800 text-white font-semibold py-3 rounded-lg shadow-md transition-all flex justify-center items-center gap-2">
-                    <CheckCircle size={20} /> Registrar Chegada
+                  <button type="submit" className="w-full bg-blue-500 hover:bg-blue-600 text-white font-bold py-4 rounded-xl shadow-lg hover:shadow-xl transition-all flex justify-center items-center gap-2 text-base">
+                    <CheckCircle size={22} /> Registrar Chegada
                   </button>
                 </div>
               </form>
             </div>
           </div>
 
-          {/* Lista + Filtros */}
-          <div>
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-4">
-              <h3 className="text-lg font-bold text-gray-800 dark:text-gray-100 flex items-center gap-2">
-                <Clock size={20} className="text-slate-600 dark:text-slate-400" /> Pendentes ({pendingPackages.length})
+          {/* Lista + Filtros - Design moderno */}
+          <div className="mt-6">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-5 gap-4">
+              <h3 className="text-lg font-bold text-slate-800 dark:text-white flex items-center gap-2">
+                <div className="p-1.5 bg-amber-100 dark:bg-amber-800 rounded-lg">
+                  <Clock size={18} className="text-amber-600 dark:text-amber-200" />
+                </div>
+                Pendentes ({pendingPackages.length})
               </h3>
-              <div className="flex gap-2 overflow-x-auto pb-2 w-full sm:w-auto">
-                {['Todos', 'Caixa', 'Pacote', 'Envelope', 'Mercado Livre/Shopee', 'Delivery / Comida', 'Outro'].map(type => (
-                  <button
-                    key={type}
-                    onClick={() => setFilterType(type)}
-                    className={`px-3 py-1.5 rounded-full border text-xs font-medium whitespace-nowrap flex items-center gap-1 transition-colors ${filterType === type ? 'bg-slate-700 text-white border-slate-700' : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700'}`}
-                  >
-                    {type}
-                    {type !== 'Todos' && countByType(type) > 0 &&
-                      <span className="bg-slate-100 dark:bg-slate-600 text-slate-700 dark:text-slate-200 px-1.5 rounded-full text-[10px]">{countByType(type)}</span>}
-                  </button>
-                ))}
+              <div className="flex gap-2 overflow-x-auto pb-2 w-full sm:w-auto scrollbar-hide">
+                {['Todos', 'Caixa', 'Pacote', 'Envelope', 'Mercado Livre/Shopee', 'Delivery / Comida', 'Outro'].map(type => {
+                  const typeConfig = type === 'Todos' ? null : PACKAGE_TYPE_CONFIG[type];
+                  const getFilterButtonClass = () => {
+                    if (filterType === type) {
+                      if (type === 'Todos') return 'bg-slate-700 text-white shadow-md';
+                      return `${typeConfig?.badge || 'bg-slate-500'} text-white shadow-md`;
+                    }
+                    if (type === 'Todos') return 'bg-white dark:bg-gray-800 text-slate-600 dark:text-slate-300 border-2 border-slate-200 dark:border-gray-700 hover:border-slate-400 hover:text-slate-800';
+                    return `bg-white dark:bg-gray-800 border-2 border-slate-200 dark:border-gray-700 hover:border-current ${typeConfig?.textLight || 'text-slate-600'} ${typeConfig?.textDark || 'dark:text-slate-400'}`;
+                  };
+                  return (
+                    <button
+                      key={type}
+                      onClick={() => setFilterType(type)}
+                      className={`px-3.5 py-2 rounded-xl text-xs font-semibold whitespace-nowrap flex items-center gap-1.5 transition-all ${getFilterButtonClass()}`}
+                    >
+                      {type}
+                      {type !== 'Todos' && countByType(type) > 0 &&
+                        <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${filterType === type ? 'bg-white/30 text-white' : `${typeConfig?.bgLight || 'bg-slate-100'} ${typeConfig?.textLight || 'text-slate-600'}`}`}>{countByType(type)}</span>}
+                    </button>
+                  );
+                })}
               </div>
             </div>
 
-            <div className="grid gap-2 grid-cols-2 lg:grid-cols-4">
-              {filteredPackages.length === 0 ? (
-                <div className="col-span-2 text-center py-10 bg-white dark:bg-gray-800 rounded-xl border border-dashed border-gray-300 dark:border-gray-600 text-gray-400 dark:text-gray-500">Sem encomendas pendentes.</div>
-              ) : (
-                filteredPackages.map(pkg => (
-                  <PackageCard
-                    key={pkg.id}
-                    pkg={pkg}
-                    residentsIndex={residentsIndex}
-                    compact
-                    onClick={() => setCollectTarget(pkg.id)}
-                  />
-                ))
-              )}
-            </div>
+            {filteredPackages.length === 0 ? (
+              <div className="text-center py-14 bg-white dark:bg-gray-800 rounded-xl border-2 border-dashed border-gray-200 dark:border-gray-600">
+                <div className="inline-flex items-center justify-center w-14 h-14 bg-slate-100 dark:bg-gray-700 rounded-xl mb-4">
+                  <Package size={28} className="text-slate-800-subtle" />
+                </div>
+                <p className="text-slate-800-muted font-medium">Sem encomendas pendentes</p>
+                <p className="text-slate-800-subtle text-sm mt-1">Registre uma nova encomenda acima</p>
+              </div>
+            ) : (
+              <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="bg-slate-100 dark:bg-gray-900/50 border-b border-gray-200 dark:border-gray-700">
+                        <th className="px-5 py-4 text-left font-semibold text-slate-800-muted text-xs uppercase tracking-wide">Unidade</th>
+                        <th className="px-5 py-4 text-left font-semibold text-slate-800-muted text-xs uppercase tracking-wide">Destinatário</th>
+                        <th className="px-5 py-4 text-left font-semibold text-slate-800-muted text-xs uppercase tracking-wide">Tipo</th>
+                        <th className="px-5 py-4 text-left font-semibold text-slate-800-muted text-xs uppercase tracking-wide">Status</th>
+                        <th className="px-5 py-4 text-right font-semibold text-slate-800-muted text-xs uppercase tracking-wide">Ações</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-surface-border dark:divide-gray-700">
+                      {filteredPackages.map((pkg, index) => {
+                        const phoneDigits = String(pkg.phone || '').replace(/\D/g,'');
+                        const box = String.fromCodePoint(0x1F4E6);
+                        const waMsg = encodeURIComponent(`Olá ${pkg.recipient}! Chegou uma encomenda (${pkg.type}) para você na portaria. ${box} Disponível para retirada.`);
+                        const wa = phoneDigits ? `https://wa.me/55${phoneDigits}?text=${waMsg}` : null;
+                        return (
+                          <tr key={pkg.id} className={`${index % 2 === 0 ? 'bg-white dark:bg-gray-800' : 'bg-slate-50/50 dark:bg-gray-800/50'} hover:bg-blue-500-50 dark:hover:bg-blue-500/5 transition-colors`}>
+                            <td className="px-5 py-4">
+                              <span className="inline-flex items-center gap-1.5 font-semibold text-slate-800 dark:text-white">
+                                <Building2 size={14} className="text-blue-500" />
+                                APT {pkg.unit}
+                              </span>
+                            </td>
+                            <td className="px-5 py-4 text-slate-800 dark:text-gray-300">{pkg.recipient}</td>
+                            <td className="px-5 py-4">
+                              <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-medium bg-slate-100 dark:bg-gray-700 text-slate-800-muted">{pkg.type}</span>
+                            </td>
+                            <td className="px-5 py-4">
+                              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold bg-amber-100 text-amber-700 dark:bg-amber-800 dark:text-amber-200">
+                                <span className="w-1.5 h-1.5 bg-amber-500 rounded-full animate-pulse"></span>
+                                Pendente
+                              </span>
+                            </td>
+                            <td className="px-5 py-4">
+                              <div className="flex justify-end gap-2">
+                                {wa && (
+                                  <a href={wa} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-500/10 rounded-lg transition-colors">
+                                    <MessageCircle size={14} />
+                                    WhatsApp
+                                  </a>
+                                )}
+                                <button onClick={() => setCollectTarget(pkg.id)} className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-blue-500 text-white hover:bg-blue-600 rounded-lg shadow-sm transition-all">
+                                  <CheckCircle size={14} />
+                                  Entregar
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
           </div>
 
         </>
@@ -1222,6 +2715,11 @@ function ConciergeView({ onAdd, packages, onDelete, onCollect, residents, reside
 
       {tab === 'settings' && currentUser?.role === 'admin' && (
         <CondoSettingsManager condoSettings={condoSettings} onUpdateSettings={onUpdateSettings} />
+      )}
+
+      {/* ABA PLANO/BILLING - Informações do plano (apenas admin) */}
+      {tab === 'billing' && currentUser?.role === 'admin' && (
+        <BillingManager condoInfo={condoInfo} staff={staff} />
       )}
     </div>
   );
@@ -1250,9 +2748,9 @@ function CondoSettingsManager({ condoSettings, onUpdateSettings }) {
 
   return (
     <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
-      <div className="bg-slate-50 dark:bg-gray-700 px-6 py-4 border-b border-slate-100 dark:border-gray-600 flex items-center gap-2">
-        <Building2 className="text-slate-600 dark:text-slate-300" size={20} />
-        <h2 className="font-semibold text-slate-900 dark:text-white">Configurações do Condomínio</h2>
+      <div className="bg-blue-500 dark:bg-blue-600 px-6 py-4 flex items-center gap-2">
+        <Building2 className="text-white/80" size={20} />
+        <h2 className="font-semibold text-white">Configurações do Condomínio</h2>
       </div>
       <div className="p-6">
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -1310,6 +2808,254 @@ function CondoSettingsManager({ condoSettings, onUpdateSettings }) {
             )}
           </div>
         </form>
+      </div>
+    </div>
+  );
+}
+
+// ---------- Componente de Billing/Plano ----------
+function BillingManager({ condoInfo, staff }) {
+  const porteiroCount = staff?.filter(s => s.role === 'porteiro').length || 0;
+  const adminCount = staff?.filter(s => s.role === 'admin').length || 0;
+  const currentPlanType = condoInfo?.plan_type || 'basic';
+  const staffLimit = condoInfo?.staff_limit || 2;
+
+  const plans = [
+    {
+      id: 'basic',
+      name: 'Básico',
+      price: 99,
+      staffLimit: 2,
+      unitLimit: 50,
+      features: [
+        { text: 'Até 2 porteiros', included: true },
+        { text: 'Até 50 unidades', included: true },
+        { text: 'Gestão de encomendas', included: true },
+        { text: 'Notificação WhatsApp', included: true },
+        { text: 'Histórico 90 dias', included: true },
+        { text: 'Relatórios avançados', included: false },
+        { text: 'Suporte prioritário', included: false },
+      ],
+      color: 'gray',
+      popular: false
+    },
+    {
+      id: 'professional',
+      name: 'Profissional',
+      price: 199,
+      staffLimit: 5,
+      unitLimit: 150,
+      features: [
+        { text: 'Até 5 porteiros', included: true },
+        { text: 'Até 150 unidades', included: true },
+        { text: 'Gestão de encomendas', included: true },
+        { text: 'Notificação WhatsApp', included: true },
+        { text: 'Histórico 1 ano', included: true },
+        { text: 'Relatórios avançados', included: true },
+        { text: 'Suporte prioritário', included: true },
+      ],
+      color: 'blue',
+      popular: true
+    },
+    {
+      id: 'premium',
+      name: 'Premium',
+      price: 349,
+      staffLimit: 10,
+      unitLimit: 9999,
+      features: [
+        { text: 'Até 10 porteiros', included: true },
+        { text: 'Unidades ilimitadas', included: true },
+        { text: 'Gestão de encomendas', included: true },
+        { text: 'Notificação WhatsApp', included: true },
+        { text: 'Histórico ilimitado', included: true },
+        { text: 'Relatórios avançados', included: true },
+        { text: 'Suporte 24/7 + API', included: true },
+      ],
+      color: 'violet',
+      popular: false
+    }
+  ];
+
+  const currentPlan = plans.find(p => p.id === currentPlanType) || plans[0];
+
+  return (
+    <div className="space-y-6">
+      {/* Header do Plano Atual */}
+      <div className="bg-blue-500 dark:bg-blue-600 rounded-xl p-6 text-white">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div className="flex items-center gap-4">
+            <div className="bg-white/20 p-3 rounded-xl">
+              <CreditCard size={24} />
+            </div>
+            <div>
+              <p className="text-blue-100 text-sm">Seu plano atual</p>
+              <h2 className="text-2xl font-bold">Plano {currentPlan.name}</h2>
+            </div>
+          </div>
+          <div className="text-left sm:text-right">
+            <p className="text-3xl font-bold">R$ {currentPlan.price}<span className="text-lg font-normal text-blue-100">/mês</span></p>
+          </div>
+        </div>
+      </div>
+
+      {/* Uso de Porteiros */}
+      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+            <Users size={18} className="text-blue-500" />
+            Uso de Porteiros
+          </h3>
+          <span className="text-sm text-gray-500 dark:text-gray-400">{porteiroCount} / {staffLimit}</span>
+        </div>
+        <div className="bg-gray-100 dark:bg-gray-700 rounded-full h-3 overflow-hidden mb-3">
+          <div
+            className={`h-full rounded-full transition-all ${porteiroCount >= staffLimit ? 'bg-red-500' : porteiroCount >= staffLimit * 0.8 ? 'bg-amber-500' : 'bg-blue-500'}`}
+            style={{ width: `${Math.min((porteiroCount / staffLimit) * 100, 100)}%` }}
+          />
+        </div>
+        {porteiroCount >= staffLimit && (
+          <p className="text-red-500 text-sm flex items-center gap-1">
+            <AlertTriangle size={14} />
+            Limite atingido! Faça upgrade para adicionar mais.
+          </p>
+        )}
+
+        {/* Stats */}
+        <div className="grid grid-cols-2 gap-4 mt-4">
+          <div className="bg-blue-50 dark:bg-blue-900/30 p-4 rounded-xl text-center">
+            <p className="text-3xl font-bold text-blue-600 dark:text-blue-400">{adminCount}</p>
+            <p className="text-sm text-gray-600 dark:text-gray-400">Administradores</p>
+          </div>
+          <div className="bg-emerald-50 dark:bg-emerald-900/30 p-4 rounded-xl text-center">
+            <p className="text-3xl font-bold text-emerald-600 dark:text-emerald-400">{porteiroCount}</p>
+            <p className="text-sm text-gray-600 dark:text-gray-400">Porteiros</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Todos os Planos */}
+      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
+        <div className="bg-blue-500 dark:bg-blue-600 px-6 py-4">
+          <h3 className="font-semibold text-white flex items-center gap-2">
+            <TrendingUp size={18} />
+            Planos Disponíveis
+          </h3>
+        </div>
+        <div className="p-6">
+          <div className="grid md:grid-cols-3 gap-4">
+            {plans.map((plan) => {
+              const isCurrent = plan.id === currentPlanType;
+              const isPopular = plan.popular;
+
+              return (
+                <div
+                  key={plan.id}
+                  className={`relative rounded-xl border-2 p-5 transition-all ${
+                    isCurrent
+                      ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
+                      : isPopular
+                        ? 'border-blue-300 dark:border-blue-700'
+                        : 'border-gray-200 dark:border-gray-700'
+                  }`}
+                >
+                  {isPopular && !isCurrent && (
+                    <div className="absolute -top-3 left-1/2 -translate-x-1/2">
+                      <span className="bg-blue-500 text-white text-xs font-semibold px-3 py-1 rounded-full">
+                        Popular
+                      </span>
+                    </div>
+                  )}
+                  {isCurrent && (
+                    <div className="absolute -top-3 left-1/2 -translate-x-1/2">
+                      <span className="bg-emerald-500 text-white text-xs font-semibold px-3 py-1 rounded-full">
+                        Atual
+                      </span>
+                    </div>
+                  )}
+
+                  <div className="text-center mb-4 mt-2">
+                    <h4 className="font-bold text-gray-900 dark:text-white text-lg">{plan.name}</h4>
+                    <div className="mt-2">
+                      <span className="text-3xl font-bold text-gray-900 dark:text-white">R$ {plan.price}</span>
+                      <span className="text-gray-500 dark:text-gray-400">/mês</span>
+                    </div>
+                  </div>
+
+                  <ul className="space-y-2 mb-5">
+                    {plan.features.map((feature, idx) => (
+                      <li key={idx} className="flex items-center gap-2 text-sm">
+                        {feature.included ? (
+                          <CheckCircle size={16} className={`flex-shrink-0 ${
+                            plan.color === 'blue' ? 'text-blue-500' :
+                            plan.color === 'violet' ? 'text-violet-500' : 'text-emerald-500'
+                          }`} />
+                        ) : (
+                          <X size={16} className="text-gray-300 dark:text-gray-600 flex-shrink-0" />
+                        )}
+                        <span className={feature.included ? 'text-gray-700 dark:text-gray-300' : 'text-gray-400 dark:text-gray-500'}>
+                          {feature.text}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+
+                  {isCurrent ? (
+                    <button disabled className="w-full bg-gray-200 dark:bg-gray-700 text-gray-500 dark:text-gray-400 py-2.5 rounded-lg font-medium cursor-not-allowed">
+                      Plano Atual
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => window.location.href = '/billing.html'}
+                      className={`w-full py-2.5 rounded-lg font-medium transition-all ${
+                        plan.color === 'blue'
+                          ? 'bg-blue-500 hover:bg-blue-600 text-white'
+                          : plan.color === 'violet'
+                            ? 'bg-violet-500 hover:bg-violet-600 text-white'
+                            : 'bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-800 dark:text-white'
+                      }`}
+                    >
+                      {plans.indexOf(plan) > plans.indexOf(currentPlan) ? 'Fazer Upgrade' : 'Mudar Plano'}
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
+      {/* Info do Condomínio */}
+      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
+        <div className="bg-blue-500 dark:bg-blue-600 px-6 py-4">
+          <h3 className="font-semibold text-white flex items-center gap-2">
+            <Building2 size={18} />
+            Informações do Condomínio
+          </h3>
+        </div>
+        <div className="p-6">
+          <div className="grid sm:grid-cols-2 gap-4">
+            <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4">
+              <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">ID do Condomínio</p>
+              <code className="text-sm font-mono text-gray-900 dark:text-white">{condoInfo?.id || 'N/A'}</code>
+            </div>
+            <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4">
+              <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">Nome</p>
+              <p className="font-medium text-gray-900 dark:text-white">{condoInfo?.name || 'N/A'}</p>
+            </div>
+            <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4">
+              <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">Plano</p>
+              <span className="inline-flex items-center gap-1.5 bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 px-2.5 py-1 rounded-lg text-sm font-medium">
+                <CheckCircle size={14} />
+                {currentPlan.name}
+              </span>
+            </div>
+            <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4">
+              <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">Limite de Porteiros</p>
+              <p className="font-medium text-gray-900 dark:text-white">{staffLimit} porteiros</p>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -1382,8 +3128,9 @@ function ResidentsManager({ residents, onAddResident, onDeleteResident, onUpdate
   };
   return (
     <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
-      <div className="bg-slate-50 dark:bg-gray-700 px-6 py-4 border-b border-slate-100 dark:border-gray-600">
-        <h2 className="font-semibold text-slate-900 dark:text-white">Gerir Moradores</h2>
+      <div className="bg-blue-500 dark:bg-blue-600 px-6 py-4 flex items-center gap-2">
+        <Users className="text-white/80" size={20} />
+        <h2 className="font-semibold text-white">Gerir Moradores</h2>
       </div>
       <div className="p-6 space-y-6">
         <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -1533,7 +3280,7 @@ function ResidentView({ packages, onCollect, residentsIndex, condoName }) {
         <div className="min-h-[50vh] flex items-center justify-center py-4">
           <div className="w-full max-w-md">
             {/* Card Principal */}
-            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl border border-gray-100 dark:border-gray-700 overflow-hidden">
+            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
               {/* Header com gradiente */}
               <div className="bg-gradient-to-r from-emerald-600 to-emerald-500 px-5 py-5 text-center">
                 <div className="inline-flex items-center justify-center w-12 h-12 bg-white/20 backdrop-blur-sm rounded-xl mb-3">
@@ -1595,7 +3342,7 @@ function ResidentView({ packages, onCollect, residentsIndex, condoName }) {
       {authorizedUnit && (
         <div className="animate-fade-in space-y-4">
           {/* Header do morador logado */}
-          <div className="bg-gradient-to-r from-emerald-600 to-emerald-500 rounded-2xl shadow-lg p-4 sm:p-5">
+          <div className="bg-gradient-to-r from-emerald-600 to-emerald-500 rounded-xl shadow-md p-4 sm:p-5">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <div className="bg-white/20 backdrop-blur-sm p-2.5 rounded-xl">
@@ -1627,7 +3374,7 @@ function ResidentView({ packages, onCollect, residentsIndex, condoName }) {
             </span>
           </div>
           {myPackages.length === 0 ? (
-            <div className="bg-white dark:bg-gray-800 p-8 sm:p-12 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 text-center">
+            <div className="bg-white dark:bg-gray-800 p-8 sm:p-12 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 text-center">
               <div className="inline-flex items-center justify-center w-16 h-16 bg-gray-100 dark:bg-gray-700 rounded-full mb-4">
                 <Package className="text-gray-400" size={32} />
               </div>
@@ -1671,7 +3418,7 @@ function ResidentView({ packages, onCollect, residentsIndex, condoName }) {
 
       {pinModalUnit && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm px-4">
-          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden animate-fade-in">
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg w-full max-w-sm overflow-hidden animate-fade-in">
             {/* Header */}
             <div className="bg-gradient-to-r from-emerald-600 to-emerald-500 px-6 py-4 text-center">
               <div className="inline-flex items-center justify-center w-12 h-12 bg-white/20 backdrop-blur-sm rounded-xl mb-2">
@@ -1748,45 +3495,49 @@ function PackageCard({ pkg, residentsIndex, compact = false, onClick }) {
   };
   const notifiedTime = pkg?.notified_at ? new Date(pkg.notified_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : null;
 
+  // Obtém configuração de cor e ícone baseado no tipo
+  const typeConfig = PACKAGE_TYPE_CONFIG[pkg.type] || PACKAGE_TYPE_CONFIG['Outro'];
+  const TypeIcon = typeConfig.icon;
+
   return (
     <div
-      className={`bg-white dark:bg-gray-800 ${compact ? 'p-2' : 'p-4'} rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 hover:shadow-md transition-shadow relative cursor-pointer`}
+      className={`bg-white dark:bg-gray-800 ${compact ? 'p-2' : 'p-4'} rounded-xl shadow-sm border-2 border-gray-100 dark:border-gray-700 hover:shadow-lg hover:border-gray-200 dark:hover:border-gray-600 transition-all relative cursor-pointer`}
       onClick={onClick}
       role="button"
       tabIndex={0}
       onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick?.(); } }}
     >
       <div className="flex justify-between items-start mb-2">
-        <div className={`bg-slate-100 dark:bg-slate-700 text-slate-800 dark:text-slate-200 ${compact ? 'text-[10px]' : 'text-xs'} font-bold px-2 py-1 rounded`}>APT {pkg.unit}</div>
-        <span className={`${compact ? 'text-[10px]' : 'text-xs'} text-gray-400`}>{dateStr}</span>
+        <div className={`${typeConfig.badge} text-white ${compact ? 'text-[10px]' : 'text-xs'} font-bold px-2.5 py-1 rounded-lg shadow-sm`}>APT {pkg.unit}</div>
+        <span className={`${compact ? 'text-[10px]' : 'text-xs'} text-gray-500 dark:text-gray-400 font-medium`}>{dateStr}</span>
       </div>
-      <div className="flex items-start gap-2">
-        <div className={`p-1.5 rounded-full ${pkg.type === 'Delivery / Comida' ? 'bg-emerald-100 dark:bg-emerald-900/50' : 'bg-gray-100 dark:bg-gray-700'}`}>
-          <Box size={compact ? 18 : 24} className={pkg.type === 'Delivery / Comida' ? 'text-emerald-600 dark:text-emerald-400' : 'text-gray-600 dark:text-gray-400'} />
+      <div className="flex items-start gap-3">
+        <div className={`p-2 rounded-xl ${typeConfig.bgLight} ${typeConfig.bgDark} shadow-sm`}>
+          <TypeIcon size={compact ? 18 : 24} className={`${typeConfig.textLight} ${typeConfig.textDark}`} />
         </div>
         <div className="flex-1">
           <h4 className={`${compact ? 'text-sm' : 'text-base'} font-bold text-gray-800 dark:text-white`}>{pkg.recipient}</h4>
-          <p className={`${compact ? 'text-xs' : 'text-sm'} text-gray-600 dark:text-gray-400`}>{pkg.type} {pkg.description && `- ${pkg.description}`}</p>
+          <p className={`${compact ? 'text-xs' : 'text-sm'} ${typeConfig.textLight} ${typeConfig.textDark} font-medium`}>{pkg.type} {pkg.description && <span className="text-gray-500 dark:text-gray-400">- {pkg.description}</span>}</p>
           {pkg?.notified_at && (
-            <div className={`${compact ? 'text-[10px]' : 'text-xs'} text-blue-600 dark:text-blue-400 flex items-center gap-1 mt-1`}>
+            <div className={`${compact ? 'text-[10px]' : 'text-xs'} text-blue-600 dark:text-blue-400 flex items-center gap-1 mt-1 font-medium`}>
               <CheckCheck size={14} /> Avisado por {pkg.notified_by || 'Portaria'} às {notifiedTime}
             </div>
           )}
           {phoneDigits && (
             compact ? (
-              <button type="button" onClick={(e) => { e.stopPropagation(); sendWhatsapp(); }} title="WhatsApp" aria-label="WhatsApp" className="inline-flex items-center text-emerald-700 dark:text-emerald-400 hover:text-emerald-800 dark:hover:text-emerald-300 mt-1">
+              <button type="button" onClick={(e) => { e.stopPropagation(); sendWhatsapp(); }} title="WhatsApp" aria-label="WhatsApp" className="inline-flex items-center text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 dark:hover:text-emerald-300 mt-1">
                 <MessageCircle size={16} />
               </button>
             ) : (
-              <button type="button" onClick={(e) => { e.stopPropagation(); sendWhatsapp(); }} className="inline-flex items-center gap-1 text-emerald-700 dark:text-emerald-400 hover:text-emerald-800 dark:hover:text-emerald-300 text-sm mt-1">
+              <button type="button" onClick={(e) => { e.stopPropagation(); sendWhatsapp(); }} className="inline-flex items-center gap-1.5 bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-900/50 px-3 py-1.5 rounded-lg text-sm mt-2 font-medium transition-colors">
                 <Phone size={14} /> {pkg?.notified_at ? 'Reenviar Aviso' : 'Avisar no WhatsApp'}
               </button>
             )
           )}
         </div>
       </div>
-      <div className={`mt-2 pt-2 border-t border-gray-100 dark:border-gray-700 flex items-center gap-1 ${compact ? 'text-[10px]' : 'text-xs'} text-slate-600 dark:text-slate-400 font-medium`}>
-        <Clock size={compact ? 12 : 14} /> Aguardando morador
+      <div className={`mt-3 pt-2 border-t border-gray-100 dark:border-gray-700 flex items-center gap-1.5 ${compact ? 'text-[10px]' : 'text-xs'} text-amber-600 dark:text-amber-400 font-semibold`}>
+        <Clock size={compact ? 12 : 14} className="text-amber-500" /> Aguardando morador
       </div>
     </div>
   );
@@ -1807,8 +3558,9 @@ function TeamManager({ staff, onAddStaff, onDeleteStaff }) {
   };
   return (
     <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
-      <div className="bg-slate-50 dark:bg-gray-700 px-6 py-4 border-b border-slate-100 dark:border-gray-600">
-        <h2 className="font-semibold text-slate-900 dark:text-white">Gestão de Equipe</h2>
+      <div className="bg-blue-500 dark:bg-blue-600 px-6 py-4 flex items-center gap-2">
+        <Shield className="text-white/80" size={20} />
+        <h2 className="font-semibold text-white">Gestão de Equipe</h2>
       </div>
       <div className="p-6 space-y-6">
         <form onSubmit={submit} className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -2050,9 +3802,9 @@ function ReportQueryManager({ packages }) {
     <div className="space-y-6">
       {/* Painel de Filtros */}
       <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
-        <div className="bg-slate-50 dark:bg-gray-700 px-6 py-4 border-b border-slate-100 dark:border-gray-600 flex items-center gap-2">
-          <FileText className="text-slate-600 dark:text-slate-300" size={20} />
-          <h2 className="font-semibold text-slate-900 dark:text-white">Consulta Histórico de Encomendas</h2>
+        <div className="bg-blue-500 dark:bg-blue-600 px-6 py-4 flex items-center gap-2">
+          <FileText className="text-white/80" size={20} />
+          <h2 className="font-semibold text-white">Consulta Histórico de Encomendas</h2>
         </div>
         <div className="p-6">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">

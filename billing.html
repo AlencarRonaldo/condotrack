@@ -1,0 +1,632 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Planos e Assinatura - CondoTrack Pro</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='64' height='64' viewBox='0 0 24 24'%3E%3Crect width='24' height='24' rx='6' fill='%233b82f6'/%3E%3Cpath d='M7 12a5 5 0 0 1 5-5h5' stroke='white' stroke-width='2' fill='none' stroke-linecap='round'/%3E%3C/svg%3E">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .plan-card { transition: all 0.3s ease; }
+        .plan-card:hover { transform: translateY(-4px); }
+        .plan-popular { box-shadow: 0 0 0 2px #3b82f6, 0 20px 40px -10px rgba(59, 130, 246, 0.3); }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+
+    <!-- Header -->
+    <header class="bg-white border-b border-gray-200 sticky top-0 z-50">
+        <div class="max-w-6xl mx-auto px-4 py-4 flex justify-between items-center">
+            <a href="/" class="text-2xl font-bold text-gray-900">
+                <span class="text-blue-600">Condo</span>Track
+            </a>
+            <a href="/app.html" class="flex items-center gap-2 text-gray-600 hover:text-gray-900 text-sm font-medium transition-colors">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
+                </svg>
+                Voltar ao Sistema
+            </a>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="py-12 px-4">
+        <div class="max-w-6xl mx-auto">
+
+            <!-- Page Title -->
+            <div class="text-center mb-12">
+                <h1 class="text-4xl font-bold text-gray-900 mb-4">Planos e Precos</h1>
+                <p class="text-lg text-gray-600 max-w-2xl mx-auto">
+                    Escolha o plano ideal para o seu condominio. Todos os planos incluem suporte e atualizacoes.
+                </p>
+            </div>
+
+            <!-- Current Plan Banner (if exists) -->
+            <div id="currentPlanBanner" class="hidden bg-blue-50 border border-blue-200 rounded-2xl p-6 mb-10">
+                <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                    <div class="flex items-center gap-4">
+                        <div class="bg-blue-500 p-3 rounded-xl">
+                            <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path>
+                            </svg>
+                        </div>
+                        <div>
+                            <p class="text-sm text-gray-600">Seu plano atual</p>
+                            <p class="text-xl font-bold text-gray-900" id="currentPlanName">Carregando...</p>
+                            <p class="text-sm text-gray-500" id="condoNameDisplay">-</p>
+                        </div>
+                    </div>
+                    <div class="text-left md:text-right">
+                        <p class="text-sm text-gray-600">Status</p>
+                        <p class="text-lg font-semibold text-green-600" id="planStatus">Ativo</p>
+                        <p class="text-sm text-gray-500" id="planExpiry">-</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Plans Grid -->
+            <div class="grid md:grid-cols-3 gap-6 mb-16">
+
+                <!-- PLANO BASICO -->
+                <div class="plan-card bg-white rounded-2xl border border-gray-200 p-8 relative">
+                    <div class="mb-6">
+                        <div class="inline-flex items-center justify-center w-12 h-12 bg-gray-100 rounded-xl mb-4">
+                            <svg class="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"></path>
+                            </svg>
+                        </div>
+                        <h3 class="text-xl font-bold text-gray-900 mb-1">Basico</h3>
+                        <p class="text-gray-500 text-sm">Ideal para condominios pequenos</p>
+                    </div>
+
+                    <div class="mb-6">
+                        <div class="flex items-baseline gap-1">
+                            <span class="text-4xl font-bold text-gray-900">R$ 99</span>
+                            <span class="text-gray-500">/mes</span>
+                        </div>
+                        <p class="text-sm text-gray-500 mt-1">Cobrado mensalmente</p>
+                    </div>
+
+                    <ul class="space-y-3 mb-8">
+                        <li class="flex items-start gap-3">
+                            <svg class="w-5 h-5 text-green-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                            <span class="text-gray-700">Ate <strong>2 porteiros</strong></span>
+                        </li>
+                        <li class="flex items-start gap-3">
+                            <svg class="w-5 h-5 text-green-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                            <span class="text-gray-700">Ate <strong>50 unidades</strong></span>
+                        </li>
+                        <li class="flex items-start gap-3">
+                            <svg class="w-5 h-5 text-green-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                            <span class="text-gray-700">Gestao de encomendas</span>
+                        </li>
+                        <li class="flex items-start gap-3">
+                            <svg class="w-5 h-5 text-green-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                            <span class="text-gray-700">Notificacao WhatsApp</span>
+                        </li>
+                        <li class="flex items-start gap-3">
+                            <svg class="w-5 h-5 text-green-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                            <span class="text-gray-700">Historico <strong>90 dias</strong></span>
+                        </li>
+                        <li class="flex items-start gap-3">
+                            <svg class="w-5 h-5 text-gray-300 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                            <span class="text-gray-400">Relatorios avancados</span>
+                        </li>
+                        <li class="flex items-start gap-3">
+                            <svg class="w-5 h-5 text-gray-300 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                            <span class="text-gray-400">Suporte prioritario</span>
+                        </li>
+                    </ul>
+
+                    <button onclick="selectPlan('basic', 99)" class="w-full bg-gray-100 hover:bg-gray-200 text-gray-800 px-6 py-3 rounded-xl font-semibold transition-all">
+                        Escolher Basico
+                    </button>
+                </div>
+
+                <!-- PLANO PRO (RECOMENDADO) -->
+                <div class="plan-card plan-popular bg-white rounded-2xl p-8 relative">
+                    <div class="absolute -top-4 left-1/2 transform -translate-x-1/2">
+                        <span class="bg-blue-500 text-white px-4 py-1.5 rounded-full text-sm font-semibold shadow-lg">
+                            Mais Popular
+                        </span>
+                    </div>
+
+                    <div class="mb-6 mt-2">
+                        <div class="inline-flex items-center justify-center w-12 h-12 bg-blue-100 rounded-xl mb-4">
+                            <svg class="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+                            </svg>
+                        </div>
+                        <h3 class="text-xl font-bold text-gray-900 mb-1">Profissional</h3>
+                        <p class="text-gray-500 text-sm">Para condominios em crescimento</p>
+                    </div>
+
+                    <div class="mb-6">
+                        <div class="flex items-baseline gap-1">
+                            <span class="text-4xl font-bold text-gray-900">R$ 199</span>
+                            <span class="text-gray-500">/mes</span>
+                        </div>
+                        <p class="text-sm text-gray-500 mt-1">Cobrado mensalmente</p>
+                    </div>
+
+                    <ul class="space-y-3 mb-8">
+                        <li class="flex items-start gap-3">
+                            <svg class="w-5 h-5 text-blue-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                            <span class="text-gray-700">Ate <strong>5 porteiros</strong></span>
+                        </li>
+                        <li class="flex items-start gap-3">
+                            <svg class="w-5 h-5 text-blue-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                            <span class="text-gray-700">Ate <strong>150 unidades</strong></span>
+                        </li>
+                        <li class="flex items-start gap-3">
+                            <svg class="w-5 h-5 text-blue-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                            <span class="text-gray-700">Gestao de encomendas</span>
+                        </li>
+                        <li class="flex items-start gap-3">
+                            <svg class="w-5 h-5 text-blue-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                            <span class="text-gray-700">Notificacao WhatsApp</span>
+                        </li>
+                        <li class="flex items-start gap-3">
+                            <svg class="w-5 h-5 text-blue-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                            <span class="text-gray-700">Historico <strong>1 ano</strong></span>
+                        </li>
+                        <li class="flex items-start gap-3">
+                            <svg class="w-5 h-5 text-blue-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                            <span class="text-gray-700"><strong>Relatorios avancados</strong></span>
+                        </li>
+                        <li class="flex items-start gap-3">
+                            <svg class="w-5 h-5 text-blue-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                            <span class="text-gray-700"><strong>Suporte prioritario</strong></span>
+                        </li>
+                    </ul>
+
+                    <button onclick="selectPlan('professional', 199)" class="w-full bg-blue-500 hover:bg-blue-600 text-white px-6 py-3 rounded-xl font-semibold transition-all shadow-lg shadow-blue-500/30">
+                        Escolher Profissional
+                    </button>
+                </div>
+
+                <!-- PLANO PREMIUM -->
+                <div class="plan-card bg-white rounded-2xl border border-gray-200 p-8 relative">
+                    <div class="mb-6">
+                        <div class="inline-flex items-center justify-center w-12 h-12 bg-violet-100 rounded-xl mb-4">
+                            <svg class="w-6 h-6 text-violet-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z"></path>
+                            </svg>
+                        </div>
+                        <h3 class="text-xl font-bold text-gray-900 mb-1">Premium</h3>
+                        <p class="text-gray-500 text-sm">Para grandes condominios</p>
+                    </div>
+
+                    <div class="mb-6">
+                        <div class="flex items-baseline gap-1">
+                            <span class="text-4xl font-bold text-gray-900">R$ 349</span>
+                            <span class="text-gray-500">/mes</span>
+                        </div>
+                        <p class="text-sm text-gray-500 mt-1">Cobrado mensalmente</p>
+                    </div>
+
+                    <ul class="space-y-3 mb-8">
+                        <li class="flex items-start gap-3">
+                            <svg class="w-5 h-5 text-violet-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                            <span class="text-gray-700">Ate <strong>10 porteiros</strong></span>
+                        </li>
+                        <li class="flex items-start gap-3">
+                            <svg class="w-5 h-5 text-violet-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                            <span class="text-gray-700"><strong>Unidades ilimitadas</strong></span>
+                        </li>
+                        <li class="flex items-start gap-3">
+                            <svg class="w-5 h-5 text-violet-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                            <span class="text-gray-700">Gestao de encomendas</span>
+                        </li>
+                        <li class="flex items-start gap-3">
+                            <svg class="w-5 h-5 text-violet-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                            <span class="text-gray-700">Notificacao WhatsApp</span>
+                        </li>
+                        <li class="flex items-start gap-3">
+                            <svg class="w-5 h-5 text-violet-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                            <span class="text-gray-700">Historico <strong>ilimitado</strong></span>
+                        </li>
+                        <li class="flex items-start gap-3">
+                            <svg class="w-5 h-5 text-violet-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                            <span class="text-gray-700">Relatorios avancados</span>
+                        </li>
+                        <li class="flex items-start gap-3">
+                            <svg class="w-5 h-5 text-violet-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                            <span class="text-gray-700"><strong>Suporte 24/7</strong></span>
+                        </li>
+                        <li class="flex items-start gap-3">
+                            <svg class="w-5 h-5 text-violet-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                            <span class="text-gray-700"><strong>API de integracao</strong></span>
+                        </li>
+                    </ul>
+
+                    <button onclick="selectPlan('premium', 349)" class="w-full bg-violet-500 hover:bg-violet-600 text-white px-6 py-3 rounded-xl font-semibold transition-all">
+                        Escolher Premium
+                    </button>
+                </div>
+            </div>
+
+            <!-- Comparison Table -->
+            <div class="bg-white rounded-2xl border border-gray-200 overflow-hidden mb-12">
+                <div class="bg-gray-50 px-6 py-4 border-b border-gray-200">
+                    <h2 class="text-xl font-bold text-gray-900">Comparativo de Planos</h2>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full">
+                        <thead>
+                            <tr class="border-b border-gray-200">
+                                <th class="text-left py-4 px-6 font-semibold text-gray-900">Recurso</th>
+                                <th class="text-center py-4 px-6 font-semibold text-gray-900">Basico</th>
+                                <th class="text-center py-4 px-6 font-semibold text-blue-600 bg-blue-50">Profissional</th>
+                                <th class="text-center py-4 px-6 font-semibold text-gray-900">Premium</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-gray-100">
+                            <tr>
+                                <td class="py-4 px-6 text-gray-700">Porteiros</td>
+                                <td class="py-4 px-6 text-center text-gray-900">2</td>
+                                <td class="py-4 px-6 text-center text-gray-900 bg-blue-50/50">5</td>
+                                <td class="py-4 px-6 text-center text-gray-900">10</td>
+                            </tr>
+                            <tr>
+                                <td class="py-4 px-6 text-gray-700">Unidades</td>
+                                <td class="py-4 px-6 text-center text-gray-900">50</td>
+                                <td class="py-4 px-6 text-center text-gray-900 bg-blue-50/50">150</td>
+                                <td class="py-4 px-6 text-center text-gray-900">Ilimitadas</td>
+                            </tr>
+                            <tr>
+                                <td class="py-4 px-6 text-gray-700">Historico de encomendas</td>
+                                <td class="py-4 px-6 text-center text-gray-900">90 dias</td>
+                                <td class="py-4 px-6 text-center text-gray-900 bg-blue-50/50">1 ano</td>
+                                <td class="py-4 px-6 text-center text-gray-900">Ilimitado</td>
+                            </tr>
+                            <tr>
+                                <td class="py-4 px-6 text-gray-700">Gestao de encomendas</td>
+                                <td class="py-4 px-6 text-center"><svg class="w-5 h-5 text-green-500 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg></td>
+                                <td class="py-4 px-6 text-center bg-blue-50/50"><svg class="w-5 h-5 text-green-500 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg></td>
+                                <td class="py-4 px-6 text-center"><svg class="w-5 h-5 text-green-500 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg></td>
+                            </tr>
+                            <tr>
+                                <td class="py-4 px-6 text-gray-700">Notificacao WhatsApp</td>
+                                <td class="py-4 px-6 text-center"><svg class="w-5 h-5 text-green-500 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg></td>
+                                <td class="py-4 px-6 text-center bg-blue-50/50"><svg class="w-5 h-5 text-green-500 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg></td>
+                                <td class="py-4 px-6 text-center"><svg class="w-5 h-5 text-green-500 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg></td>
+                            </tr>
+                            <tr>
+                                <td class="py-4 px-6 text-gray-700">Relatorios avancados</td>
+                                <td class="py-4 px-6 text-center"><svg class="w-5 h-5 text-gray-300 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg></td>
+                                <td class="py-4 px-6 text-center bg-blue-50/50"><svg class="w-5 h-5 text-green-500 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg></td>
+                                <td class="py-4 px-6 text-center"><svg class="w-5 h-5 text-green-500 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg></td>
+                            </tr>
+                            <tr>
+                                <td class="py-4 px-6 text-gray-700">Suporte prioritario</td>
+                                <td class="py-4 px-6 text-center"><svg class="w-5 h-5 text-gray-300 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg></td>
+                                <td class="py-4 px-6 text-center bg-blue-50/50"><svg class="w-5 h-5 text-green-500 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg></td>
+                                <td class="py-4 px-6 text-center"><svg class="w-5 h-5 text-green-500 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg></td>
+                            </tr>
+                            <tr>
+                                <td class="py-4 px-6 text-gray-700">Suporte 24/7</td>
+                                <td class="py-4 px-6 text-center"><svg class="w-5 h-5 text-gray-300 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg></td>
+                                <td class="py-4 px-6 text-center bg-blue-50/50"><svg class="w-5 h-5 text-gray-300 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg></td>
+                                <td class="py-4 px-6 text-center"><svg class="w-5 h-5 text-green-500 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg></td>
+                            </tr>
+                            <tr>
+                                <td class="py-4 px-6 text-gray-700">API de integracao</td>
+                                <td class="py-4 px-6 text-center"><svg class="w-5 h-5 text-gray-300 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg></td>
+                                <td class="py-4 px-6 text-center bg-blue-50/50"><svg class="w-5 h-5 text-gray-300 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg></td>
+                                <td class="py-4 px-6 text-center"><svg class="w-5 h-5 text-green-500 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg></td>
+                            </tr>
+                            <tr class="bg-gray-50">
+                                <td class="py-4 px-6 font-semibold text-gray-900">Preco mensal</td>
+                                <td class="py-4 px-6 text-center font-bold text-gray-900">R$ 99</td>
+                                <td class="py-4 px-6 text-center font-bold text-blue-600 bg-blue-50">R$ 199</td>
+                                <td class="py-4 px-6 text-center font-bold text-gray-900">R$ 349</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- FAQ Section -->
+            <div class="bg-white rounded-2xl border border-gray-200 p-8 mb-12">
+                <h2 class="text-xl font-bold text-gray-900 mb-6">Perguntas Frequentes</h2>
+                <div class="space-y-4">
+                    <details class="group">
+                        <summary class="flex justify-between items-center cursor-pointer py-3 text-gray-900 font-medium">
+                            Posso trocar de plano a qualquer momento?
+                            <svg class="w-5 h-5 text-gray-500 group-open:rotate-180 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                        </summary>
+                        <p class="text-gray-600 pb-3">Sim! Voce pode fazer upgrade ou downgrade do seu plano a qualquer momento. A diferenca sera calculada proporcionalmente.</p>
+                    </details>
+                    <details class="group border-t border-gray-100">
+                        <summary class="flex justify-between items-center cursor-pointer py-3 text-gray-900 font-medium">
+                            Como funciona o periodo de teste?
+                            <svg class="w-5 h-5 text-gray-500 group-open:rotate-180 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                        </summary>
+                        <p class="text-gray-600 pb-3">Oferecemos 15 dias de teste gratuito com acesso a todas as funcionalidades do plano Profissional. Nao e necessario cartao de credito.</p>
+                    </details>
+                    <details class="group border-t border-gray-100">
+                        <summary class="flex justify-between items-center cursor-pointer py-3 text-gray-900 font-medium">
+                            Quais formas de pagamento sao aceitas?
+                            <svg class="w-5 h-5 text-gray-500 group-open:rotate-180 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                        </summary>
+                        <p class="text-gray-600 pb-3">Aceitamos cartao de credito, PIX e boleto bancario. O pagamento e recorrente e pode ser cancelado a qualquer momento.</p>
+                    </details>
+                    <details class="group border-t border-gray-100">
+                        <summary class="flex justify-between items-center cursor-pointer py-3 text-gray-900 font-medium">
+                            O que acontece se eu exceder o limite de unidades?
+                            <svg class="w-5 h-5 text-gray-500 group-open:rotate-180 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                        </summary>
+                        <p class="text-gray-600 pb-3">Voce recebera uma notificacao quando estiver proximo do limite. Para cadastrar mais unidades, basta fazer upgrade para um plano superior.</p>
+                    </details>
+                </div>
+            </div>
+
+            <!-- Help Section -->
+            <div class="bg-gray-100 rounded-2xl p-8 text-center">
+                <h3 class="text-xl font-bold text-gray-900 mb-2">Precisa de ajuda para escolher?</h3>
+                <p class="text-gray-600 mb-6">
+                    Nossa equipe esta pronta para ajudar voce a encontrar o plano ideal para seu condominio.
+                </p>
+                <div class="flex flex-col sm:flex-row gap-3 justify-center">
+                    <a href="mailto:suporte@condotrack.com.br" class="inline-flex items-center justify-center gap-2 bg-white hover:bg-gray-50 text-gray-800 border border-gray-300 px-6 py-3 rounded-xl font-medium transition-all">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path>
+                        </svg>
+                        Enviar Email
+                    </a>
+                    <a href="https://wa.me/5511999999999" target="_blank" class="inline-flex items-center justify-center gap-2 bg-green-500 hover:bg-green-600 text-white px-6 py-3 rounded-xl font-medium transition-all">
+                        <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                            <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
+                        </svg>
+                        Falar no WhatsApp
+                    </a>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="bg-white border-t border-gray-200 py-8 mt-12">
+        <div class="max-w-6xl mx-auto px-4 text-center">
+            <p class="text-gray-500 text-sm">&copy; 2025 CondoTrack. Todos os direitos reservados.</p>
+        </div>
+    </footer>
+
+    <!-- Payment Modal -->
+    <div id="paymentModal" class="hidden fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl p-8 max-w-md w-full shadow-2xl">
+            <div class="text-center mb-6">
+                <div class="bg-blue-100 p-4 rounded-full w-16 h-16 mx-auto mb-4 flex items-center justify-center">
+                    <svg class="w-8 h-8 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"></path>
+                    </svg>
+                </div>
+                <h3 class="text-2xl font-bold text-gray-900 mb-1">Finalizar Assinatura</h3>
+                <p class="text-gray-500">Plano <span id="selectedPlanName" class="text-blue-600 font-semibold">Profissional</span></p>
+                <p class="text-3xl font-bold text-gray-900 mt-2">R$ <span id="selectedPlanPrice">199</span><span class="text-lg font-normal text-gray-500">/mes</span></p>
+            </div>
+
+            <div class="space-y-4 mb-6">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Numero do Cartao</label>
+                    <input type="text" id="cardNumber" placeholder="0000 0000 0000 0000" maxlength="19"
+                        class="w-full px-4 py-3 bg-gray-50 border border-gray-300 rounded-xl text-gray-900 placeholder-gray-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all">
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Validade</label>
+                        <input type="text" id="cardExpiry" placeholder="MM/AA" maxlength="5"
+                            class="w-full px-4 py-3 bg-gray-50 border border-gray-300 rounded-xl text-gray-900 placeholder-gray-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">CVV</label>
+                        <input type="text" id="cardCvv" placeholder="123" maxlength="4"
+                            class="w-full px-4 py-3 bg-gray-50 border border-gray-300 rounded-xl text-gray-900 placeholder-gray-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all">
+                    </div>
+                </div>
+            </div>
+
+            <button onclick="processPayment()" id="payBtn" class="w-full bg-blue-500 hover:bg-blue-600 text-white px-6 py-4 rounded-xl font-semibold transition-all mb-3">
+                Assinar Agora
+            </button>
+            <button onclick="closeModal()" class="w-full bg-gray-100 hover:bg-gray-200 text-gray-700 px-6 py-3 rounded-xl font-medium transition-all">
+                Cancelar
+            </button>
+
+            <p class="text-center text-gray-500 text-xs mt-4 flex items-center justify-center gap-1">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path>
+                </svg>
+                Pagamento seguro com criptografia SSL
+            </p>
+        </div>
+    </div>
+
+    <!-- Success Modal -->
+    <div id="successModal" class="hidden fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl p-8 max-w-md w-full shadow-2xl text-center">
+            <div class="bg-green-100 p-4 rounded-full w-20 h-20 mx-auto mb-6 flex items-center justify-center">
+                <svg class="w-10 h-10 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                </svg>
+            </div>
+            <h3 class="text-2xl font-bold text-gray-900 mb-2">Assinatura Confirmada!</h3>
+            <p class="text-gray-600 mb-6">
+                Seu plano foi ativado com sucesso. Agora voce tem acesso completo ao CondoTrack.
+            </p>
+            <a href="/app.html" class="inline-block w-full bg-green-500 hover:bg-green-600 text-white px-8 py-4 rounded-xl font-semibold transition-all">
+                Acessar o Sistema
+            </a>
+        </div>
+    </div>
+
+    <script>
+        let selectedPlanType = 'professional';
+        let selectedPlanPrice = 199;
+
+        // Load condo info
+        function loadCondoInfo() {
+            const keyFor = (table) => `condotrack_${table}`;
+            const read = (table) => JSON.parse(localStorage.getItem(keyFor(table)) || '[]');
+
+            const urlParams = new URLSearchParams(window.location.search);
+            let condoId = urlParams.get('condo');
+
+            if (!condoId) {
+                const lastSession = localStorage.getItem('condotrack_last_session');
+                if (lastSession) {
+                    const session = JSON.parse(lastSession);
+                    condoId = session.condoId;
+                }
+            }
+
+            if (condoId) {
+                const condos = read('condos');
+                const condo = condos.find(c => c.id === condoId);
+
+                if (condo) {
+                    document.getElementById('currentPlanBanner').classList.remove('hidden');
+                    document.getElementById('condoNameDisplay').textContent = condo.name;
+
+                    const planNames = {
+                        basic: 'Basico',
+                        professional: 'Profissional',
+                        premium: 'Premium'
+                    };
+                    document.getElementById('currentPlanName').textContent = 'Plano ' + (planNames[condo.plan_type] || 'Trial');
+
+                    if (condo.trial_end_date) {
+                        const trialEnd = new Date(condo.trial_end_date);
+                        const now = new Date();
+                        const diffDays = Math.ceil((trialEnd - now) / (1000 * 60 * 60 * 24));
+
+                        if (condo.is_active) {
+                            document.getElementById('planStatus').textContent = 'Ativo';
+                            document.getElementById('planStatus').className = 'text-lg font-semibold text-green-600';
+                        } else {
+                            document.getElementById('planStatus').textContent = 'Expirado';
+                            document.getElementById('planStatus').className = 'text-lg font-semibold text-red-600';
+                        }
+
+                        if (diffDays < 0) {
+                            document.getElementById('planExpiry').textContent = `Expirou ha ${Math.abs(diffDays)} dias`;
+                        } else if (diffDays === 0) {
+                            document.getElementById('planExpiry').textContent = 'Expira hoje';
+                        } else {
+                            document.getElementById('planExpiry').textContent = `Expira em ${diffDays} dias`;
+                        }
+                    }
+                }
+            }
+        }
+
+        function selectPlan(planType, price) {
+            selectedPlanType = planType;
+            selectedPlanPrice = price;
+
+            const planNames = {
+                basic: 'Basico',
+                professional: 'Profissional',
+                premium: 'Premium'
+            };
+
+            document.getElementById('selectedPlanName').textContent = planNames[planType];
+            document.getElementById('selectedPlanPrice').textContent = price;
+            document.getElementById('paymentModal').classList.remove('hidden');
+        }
+
+        function closeModal() {
+            document.getElementById('paymentModal').classList.add('hidden');
+        }
+
+        function processPayment() {
+            const btn = document.getElementById('payBtn');
+            btn.disabled = true;
+            btn.innerHTML = '<svg class="animate-spin h-5 w-5 inline mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> Processando...';
+
+            setTimeout(() => {
+                const keyFor = (table) => `condotrack_${table}`;
+                const read = (table) => JSON.parse(localStorage.getItem(keyFor(table)) || '[]');
+                const write = (table, data) => localStorage.setItem(keyFor(table), JSON.stringify(data));
+
+                const urlParams = new URLSearchParams(window.location.search);
+                let condoId = urlParams.get('condo');
+
+                if (!condoId) {
+                    const lastSession = localStorage.getItem('condotrack_last_session');
+                    if (lastSession) {
+                        const session = JSON.parse(lastSession);
+                        condoId = session.condoId;
+                    }
+                }
+
+                if (condoId) {
+                    const condos = read('condos');
+                    const condoIndex = condos.findIndex(c => c.id === condoId);
+
+                    if (condoIndex !== -1) {
+                        condos[condoIndex].plan_type = selectedPlanType;
+                        condos[condoIndex].is_active = true;
+
+                        const newExpiration = new Date();
+                        newExpiration.setDate(newExpiration.getDate() + 30);
+                        condos[condoIndex].trial_end_date = newExpiration.toISOString();
+                        condos[condoIndex].updated_at = new Date().toISOString();
+
+                        const planLimits = {
+                            basic: { staff: 2, units: 50 },
+                            professional: { staff: 5, units: 150 },
+                            premium: { staff: 10, units: 9999 }
+                        };
+                        const limits = planLimits[selectedPlanType];
+                        condos[condoIndex].staff_limit = limits.staff;
+                        condos[condoIndex].unit_limit = limits.units;
+
+                        write('condos', condos);
+                    }
+                }
+
+                document.getElementById('paymentModal').classList.add('hidden');
+                document.getElementById('successModal').classList.remove('hidden');
+
+            }, 2000);
+        }
+
+        document.getElementById('paymentModal').addEventListener('click', function(e) {
+            if (e.target === this) closeModal();
+        });
+
+        // Card number formatting
+        document.getElementById('cardNumber')?.addEventListener('input', function(e) {
+            let value = e.target.value.replace(/\D/g, '');
+            value = value.replace(/(\d{4})(?=\d)/g, '$1 ');
+            e.target.value = value.substring(0, 19);
+        });
+
+        // Expiry formatting
+        document.getElementById('cardExpiry')?.addEventListener('input', function(e) {
+            let value = e.target.value.replace(/\D/g, '');
+            if (value.length >= 2) {
+                value = value.substring(0, 2) + '/' + value.substring(2);
+            }
+            e.target.value = value.substring(0, 5);
+        });
+
+        loadCondoInfo();
+    </script>
+</body>
+</html>
