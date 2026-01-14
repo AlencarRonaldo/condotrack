@@ -104,34 +104,23 @@ const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
 const IS_PRODUCTION = Boolean(SUPABASE_URL && SUPABASE_ANON_KEY);
 
 // URL da Edge Function de autenticação
-// TEMPORÁRIO: Desabilitado até Edge Function ser deployada
-// const AUTH_EDGE_FUNCTION_URL = IS_PRODUCTION
-//   ? `${SUPABASE_URL}/functions/v1/auth-login`
-//   : null;
-const AUTH_EDGE_FUNCTION_URL = null; // Força uso do localStorage
-
-// ==================================================================================
-// 💳 STRIPE CONFIGURATION - Integração de Pagamentos
-// ==================================================================================
-// Chaves Stripe (use variáveis de ambiente em produção)
-const STRIPE_PK = import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY || 'pk_test_demo_key';
-const STRIPE_WEBHOOK_SECRET = import.meta.env.VITE_STRIPE_WEBHOOK_SECRET || 'whsec_demo_secret';
-
-// Endpoints de checkout (Edge Functions ou API backend)
-const CHECKOUT_ENDPOINT = IS_PRODUCTION
-  ? `${SUPABASE_URL}/functions/v1/create-checkout-session`
+const AUTH_EDGE_FUNCTION_URL = IS_PRODUCTION
+  ? `${SUPABASE_URL}/functions/v1/auth-login`
   : null;
 
-const WEBHOOK_ENDPOINT = IS_PRODUCTION
-  ? `${SUPABASE_URL}/functions/v1/stripe-webhook`
+// ==================================================================================
+// 💳 ASAAS CONFIGURATION - Integração de Pagamentos (RECORRENTE)
+// ==================================================================================
+// IMPORTANTÍSSIMO: nenhuma chave do Asaas fica no frontend.
+// O frontend apenas chama Edge Functions que conversam com o Asaas.
+
+const ASAAS_CHECKOUT_ENDPOINT = IS_PRODUCTION
+  ? `${SUPABASE_URL}/functions/v1/asaas-create-checkout`
   : null;
 
-// Mapeamento de planos para Price IDs do Stripe (configurar no dashboard Stripe)
-const STRIPE_PRICE_IDS = {
-  basic: import.meta.env.VITE_STRIPE_PRICE_BASIC || 'price_basic_demo',
-  professional: import.meta.env.VITE_STRIPE_PRICE_PRO || 'price_pro_demo',
-  premium: import.meta.env.VITE_STRIPE_PRICE_PREMIUM || 'price_premium_demo'
-};
+const ASAAS_WEBHOOK_ENDPOINT = IS_PRODUCTION
+  ? `${SUPABASE_URL}/functions/v1/asaas-webhook`
+  : null;
 
 // Log para debug (apenas em desenvolvimento)
 if (import.meta.env.DEV) {
@@ -442,33 +431,33 @@ const PLANS_CONFIG = {
 };
 
 // ==================================================================================
-// 💳 CREATE STRIPE CHECKOUT SESSION
+// 💳 CREATE ASAAS CHECKOUT (RECORRENTE)
 // ==================================================================================
-// Cria uma sessão de checkout no Stripe (produção) ou simula (demo)
-// Retorna URL para redirecionar o usuário para a página de pagamento
-export async function createStripeSession(planKey, condoId, condoName) {
+// Cria uma assinatura/cobrança recorrente no Asaas via Edge Function (produção) ou simula (demo)
+// Retorna URL para redirecionar o usuário para a página de pagamento (invoiceUrl)
+export async function createAsaasCheckout(planKey, condoId, condoName, billingType = 'PIX') {
   const plan = PLANS_CONFIG[planKey];
   if (!plan) {
     throw new Error('Plano inválido');
   }
 
   // ========================================================================
-  // MODO PRODUÇÃO: Chama Edge Function para criar sessão real do Stripe
+  // MODO PRODUÇÃO: Chama Edge Function para criar checkout no Asaas
   // ========================================================================
-  if (IS_PRODUCTION && CHECKOUT_ENDPOINT) {
+  if (IS_PRODUCTION && ASAAS_CHECKOUT_ENDPOINT) {
     try {
-      const response = await fetch(CHECKOUT_ENDPOINT, {
+      const response = await fetch(ASAAS_CHECKOUT_ENDPOINT, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
         },
         body: JSON.stringify({
-          priceId: STRIPE_PRICE_IDS[planKey],
           planKey: planKey,
           condoId: condoId,
           condoName: condoName,
-          successUrl: `${window.location.origin}/app?payment=success&session_id={CHECKOUT_SESSION_ID}`,
+          billingType,
+          successUrl: `${window.location.origin}/app?payment=success`,
           cancelUrl: `${window.location.origin}/app?payment=cancelled`
         })
       });
@@ -481,11 +470,12 @@ export async function createStripeSession(planKey, condoId, condoName) {
 
       return {
         success: true,
-        checkoutUrl: data.url, // URL do Stripe Checkout
-        sessionId: data.sessionId
+        checkoutUrl: data.url, // invoiceUrl do Asaas
+        subscriptionId: data.subscriptionId,
+        paymentId: data.paymentId
       };
     } catch (error) {
-      console.error('Erro ao criar sessão Stripe:', error);
+      console.error('Erro ao criar checkout Asaas:', error);
       throw error;
     }
   }
@@ -495,10 +485,10 @@ export async function createStripeSession(planKey, condoId, condoName) {
   // ========================================================================
   return new Promise((resolve) => {
     setTimeout(() => {
-      const fakeSessionId = `cs_demo_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      const fakeSessionId = `asaas_demo_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
-      console.log('💳 Sessão de checkout criada (demo):', {
-        sessionId: fakeSessionId,
+      console.log('💳 Checkout criado (demo):', {
+        id: fakeSessionId,
         plan: plan.name,
         price: plan.priceFormatted,
         condoId
@@ -506,8 +496,8 @@ export async function createStripeSession(planKey, condoId, condoName) {
 
       resolve({
         success: true,
-        checkoutUrl: `https://checkout.stripe.com/demo/${fakeSessionId}`,
-        sessionId: fakeSessionId,
+        checkoutUrl: `https://sandbox.asaas.com/demo/${fakeSessionId}`,
+        subscriptionId: fakeSessionId,
         isDemo: true // Flag para indicar modo demo
       });
     }, 500);
@@ -517,7 +507,7 @@ export async function createStripeSession(planKey, condoId, condoName) {
 // ==================================================================================
 // 🔐 SIMULATE WEBHOOK SUCCESS (Desbloqueio após pagamento)
 // ==================================================================================
-// Esta função simula o que um webhook do Stripe faria após pagamento confirmado
+// Esta função simula o que um webhook do gateway (Asaas) faria após pagamento confirmado
 // IMPORTANTE: Em produção, essa lógica fica APENAS na Edge Function do webhook
 export async function simulateWebhookSuccess(condoId, planKey) {
   const plan = PLANS_CONFIG[planKey];
@@ -539,7 +529,7 @@ export async function simulateWebhookSuccess(condoId, planKey) {
         body: JSON.stringify({
           condoId: condoId,
           planKey: planKey,
-          // Em produção real, isso viria do evento do Stripe
+          // Em produção real, isso viria do evento do Asaas
           eventType: 'checkout.session.completed'
         })
       });
@@ -621,7 +611,7 @@ export async function simulateWebhookSuccess(condoId, planKey) {
 // ==================================================================================
 // 🔐 SIMULAÇÃO DE WEBHOOK DE PAGAMENTO (Legacy - mantido para compatibilidade)
 // ==================================================================================
-// Esta função simula o que um webhook de Stripe/Mercado Pago faria após pagamento
+// Esta função simula o que um webhook do gateway faria após pagamento
 export function simulatePaymentConfirmation(condoId, planKey) {
   // Agora usa a nova função simulateWebhookSuccess
   return simulateWebhookSuccess(condoId, planKey);
@@ -704,7 +694,7 @@ export default function CondoTrackApp() {
     fetchPackages(condoId);
     fetchResidents(condoId);
     fetchStaff(condoId);
-    fetchSettings(condoId);
+    // Configurações do condomínio já carregadas via condoInfo
 
     // Real-time subscriptions
     const channel = supabase.channel('packages_changes')
@@ -764,7 +754,7 @@ export default function CondoTrackApp() {
       fetchPackages(updatedCondo.id);
       fetchResidents(updatedCondo.id);
       fetchStaff(updatedCondo.id);
-      fetchSettings(updatedCondo.id);
+      // Configurações do condomínio já carregadas via condoInfo
     }
   };
 
@@ -788,16 +778,28 @@ export default function CondoTrackApp() {
           // Verifica se sessão tem os campos necessários (user + condo_id)
           if (parsed && parsed.username && parsed.condo_id) {
             // Carrega info do condomínio primeiro para verificar status
-            const { data: condoData } = await supabase
+            const { data: condoData, error: condoError } = await supabase
               .from('condos')
               .select('*')
               .eq('id', parsed.condo_id)
               .single();
 
+            if (condoError) {
+              console.error('Erro ao carregar configurações:', condoError);
+              setError('Erro ao carregar configurações do condomínio');
+              setIsConciergeAuthed(false);
+              return;
+            }
+
             if (condoData) {
               const status = checkCondoStatus(condoData);
               setCondoStatus(status);
               setCondoInfo(condoData);
+              setCondoSettings({
+                condo_name: condoData.name || 'CondoTrack',
+                condo_address: condoData.address || '',
+                condo_phone: condoData.phone || ''
+              });
               setCurrentUser(parsed);
               setCondoId(parsed.condo_id);
               setIsConciergeAuthed(true);
@@ -877,39 +879,23 @@ export default function CondoTrackApp() {
     }
   };
 
-  // Multi-Tenant: fetchSettings filtra por condo_id
-  const fetchSettings = async (tenantId = condoId) => {
-    if (!tenantId) return;
-    try {
-      const { data, error } = await supabase
-        .from('settings')
-        .select('*')
-        .eq('condo_id', tenantId)
-        .single();
-      if (error) throw error;
-      if (data) {
-        setCondoSettings(data);
-      }
-    } catch (err) {
-      console.error('Erro ao carregar configurações:', err);
-    }
-  };
-
-  // Multi-Tenant: handleUpdateSettings usa condo_id
+  // Configurações do condomínio são gerenciadas via condoInfo (tabela condos)
+  // Não há mais tabela separada 'settings'
   const handleUpdateSettings = async (newSettings) => {
     if (!condoId) return;
     try {
       const { error } = await supabase
-        .from('settings')
+        .from('condos')
         .update({
-          condo_name: newSettings.condo_name,
-          condo_address: newSettings.condo_address || '',
-          condo_phone: newSettings.condo_phone || '',
+          name: newSettings.condo_name,
           updated_at: new Date().toISOString()
         })
-        .eq('condo_id', condoId);
+        .eq('id', condoId);
       if (error) throw error;
+      
+      // Atualiza estado local
       setCondoSettings(prev => ({ ...prev, ...newSettings }));
+      setCondoInfo(prev => prev ? { ...prev, name: newSettings.condo_name } : null);
       showNotification('Configurações salvas com sucesso!');
     } catch (err) {
       console.error(err);
@@ -1337,6 +1323,11 @@ export default function CondoTrackApp() {
               setCurrentUser(user);
               setCondoId(user.condo_id);
               setCondoInfo(condoData);
+              setCondoSettings({
+                condo_name: condoData?.name || 'CondoTrack',
+                condo_address: condoData?.address || '',
+                condo_phone: condoData?.phone || ''
+              });
               try { localStorage.setItem(SESSION_KEY, JSON.stringify(user)); } catch {}
             }} />
           )
@@ -1381,10 +1372,11 @@ export default function CondoTrackApp() {
 // ---------- Subcomponentes ----------
 
 // ==================================================================================
-// 💳 BILLING CHECKOUT - Componente de Checkout/Pagamento com Stripe
+// 💳 BILLING CHECKOUT - Componente de Checkout/Pagamento (Asaas)
 // ==================================================================================
 function BillingCheckout({ condoInfo, onPaymentSuccess, onLogout, isAdmin = false }) {
   const [selectedPlan, setSelectedPlan] = useState('professional');
+  const [paymentMethod, setPaymentMethod] = useState('PIX'); // 'PIX' | 'CREDIT_CARD'
   const [isProcessing, setIsProcessing] = useState(false);
   const [isRedirecting, setIsRedirecting] = useState(false);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
@@ -1410,7 +1402,7 @@ function BillingCheckout({ condoInfo, onPaymentSuccess, onLogout, isAdmin = fals
   const daysInfo = getDaysInfo();
 
   // ========================================================================
-  // HANDLE SUBSCRIBE - Cria sessão Stripe e redireciona
+  // HANDLE SUBSCRIBE - Cria checkout (Asaas) e redireciona
   // ========================================================================
   const handleSubscribe = async (planKey) => {
     if (!condoInfo?.id) {
@@ -1423,8 +1415,8 @@ function BillingCheckout({ condoInfo, onPaymentSuccess, onLogout, isAdmin = fals
     setError('');
 
     try {
-      // Cria sessão de checkout no Stripe
-      const session = await createStripeSession(planKey, condoInfo.id, condoInfo.name);
+      // Cria checkout no Asaas
+      const session = await createAsaasCheckout(planKey, condoInfo.id, condoInfo.name, paymentMethod);
 
       if (session.success) {
         if (session.isDemo) {
@@ -1432,9 +1424,9 @@ function BillingCheckout({ condoInfo, onPaymentSuccess, onLogout, isAdmin = fals
           setShowPaymentModal(true);
           setIsProcessing(false);
         } else {
-          // Produção: redireciona para Stripe Checkout
+          // Produção: redireciona para a página de pagamento do Asaas
           setIsRedirecting(true);
-          console.log('🔄 Redirecionando para Stripe Checkout:', session.checkoutUrl);
+          console.log('🔄 Redirecionando para Asaas:', session.checkoutUrl);
           window.location.href = session.checkoutUrl;
         }
       }
@@ -1513,7 +1505,7 @@ function BillingCheckout({ condoInfo, onPaymentSuccess, onLogout, isAdmin = fals
           <div className="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-6" />
           <h2 className="text-xl font-bold text-gray-800 dark:text-white mb-2">Redirecionando para pagamento...</h2>
           <p className="text-gray-600 dark:text-gray-400">
-            Você será redirecionado para a página segura do Stripe.
+            Você será redirecionado para a página segura do Asaas.
           </p>
         </div>
       </div>
@@ -1585,6 +1577,34 @@ function BillingCheckout({ condoInfo, onPaymentSuccess, onLogout, isAdmin = fals
         <div className="text-center mb-8">
           <h2 className="text-2xl font-bold text-gray-800 dark:text-white mb-2">Escolha seu Plano</h2>
           <p className="text-gray-600 dark:text-gray-400">Selecione o plano ideal e continue gerenciando seu condomínio</p>
+        </div>
+
+        {/* Método de Pagamento */}
+        <div className="flex justify-center mb-8">
+          <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-2 inline-flex gap-2">
+            <button
+              type="button"
+              onClick={() => setPaymentMethod('PIX')}
+              className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${
+                paymentMethod === 'PIX'
+                  ? 'bg-emerald-600 text-white'
+                  : 'bg-transparent text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700'
+              }`}
+            >
+              Pix
+            </button>
+            <button
+              type="button"
+              onClick={() => setPaymentMethod('CREDIT_CARD')}
+              className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${
+                paymentMethod === 'CREDIT_CARD'
+                  ? 'bg-emerald-600 text-white'
+                  : 'bg-transparent text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700'
+              }`}
+            >
+              Cartão
+            </button>
+          </div>
         </div>
 
         {/* Cards de Planos */}
@@ -1667,7 +1687,7 @@ function BillingCheckout({ condoInfo, onPaymentSuccess, onLogout, isAdmin = fals
                   </div>
                   <div>
                     <p className="font-semibold text-purple-800 dark:text-purple-300">Painel de Teste (Dev Mode)</p>
-                    <p className="text-xs text-purple-600 dark:text-purple-400">Simular pagamento sem Stripe</p>
+                    <p className="text-xs text-purple-600 dark:text-purple-400">Simular pagamento (modo demo)</p>
                   </div>
                 </div>
                 <span className="text-purple-500">{showTestPanel ? '▲' : '▼'}</span>
@@ -1678,7 +1698,7 @@ function BillingCheckout({ condoInfo, onPaymentSuccess, onLogout, isAdmin = fals
               <div className="mt-4 bg-white dark:bg-gray-800 border border-purple-200 dark:border-purple-800 rounded-xl p-6">
                 <h4 className="font-bold text-gray-800 dark:text-white mb-4">Simular Pagamento (Webhook)</h4>
                 <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
-                  Este botão simula a confirmação de pagamento que seria enviada pelo webhook do Stripe após um pagamento bem-sucedido.
+                  Este botão simula a confirmação de pagamento que seria enviada pelo webhook do Asaas após um pagamento bem-sucedido.
                   A conta será desbloqueada instantaneamente.
                 </p>
 
@@ -1757,7 +1777,7 @@ function BillingCheckout({ condoInfo, onPaymentSuccess, onLogout, isAdmin = fals
             {/* Badge Modo Demo */}
             <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-300 dark:border-amber-700 rounded-lg p-3 mb-4">
               <p className="text-xs text-amber-700 dark:text-amber-400 text-center font-medium">
-                Modo Demo - Em produção, você seria redirecionado para o Stripe Checkout
+                Modo Demo - Em produção, você seria redirecionado para o checkout do Asaas
               </p>
             </div>
 
