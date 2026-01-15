@@ -435,47 +435,42 @@ const PLANS_CONFIG = {
 // ==================================================================================
 // Cria uma assinatura/cobrança recorrente no Asaas via Edge Function (produção) ou simula (demo)
 // Retorna URL para redirecionar o usuário para a página de pagamento (invoiceUrl)
-export async function createAsaasCheckout(planKey, condoId, condoName, billingType = 'PIX') {
+export async function createAsaasCheckout(planKey, billingType) {
   const plan = PLANS_CONFIG[planKey];
   if (!plan) {
     throw new Error('Plano inválido');
   }
 
   // ========================================================================
-  // MODO PRODUÇÃO: Chama Edge Function para criar checkout no Asaas
+  // MODO PRODUÇÃO: Chama a nova Edge Function 'create-payment'
   // ========================================================================
-  if (IS_PRODUCTION && ASAAS_CHECKOUT_ENDPOINT) {
+  if (IS_PRODUCTION) {
     try {
-      const response = await fetch(ASAAS_CHECKOUT_ENDPOINT, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+      const { data, error } = await supabase.functions.invoke('create-payment', {
+        body: {
+          planId: planKey, // A Edge Function espera 'planId' que corresponde ao 'slug' do plano
+          billingType: billingType,
         },
-        body: JSON.stringify({
-          planKey: planKey,
-          condoId: condoId,
-          condoName: condoName,
-          billingType,
-          successUrl: `${window.location.origin}/app?payment=success`,
-          cancelUrl: `${window.location.origin}/app?payment=cancelled`
-        })
       });
 
-      const data = await response.json();
+      if (error) {
+        throw new Error(error.message || 'Erro ao invocar a função de pagamento.');
+      }
 
-      if (!response.ok) {
-        throw new Error(data.error || 'Erro ao criar sessão de checkout');
+      if (data.error) {
+        throw new Error(data.error);
       }
 
       return {
         success: true,
-        checkoutUrl: data.url, // invoiceUrl do Asaas
-        subscriptionId: data.subscriptionId,
-        paymentId: data.paymentId
+        checkoutUrl: data.paymentLink, // URL para Boleto/Cartão
+        pixQrCode: data.pixQrCode,   // QR Code para PIX
+        billingType: billingType,
+        paymentId: data.paymentId,
       };
+
     } catch (error) {
-      console.error('Erro ao criar checkout Asaas:', error);
+      console.error('Erro ao criar checkout Asaas via create-payment:', error);
       throw error;
     }
   }
@@ -660,6 +655,7 @@ export default function CondoTrackApp() {
   const [condoId, setCondoId] = useState(null); // UUID do condomínio logado
   const [condoInfo, setCondoInfo] = useState(null); // {id, name, plan_type, staff_limit}
   const [condoStatus, setCondoStatus] = useState('active'); // 'active' | 'expired' | 'inactive'
+  const [showBillingWhenExpired, setShowBillingWhenExpired] = useState(true); // Controla se mostra billing ou perfil quando expirado
   // Inicializa tema diretamente do localStorage para evitar flash
   const [theme, setTheme] = useState(() => {
     try {
@@ -803,6 +799,10 @@ export default function CondoTrackApp() {
               setCurrentUser(parsed);
               setCondoId(parsed.condo_id);
               setIsConciergeAuthed(true);
+              // Resetar showBillingWhenExpired quando status é expired/inactive
+              if (status === 'expired' || status === 'inactive') {
+                setShowBillingWhenExpired(true);
+              }
               // Não redireciona mais - o BillingCheckout será mostrado inline
             }
           }
@@ -815,6 +815,13 @@ export default function CondoTrackApp() {
     const savedTheme = localStorage.getItem(THEME_KEY);
     if (savedTheme === 'dark') root.classList.add('dark'); else root.classList.remove('dark');
   }, []);
+
+  // Resetar showBillingWhenExpired quando o status muda para expired/inactive
+  useEffect(() => {
+    if (condoStatus === 'expired' || condoStatus === 'inactive') {
+      setShowBillingWhenExpired(true);
+    }
+  }, [condoStatus]);
 
   // aplica tema e persiste
   useEffect(() => {
@@ -1260,13 +1267,108 @@ export default function CondoTrackApp() {
       </header>
 
       <main className="max-w-5xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
-        {/* Verifica se conta está expirada/inativa - mostra Checkout de Billing */}
+        {/* Verifica se conta está expirada/inativa - mostra Checkout de Billing (padrão) OU Perfil */}
         {isConciergeAuthed && (condoStatus === 'expired' || condoStatus === 'inactive') ? (
-          <BillingCheckout
-            condoInfo={condoInfo}
-            onPaymentSuccess={handlePaymentSuccess}
-            onLogout={handleBillingLogout}
-          />
+          <>
+            {/* Botão discreto para acessar perfil quando está na tela de billing */}
+            {showBillingWhenExpired && (
+              <div className="mb-4 flex justify-end">
+                <button
+                  onClick={() => setShowBillingWhenExpired(false)}
+                  className="px-3 py-2 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 flex items-center gap-2 transition-colors"
+                >
+                  <Settings size={16} />
+                  Acessar Perfil
+                </button>
+              </div>
+            )}
+            
+            {/* Banner de aviso quando está no perfil com trial expirado */}
+            {!showBillingWhenExpired && (
+              <div className="bg-amber-50 dark:bg-amber-900/20 border-2 border-amber-400 dark:border-amber-600 rounded-xl p-4 mb-6">
+                <div className="flex items-start gap-3">
+                  <AlertTriangle size={24} className="text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
+                  <div className="flex-1">
+                    <p className="text-sm font-semibold text-amber-800 dark:text-amber-300 mb-1">
+                      Período de teste expirado
+                    </p>
+                    <p className="text-sm text-amber-700 dark:text-amber-400 mb-3">
+                      Você pode editar seus dados, mas para usar todas as funcionalidades, é necessário fazer upgrade do plano.
+                    </p>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => setShowBillingWhenExpired(true)}
+                        className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-lg font-medium text-sm transition-colors"
+                      >
+                        Fazer Upgrade Agora
+                      </button>
+                      <button
+                        onClick={() => setShowBillingWhenExpired(true)}
+                        className="px-4 py-2 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 rounded-lg font-medium text-sm transition-colors"
+                      >
+                        Voltar para Assinatura
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+            
+            {/* Mostra BillingCheckout (padrão quando expirado) ou ConciergeView */}
+            {showBillingWhenExpired ? (
+              <BillingCheckout
+                condoInfo={condoInfo}
+                onPaymentSuccess={handlePaymentSuccess}
+                onLogout={handleBillingLogout}
+              />
+            ) : (
+              <ConciergeView
+                onAdd={handleAddPackage}
+                packages={packages}
+                onDelete={handleDeletePackage}
+                onCollect={handleCollectPackage}
+                residents={residents}
+                residentsIndex={residentsIndex}
+                onAddResident={handleAddResident}
+                onDeleteResident={handleDeleteResident}
+                onUpdateResident={handleUpdateResident}
+                currentUser={currentUser}
+                staff={staff}
+                condoInfo={condoInfo}
+                onAddStaff={async (member) => {
+                  if (!condoId) return;
+                  // RBAC: Verifica limite de staff do plano
+                  const porteiroCount = staff.filter(s => s.role === 'porteiro').length;
+                  if (member.role === 'porteiro' && condoInfo && porteiroCount >= condoInfo.staff_limit) {
+                    showNotification(`Limite de ${condoInfo.staff_limit} porteiros atingido. Faça upgrade do plano.`, 'error');
+                    return;
+                  }
+                  try {
+                    const { error } = await supabase.from('staff').insert([{ ...member, condo_id: condoId }]);
+                    if (error) throw error;
+                    showNotification('Funcionário cadastrado!');
+                    fetchStaff(condoId);
+                  } catch (e) {
+                    console.error(e);
+                    showNotification('Erro ao cadastrar funcionário.', 'error');
+                  }
+                }}
+                onDeleteStaff={async (id) => {
+                  try {
+                    const { error } = await supabase.from('staff').delete().eq('id', id);
+                    if (error) throw error;
+                    showNotification('Funcionário excluído.');
+                    fetchStaff(condoId);
+                  } catch (e) {
+                    console.error(e);
+                    showNotification('Erro ao excluir funcionário.', 'error');
+                  }
+                }}
+                condoSettings={condoSettings}
+                onUpdateSettings={handleUpdateSettings}
+              />
+            )}
+          </>
         ) : isConcierge ? (
           isConciergeAuthed ? (
             <ConciergeView
@@ -1328,6 +1430,10 @@ export default function CondoTrackApp() {
                 condo_address: condoData?.address || '',
                 condo_phone: condoData?.phone || ''
               });
+              // Resetar showBillingWhenExpired quando status é expired/inactive
+              if (status === 'expired' || status === 'inactive') {
+                setShowBillingWhenExpired(true);
+              }
               try { localStorage.setItem(SESSION_KEY, JSON.stringify(user)); } catch {}
             }} />
           )
@@ -1379,6 +1485,7 @@ function BillingCheckout({ condoInfo, onPaymentSuccess, onLogout, isAdmin = fals
   const [paymentMethod, setPaymentMethod] = useState('PIX'); // 'PIX' | 'CREDIT_CARD'
   const [isProcessing, setIsProcessing] = useState(false);
   const [isRedirecting, setIsRedirecting] = useState(false);
+  const [pixData, setPixData] = useState(null); // NOVO ESTADO PARA O PIX
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [paymentSuccess, setPaymentSuccess] = useState(false);
   const [showTestPanel, setShowTestPanel] = useState(false);
@@ -1402,32 +1509,29 @@ function BillingCheckout({ condoInfo, onPaymentSuccess, onLogout, isAdmin = fals
   const daysInfo = getDaysInfo();
 
   // ========================================================================
-  // HANDLE SUBSCRIBE - Cria checkout (Asaas) e redireciona
+  // HANDLE SUBSCRIBE - Cria checkout (Asaas) e redireciona ou mostra QR Code
   // ========================================================================
   const handleSubscribe = async (planKey) => {
-    if (!condoInfo?.id) {
-      setError('Erro: Condomínio não identificado.');
-      return;
-    }
-
+    // A função `createAsaasCheckout` agora usa a nova Edge Function
     setSelectedPlan(planKey);
     setIsProcessing(true);
     setError('');
+    setPixData(null);
 
     try {
-      // Cria checkout no Asaas
-      const session = await createAsaasCheckout(planKey, condoInfo.id, condoInfo.name, paymentMethod);
+      const session = await createAsaasCheckout(planKey, paymentMethod);
 
       if (session.success) {
-        if (session.isDemo) {
-          // Modo Demo: mostra modal de pagamento simulado
-          setShowPaymentModal(true);
+        // NOVO FLUXO: Trata PIX ou redireciona
+        if (session.billingType === 'PIX' && session.pixQrCode) {
+          setPixData(session.pixQrCode);
           setIsProcessing(false);
-        } else {
-          // Produção: redireciona para a página de pagamento do Asaas
+        } else if (session.checkoutUrl) {
           setIsRedirecting(true);
           console.log('🔄 Redirecionando para Asaas:', session.checkoutUrl);
           window.location.href = session.checkoutUrl;
+        } else {
+          throw new Error('Não foi possível obter um link de pagamento ou QR Code.');
         }
       }
     } catch (err) {
@@ -1496,6 +1600,29 @@ function BillingCheckout({ condoInfo, onPaymentSuccess, onLogout, isAdmin = fals
       setIsProcessing(false);
     }
   };
+
+  // Se tiver dados de PIX, mostra a tela de pagamento PIX
+  if (pixData) {
+    return (
+      <div className="min-h-[80vh] flex items-center justify-center p-4">
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-8 max-w-md w-full text-center border border-gray-200 dark:border-gray-700">
+           <h2 className="text-2xl font-bold text-gray-800 dark:text-white mb-4">Pague com PIX</h2>
+           {/* Idealmente, renderizar um componente de QR Code aqui */}
+           <div className="bg-gray-100 dark:bg-gray-700 p-4 rounded-lg mb-4">
+             <pre className="text-xs break-all text-left text-gray-600 dark:text-gray-300">{pixData}</pre>
+           </div>
+           <button
+             onClick={() => navigator.clipboard.writeText(pixData)}
+             className="w-full px-4 py-3 rounded-lg bg-emerald-500 hover:bg-emerald-600 text-white font-semibold shadow-sm transition-all mb-4"
+           >
+             Copiar Código PIX
+           </button>
+           <p className="text-sm text-gray-500 dark:text-gray-400">Após o pagamento, o sistema será atualizado automaticamente em alguns instantes.</p>
+           <button onClick={() => setPixData(null)} className="text-sm text-gray-500 hover:underline mt-6">Voltar</button>
+        </div>
+      </div>
+    );
+  }
 
   // Modal de Redirecionamento
   if (isRedirecting) {
