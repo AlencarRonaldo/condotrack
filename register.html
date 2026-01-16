@@ -1045,141 +1045,57 @@
         }
 
         // ================================================================
-        // FUNCAO PRINCIPAL DE REGISTRO (SUPABASE REAL)
+        // FUNCAO PRINCIPAL DE REGISTRO (VIA EDGE FUNCTION)
         // ================================================================
         async function handleRegistration(formData) {
-            // ============================================================
-            // ETAPA A: Geracao de IDs Unicos
-            // ============================================================
-            const newCondoId = generateUUID();
-            const now = new Date().toISOString();
+            const EDGE_FUNCTION_URL = `${SUPABASE_URL}/functions/v1/register-condo`;
+            
+            console.log('[REGISTRO] Chamando Edge Function de registro:', EDGE_FUNCTION_URL);
 
-            // ============================================================
-            // ETAPA B: Calculo do Prazo de Trial (15 dias)
-            // ============================================================
-            const trialEnd = new Date();
-            trialEnd.setDate(trialEnd.getDate() + 15);
-            const trialEndDate = trialEnd.toISOString().split('T')[0]; // Formato YYYY-MM-DD
-
-            // ============================================================
-            // DEFINICAO DE LIMITES POR PLANO
-            // ============================================================
-            const planLimits = {
-                basic: { staff: 2, units: 50, name: 'BASICO' },
-                professional: { staff: 5, units: 150, name: 'PRO' },
-                premium: { staff: 10, units: 9999, name: 'PREMIUM' }
-            };
-            const limits = planLimits[formData.planType] || planLimits.basic;
-
-            // Monta endereco completo para display
-            const fullAddress = [
-                formData.condoStreet,
-                formData.condoNumber,
-                formData.condoComplement,
-                formData.condoNeighborhood,
-                formData.condoCity,
-                formData.condoState,
-                formData.condoCep
-            ].filter(Boolean).join(', ');
-
-            // ============================================================
-            // ETAPA C: INSERT na tabela `condos` (Supabase)
-            // ============================================================
-            const newCondo = {
-                id: newCondoId,
-                name: formData.condoName,
-                plan_type: 'BASICO',
-                staff_limit: limits.staff,
-                unit_limit: limits.units,
-                trial_end_date: trialEndDate,
-                is_active: true,
-                created_at: now,
-                updated_at: now
-            };
-
-            console.log('[REGISTRO] Inserindo condominio no Supabase:', newCondo);
-
-            const { data: condoData, error: condoError } = await supabaseClient
-                .from('condos')
-                .insert([newCondo])
-                .select()
-                .single();
-
-            if (condoError) {
-                console.error('[REGISTRO] Erro ao criar condominio:', condoError);
-                throw new Error('Erro ao criar condominio: ' + condoError.message);
-            }
-
-            console.log('[REGISTRO] Condominio criado:', condoData);
-
-            // ============================================================
-            // ETAPA D: INSERT na tabela `staff` (Admin)
-            // ============================================================
-            const newAdmin = {
-                condo_id: newCondoId,
-                name: formData.adminName,
-                username: formData.adminEmail,
-                password: formData.adminPassword, // NOTA: Em producao usar hash!
-                role: 'admin',
-                created_at: now
-            };
-
-            console.log('[REGISTRO] Inserindo admin no Supabase:', { ...newAdmin, password: '***' });
-
-            const { data: staffData, error: staffError } = await supabaseClient
-                .from('staff')
-                .insert([newAdmin])
-                .select()
-                .single();
-
-            if (staffError) {
-                console.error('[REGISTRO] Erro ao criar admin:', staffError);
-                // Rollback: Remove o condo criado
-                await supabaseClient.from('condos').delete().eq('id', newCondoId);
-                throw new Error('Erro ao criar administrador: ' + staffError.message);
-            }
-
-            console.log('[REGISTRO] Admin criado:', { ...staffData, password: '***' });
-
-            // ============================================================
-            // ETAPA E: INSERT na tabela `settings` (Configuracoes padrao)
-            // ============================================================
-            const newSettings = {
-                condo_id: newCondoId,
-                condo_name: formData.condoName,
-                condo_address: fullAddress,
-                condo_phone: '',
-                created_at: now,
-                updated_at: now
-            };
-
-            const { error: settingsError } = await supabaseClient
-                .from('settings')
-                .insert([newSettings]);
-
-            if (settingsError) {
-                console.warn('[REGISTRO] Erro ao criar settings (nao critico):', settingsError);
-            }
-
-            // ============================================================
-            // LOG DE SUCESSO
-            // ============================================================
-            console.log('[REGISTRO] Cadastro concluido com sucesso:', {
-                condoId: newCondoId,
-                name: formData.condoName,
-                plan: 'BASICO',
-                admin: formData.adminEmail,
-                trialEnd: trialEndDate
+            // Chama a Edge Function para criar o condomínio e admin
+            const response = await fetch(EDGE_FUNCTION_URL, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
+                },
+                body: JSON.stringify({
+                    condoName: formData.condoName,
+                    condoDocument: formData.condoDocument,
+                    condoCep: formData.condoCep,
+                    condoStreet: formData.condoStreet,
+                    condoNumber: formData.condoNumber,
+                    condoComplement: formData.condoComplement,
+                    condoNeighborhood: formData.condoNeighborhood,
+                    condoCity: formData.condoCity,
+                    condoState: formData.condoState,
+                    adminName: formData.adminName,
+                    adminEmail: formData.adminEmail,
+                    adminPassword: formData.adminPassword,
+                    planType: formData.planType || 'basic'
+                })
             });
 
-            // ============================================================
-            // RETORNO DE SUCESSO
-            // ============================================================
+            const data = await response.json();
+
+            if (!response.ok) {
+                console.error('[REGISTRO] Erro na Edge Function:', data);
+                throw new Error(data.error || 'Erro ao criar conta. Tente novamente.');
+            }
+
+            if (!data.success) {
+                console.error('[REGISTRO] Registro falhou:', data);
+                throw new Error(data.error || 'Erro ao criar conta.');
+            }
+
+            console.log('[REGISTRO] Cadastro concluído com sucesso:', data);
+
+            // Retorna os dados de sucesso
             return {
-                condoId: newCondoId,
-                username: formData.adminEmail,
-                trialEndDate: trialEndDate,
-                condoName: formData.condoName
+                condoId: data.condoId,
+                username: data.username,
+                trialEndDate: data.trialEndDate,
+                condoName: data.condoName
             };
         }
 
