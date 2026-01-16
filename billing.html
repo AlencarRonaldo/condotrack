@@ -817,17 +817,28 @@
                     condoId: condoId
                 });
 
+                // Não enviar Authorization header se não houver JWT válido
+                // A Edge Function aceita condoId no body como fallback
+                const headers: Record<string, string> = {
+                    'Content-Type': 'application/json',
+                    'apikey': SUPABASE_ANON_KEY
+                };
+
+                // Só adicionar Authorization se tiver JWT válido (não anon key)
+                if (authToken && authToken !== SUPABASE_ANON_KEY) {
+                    headers['Authorization'] = `Bearer ${authToken}`;
+                    console.log('📤 Enviando com JWT válido');
+                } else {
+                    console.log('📤 Enviando sem JWT (usando condoId do body)');
+                }
+
                 const response = await fetch(`${SUPABASE_URL}/functions/v1/create-payment`, {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${authToken || SUPABASE_ANON_KEY}`,
-                        'apikey': SUPABASE_ANON_KEY
-                    },
+                    headers: headers,
                     body: JSON.stringify({
                         planId: selectedPlanType,
                         billingType: selectedPaymentMethod,
-                        ...(condoId ? { condoId: condoId } : {}) // Enviar condoId se disponível
+                        condoId: condoId // Sempre enviar condoId
                     })
                 });
 

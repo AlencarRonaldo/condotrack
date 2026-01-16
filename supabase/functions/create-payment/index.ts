@@ -61,31 +61,41 @@ Deno.serve(async (req) => {
     // Tentar obter condoId do JWT primeiro, depois do body como fallback
     let condoId: string | null = null;
 
-    // 1. Tentar autenticar via JWT (método preferido)
+    // 1. Tentar autenticar via JWT (método preferido, mas opcional)
     const authHeader = req.headers.get('Authorization');
-    if (authHeader) {
+    if (authHeader && !authHeader.includes(Deno.env.get('SUPABASE_ANON_KEY') || '')) {
+      // Só tenta validar JWT se não for anon key
       try {
-        const jwt = authHeader.replace('Bearer ', '');
-        const { data: { user }, error: userError } = await supabaseAdmin.auth.getUser(jwt);
+        const jwt = authHeader.replace('Bearer ', '').trim();
+        
+        // Verificar se não é anon key (anon key não é JWT válido)
+        if (jwt && jwt !== Deno.env.get('SUPABASE_ANON_KEY')) {
+          const { data: { user }, error: userError } = await supabaseAdmin.auth.getUser(jwt);
 
-        if (!userError && user) {
-          condoId = user.user_metadata?.condo_id || null;
-          console.log('[create-payment] CondoId obtido do JWT:', condoId);
+          if (!userError && user && user.user_metadata?.condo_id) {
+            condoId = user.user_metadata.condo_id;
+            console.log('[create-payment] ✅ CondoId obtido do JWT:', condoId);
+          } else if (userError) {
+            console.log('[create-payment] ⚠️ JWT inválido ou sem condo_id, usando fallback:', userError.message);
+          }
         }
-      } catch (jwtError) {
-        console.warn('[create-payment] Erro ao validar JWT (continuando com fallback):', jwtError);
+      } catch (jwtError: any) {
+        // Ignorar erros de JWT e continuar com fallback
+        console.log('[create-payment] ⚠️ Erro ao validar JWT (ignorando, usando fallback):', jwtError?.message || jwtError);
       }
+    } else {
+      console.log('[create-payment] ℹ️ Sem JWT válido no header, usando condoId do body');
     }
 
     // 2. Fallback: usar condoId do body se não veio do JWT
     if (!condoId && condoIdFromBody) {
-      condoId = condoIdFromBody;
-      console.log('[create-payment] CondoId obtido do body:', condoId);
+      condoId = condoIdFromBody.trim();
+      console.log('[create-payment] ✅ CondoId obtido do body:', condoId);
     }
 
     // 3. Validar que temos um condoId
     if (!condoId) {
-      throw { status: 403, message: 'Condomínio não identificado. É necessário estar autenticado ou fornecer condoId.' };
+      throw { status: 403, message: 'Condomínio não identificado. É necessário estar autenticado ou fornecer condoId no body da requisição.' };
     }
 
     // 2. Buscar dados do plano e do condomínio
