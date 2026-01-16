@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Cadastro - CondoTrack Pro | Teste Gratis por 15 Dias</title>
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='64' height='64' viewBox='0 0 24 24'%3E%3Crect width='24' height='24' rx='6' fill='%2310b981'/%3E%3Cpath d='M7 12a5 5 0 0 1 5-5h5' stroke='white' stroke-width='2' fill='none' stroke-linecap='round'/%3E%3C/svg%3E">
+    <!-- Tailwind CSS via CDN (apenas para desenvolvimento - remover em produção) -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
@@ -629,7 +630,17 @@
         const SUPABASE_URL = 'https://slsmtndfsydmaixsqkcj.supabase.co';
         const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNsc210bmRmc3lkbWFpeHNxa2NqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDg1NTk4MjUsImV4cCI6MjA2NDEzNTgyNX0.rnfsRR45lIkcea6DcZpLGCKuN7GNdpdpFgRYytCPT0c';
 
-        const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        // Verifica se window.supabase existe antes de criar o cliente
+        if (typeof window.supabase === 'undefined') {
+            console.error('[Register] Supabase library não carregada! Verifique se o script foi incluído.');
+        }
+        
+        // Usa nome único para evitar conflitos com extensões do navegador
+        const supabaseClient = window.supabase?.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        
+        if (!supabaseClient) {
+            console.error('[Register] Erro ao criar cliente Supabase!');
+        }
 
         console.log('[Register] Supabase client inicializado:', SUPABASE_URL);
 
@@ -1088,7 +1099,7 @@
 
             console.log('[REGISTRO] Inserindo condominio no Supabase:', newCondo);
 
-            const { data: condoData, error: condoError } = await supabase
+            const { data: condoData, error: condoError } = await supabaseClient
                 .from('condos')
                 .insert([newCondo])
                 .select()
@@ -1115,7 +1126,7 @@
 
             console.log('[REGISTRO] Inserindo admin no Supabase:', { ...newAdmin, password: '***' });
 
-            const { data: staffData, error: staffError } = await supabase
+            const { data: staffData, error: staffError } = await supabaseClient
                 .from('staff')
                 .insert([newAdmin])
                 .select()
@@ -1124,7 +1135,7 @@
             if (staffError) {
                 console.error('[REGISTRO] Erro ao criar admin:', staffError);
                 // Rollback: Remove o condo criado
-                await supabase.from('condos').delete().eq('id', newCondoId);
+                await supabaseClient.from('condos').delete().eq('id', newCondoId);
                 throw new Error('Erro ao criar administrador: ' + staffError.message);
             }
 
@@ -1142,7 +1153,7 @@
                 updated_at: now
             };
 
-            const { error: settingsError } = await supabase
+            const { error: settingsError } = await supabaseClient
                 .from('settings')
                 .insert([newSettings]);
 
