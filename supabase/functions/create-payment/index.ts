@@ -18,7 +18,14 @@
 // ==================================================================================
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { corsHeaders } from '../_shared/cors.ts';
+
+// CORS Headers
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  'Content-Type': 'application/json',
+};
 
 // --- Tipos (simplificado) ---
 interface PaymentRequestBody {
@@ -50,6 +57,12 @@ Deno.serve(async (req) => {
     const { planId, billingType } = await req.json() as PaymentRequestBody;
     if (!planId || !billingType) {
       throw { status: 400, message: 'planId e billingType são obrigatórios.' };
+    }
+
+    // Validar billingType
+    const validBillingTypes = ['PIX', 'CREDIT_CARD', 'BOLETO'];
+    if (!validBillingTypes.includes(billingType)) {
+      throw { status: 400, message: `billingType inválido. Deve ser um de: ${validBillingTypes.join(', ')}` };
     }
 
     // --- Lógica Principal ---
@@ -147,7 +160,28 @@ Deno.serve(async (req) => {
         throw { status: 500, message: 'Erro ao criar cobrança no Asaas.', details: asaasPayment.errors };
     }
 
-    // 5. Persistir a cobrança no nosso banco de dados
+    // 5. Se for PIX e não vier pixQrCode na resposta, buscar via endpoint específico
+    let pixQrCodeData = null;
+    if (billingType === 'PIX' && !asaasPayment.pixQrCode) {
+        // Buscar QR Code PIX via endpoint específico
+        const pixQrCodeResponse = await fetch(`https://api.asaas.com/v3/payments/${asaasPayment.id}/pixQrCode`, {
+            method: 'GET',
+            headers: {
+                'Content-Type': 'application/json',
+                'access_token': Deno.env.get('ASAAS_API_KEY')!,
+            },
+        });
+
+        if (pixQrCodeResponse.ok) {
+            pixQrCodeData = await pixQrCodeResponse.json();
+        } else {
+            console.warn('Não foi possível obter QR Code PIX via endpoint específico. Usando dados do pagamento.');
+        }
+    } else if (billingType === 'PIX' && asaasPayment.pixQrCode) {
+        pixQrCodeData = asaasPayment.pixQrCode;
+    }
+
+    // 6. Persistir a cobrança no nosso banco de dados
     const { data: newInvoice, error: invoiceInsertError } = await supabaseAdmin
       .from('invoices')
       .insert({
@@ -158,7 +192,7 @@ Deno.serve(async (req) => {
         due_date: asaasPayment.dueDate,
         billing_type: asaasPayment.billingType,
         payment_link: asaasPayment.invoiceUrl,
-        pix_qr_code: asaasPayment.pixQrCode?.payload, // Apenas para PIX
+        pix_qr_code: pixQrCodeData?.payload || asaasPayment.pixQrCode?.payload, // Payload do PIX (copia e cola)
         barcode: asaasPayment.barcode, // Apenas para Boleto
       })
       .select('id')
@@ -168,12 +202,30 @@ Deno.serve(async (req) => {
         throw { status: 500, message: 'Erro ao salvar a fatura no DB.', details: invoiceInsertError.message };
     }
     
-    // 6. Retornar os dados para o frontend
-    return new Response(JSON.stringify({
+    // 7. Retornar os dados para o frontend
+    const responseData: any = {
         paymentId: newInvoice.id,
         paymentLink: asaasPayment.invoiceUrl,
-        pixQrCode: asaasPayment.pixQrCode?.payload,
-    }), {
+        billingType: billingType,
+    };
+
+    // Se for PIX, incluir dados do QR Code
+    if (billingType === 'PIX' && pixQrCodeData) {
+        responseData.pixQrCode = {
+            payload: pixQrCodeData.payload, // Código copia e cola
+            encodedImage: pixQrCodeData.encodedImage, // QR Code em Base64 (opcional)
+            expirationDate: pixQrCodeData.expirationDate, // Data de expiração
+        };
+    } else if (billingType === 'PIX' && asaasPayment.pixQrCode) {
+        // Fallback: usar dados que vieram na resposta do pagamento
+        responseData.pixQrCode = {
+            payload: asaasPayment.pixQrCode.payload,
+            encodedImage: asaasPayment.pixQrCode.encodedImage,
+            expirationDate: asaasPayment.pixQrCode.expirationDate,
+        };
+    }
+
+    return new Response(JSON.stringify(responseData), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         status: 200,
     });

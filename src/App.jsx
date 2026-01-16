@@ -464,7 +464,7 @@ export async function createAsaasCheckout(planKey, billingType) {
       return {
         success: true,
         checkoutUrl: data.paymentLink, // URL para Boleto/Cartão
-        pixQrCode: data.pixQrCode,   // QR Code para PIX
+        pixQrCode: data.pixQrCode,   // QR Code para PIX (objeto com payload, encodedImage, expirationDate)
         billingType: billingType,
         paymentId: data.paymentId,
       };
@@ -1540,6 +1540,7 @@ function BillingCheckout({ condoInfo, onPaymentSuccess, onLogout, isAdmin = fals
       if (session.success) {
         // NOVO FLUXO: Trata PIX ou redireciona
         if (session.billingType === 'PIX' && session.pixQrCode) {
+          // pixQrCode agora é um objeto com payload, encodedImage, expirationDate
           setPixData(session.pixQrCode);
           setIsProcessing(false);
         } else if (session.checkoutUrl) {
@@ -1619,22 +1620,72 @@ function BillingCheckout({ condoInfo, onPaymentSuccess, onLogout, isAdmin = fals
 
   // Se tiver dados de PIX, mostra a tela de pagamento PIX
   if (pixData) {
+    // pixData pode ser um objeto { payload, encodedImage, expirationDate } ou string (legado)
+    const pixPayload = typeof pixData === 'string' ? pixData : pixData.payload;
+    const pixImage = typeof pixData === 'object' ? pixData.encodedImage : null;
+    const expirationDate = typeof pixData === 'object' && pixData.expirationDate 
+      ? new Date(pixData.expirationDate).toLocaleString('pt-BR')
+      : null;
+
     return (
       <div className="min-h-[80vh] flex items-center justify-center p-4">
         <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-8 max-w-md w-full text-center border border-gray-200 dark:border-gray-700">
            <h2 className="text-2xl font-bold text-gray-800 dark:text-white mb-4">Pague com PIX</h2>
-           {/* Idealmente, renderizar um componente de QR Code aqui */}
-           <div className="bg-gray-100 dark:bg-gray-700 p-4 rounded-lg mb-4">
-             <pre className="text-xs break-all text-left text-gray-600 dark:text-gray-300">{pixData}</pre>
-           </div>
+           
+           {/* QR Code Image (se disponível) */}
+           {pixImage ? (
+             <div className="bg-white p-4 rounded-lg mb-4 flex justify-center">
+               <img 
+                 src={`data:image/png;base64,${pixImage}`} 
+                 alt="QR Code PIX" 
+                 className="w-64 h-64 mx-auto"
+               />
+             </div>
+           ) : (
+             <div className="bg-gray-100 dark:bg-gray-700 p-4 rounded-lg mb-4">
+               <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">Código PIX (Copia e Cola):</p>
+               <pre className="text-xs break-all text-left text-gray-600 dark:text-gray-300">{pixPayload}</pre>
+             </div>
+           )}
+
+           {/* Botão Copiar Código */}
            <button
-             onClick={() => navigator.clipboard.writeText(pixData)}
+             onClick={(e) => {
+               navigator.clipboard.writeText(pixPayload);
+               // Feedback visual
+               const btn = e.target;
+               if (btn) {
+                 const originalText = btn.textContent;
+                 btn.textContent = '✓ Copiado!';
+                 btn.classList.add('bg-green-500');
+                 setTimeout(() => {
+                   btn.textContent = originalText;
+                   btn.classList.remove('bg-green-500');
+                 }, 2000);
+               }
+             }}
              className="w-full px-4 py-3 rounded-lg bg-emerald-500 hover:bg-emerald-600 text-white font-semibold shadow-sm transition-all mb-4"
            >
              Copiar Código PIX
            </button>
-           <p className="text-sm text-gray-500 dark:text-gray-400">Após o pagamento, o sistema será atualizado automaticamente em alguns instantes.</p>
-           <button onClick={() => setPixData(null)} className="text-sm text-gray-500 hover:underline mt-6">Voltar</button>
+
+           {/* Data de Expiração */}
+           {expirationDate && (
+             <p className="text-xs text-amber-600 dark:text-amber-400 mb-2">
+               ⏰ Expira em: {expirationDate}
+             </p>
+           )}
+
+           <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+             Após o pagamento, o sistema será atualizado automaticamente em alguns instantes.
+           </p>
+           
+           <button 
+             onClick={() => setPixData(null)} 
+             className="text-sm text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 hover:underline"
+           >
+             ← Voltar
+           </button>
         </div>
       </div>
     );
