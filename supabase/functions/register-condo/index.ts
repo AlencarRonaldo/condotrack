@@ -4,6 +4,8 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  'Content-Type': 'application/json',
 }
 
 serve(async (req) => {
@@ -22,10 +24,22 @@ serve(async (req) => {
   }
 
   try {
+    // Valida variáveis de ambiente críticas
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')
+    const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
+    
+    if (!supabaseUrl || !serviceRoleKey) {
+      console.error('[REGISTER] Variáveis de ambiente não configuradas')
+      return new Response(
+        JSON.stringify({ error: 'Configuração do servidor inválida' }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+
     // Get service role client (bypasses RLS)
     const supabaseAdmin = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
+      supabaseUrl,
+      serviceRoleKey,
       {
         auth: {
           autoRefreshToken: false,
@@ -33,6 +47,18 @@ serve(async (req) => {
         }
       }
     )
+
+    // Parse do body JSON com tratamento de erro
+    let requestData
+    try {
+      requestData = await req.json()
+    } catch (parseError) {
+      console.error('[REGISTER] Erro ao parsear JSON:', parseError)
+      return new Response(
+        JSON.stringify({ error: 'Formato de requisição inválido. JSON esperado.' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
 
     const {
       condoName,
@@ -48,7 +74,7 @@ serve(async (req) => {
       adminEmail,
       adminPassword,
       planType = 'basic'
-    } = await req.json()
+    } = requestData
 
     // Validações básicas
     if (!condoName || !adminEmail || !adminPassword || !adminName) {
@@ -144,16 +170,35 @@ serve(async (req) => {
 
     if (staffError) {
       console.error('[REGISTER] Erro ao criar admin:', staffError)
+      
       // Rollback: Remove o condo criado
-      await supabaseAdmin.from('condos').delete().eq('id', newCondoId)
+      try {
+        const { error: deleteError } = await supabaseAdmin
+          .from('condos')
+          .delete()
+          .eq('id', newCondoId)
+        
+        if (deleteError) {
+          console.error('[REGISTER] Erro ao fazer rollback (deletar condo):', deleteError)
+        } else {
+          console.log('[REGISTER] Rollback concluído: condomínio removido')
+        }
+      } catch (rollbackError) {
+        console.error('[REGISTER] Erro crítico no rollback:', rollbackError)
+      }
+      
       return new Response(
-        JSON.stringify({ error: 'Erro ao criar administrador: ' + staffError.message }),
+        JSON.stringify({ 
+          error: 'Erro ao criar administrador',
+          details: staffError.message,
+          code: staffError.code || 'STAFF_CREATION_ERROR'
+        }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
 
     // 4. Cria settings (opcional, pode falhar sem quebrar o fluxo)
-    await supabaseAdmin
+    const { error: settingsError } = await supabaseAdmin
       .from('settings')
       .insert([{
         condo_id: newCondoId,
@@ -163,7 +208,11 @@ serve(async (req) => {
         created_at: now,
         updated_at: now
       }])
-      .catch(err => console.warn('[REGISTER] Erro ao criar settings (não crítico):', err))
+    
+    if (settingsError) {
+      // Log mas não quebra o fluxo (settings é opcional)
+      console.warn('[REGISTER] Erro ao criar settings (não crítico):', settingsError)
+    }
 
     // Sucesso
     return new Response(
@@ -179,8 +228,24 @@ serve(async (req) => {
 
   } catch (error) {
     console.error('[REGISTER] Erro inesperado:', error)
+    
+    // Log detalhado para debugging
+    const errorMessage = error instanceof Error ? error.message : String(error)
+    const errorStack = error instanceof Error ? error.stack : undefined
+    
+    console.error('[REGISTER] Stack trace:', errorStack)
+    console.error('[REGISTER] Error details:', {
+      message: errorMessage,
+      type: error?.constructor?.name,
+      url: req.url,
+      method: req.method
+    })
+    
     return new Response(
-      JSON.stringify({ error: 'Erro interno do servidor: ' + error.message }),
+      JSON.stringify({ 
+        error: 'Erro interno do servidor ao processar registro',
+        message: process.env.NODE_ENV === 'development' ? errorMessage : undefined
+      }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
   }
