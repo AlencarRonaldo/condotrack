@@ -6,6 +6,7 @@
     <title>Planos e Assinatura - CondoTrack Pro</title>
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='64' height='64' viewBox='0 0 24 24'%3E%3Crect width='24' height='24' rx='6' fill='%233b82f6'/%3E%3Cpath d='M7 12a5 5 0 0 1 5-5h5' stroke='white' stroke-width='2' fill='none' stroke-linecap='round'/%3E%3C/svg%3E">
     <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Supabase será carregado no script principal para evitar problemas de escopo -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <script>
         tailwind.config = {
@@ -420,7 +421,29 @@
                 <p class="text-3xl font-bold text-gray-900 mt-2">R$ <span id="selectedPlanPrice">199</span><span class="text-lg font-normal text-gray-500">/mes</span></p>
             </div>
 
-            <div class="space-y-4 mb-6">
+            <!-- Seleção de Método de Pagamento -->
+            <div class="mb-6">
+                <label class="block text-sm font-medium text-gray-700 mb-3 text-center">Escolha a forma de pagamento:</label>
+                <div class="flex gap-2">
+                    <button
+                        id="btnPix"
+                        onclick="selectPaymentMethod('PIX')"
+                        class="flex-1 px-4 py-3 rounded-lg text-sm font-bold transition-all bg-emerald-600 text-white shadow-lg"
+                    >
+                        💚 Pix
+                    </button>
+                    <button
+                        id="btnCard"
+                        onclick="selectPaymentMethod('CREDIT_CARD')"
+                        class="flex-1 px-4 py-3 rounded-lg text-sm font-bold transition-all bg-gray-100 text-gray-700 hover:bg-gray-200"
+                    >
+                        💳 Cartão
+                    </button>
+                </div>
+            </div>
+
+            <!-- Formulário de Cartão (apenas se Cartão selecionado) -->
+            <div id="cardForm" class="space-y-4 mb-6 hidden">
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-2">Numero do Cartao</label>
                     <input type="text" id="cardNumber" placeholder="0000 0000 0000 0000" maxlength="19"
@@ -437,6 +460,37 @@
                         <input type="text" id="cardCvv" placeholder="123" maxlength="4"
                             class="w-full px-4 py-3 bg-gray-50 border border-gray-300 rounded-xl text-gray-900 placeholder-gray-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all">
                     </div>
+                </div>
+            </div>
+
+            <!-- Mensagem para PIX (placeholder) -->
+            <div id="pixMessage" class="bg-emerald-50 border border-emerald-300 rounded-lg p-4 mb-6 hidden">
+                <p class="text-sm text-emerald-700 text-center">
+                    💚 Clique em "Assinar Agora" para gerar o QR Code PIX
+                </p>
+            </div>
+
+            <!-- QR Code PIX (exibido após processar pagamento) -->
+            <div id="pixQrCodeContainer" class="hidden mb-6">
+                <div class="bg-white border-2 border-emerald-500 rounded-xl p-6 text-center">
+                    <h4 class="text-lg font-bold text-gray-900 mb-4">Pague com PIX</h4>
+                    <div id="pixQrCodeImage" class="mb-4 flex justify-center">
+                        <!-- QR Code será inserido aqui -->
+                    </div>
+                    <div id="pixPayloadContainer" class="bg-gray-100 p-3 rounded-lg mb-4 hidden">
+                        <p class="text-xs text-gray-500 mb-2">Código PIX (Copia e Cola):</p>
+                        <pre id="pixPayload" class="text-xs break-all text-left text-gray-600"></pre>
+                    </div>
+                    <button onclick="copyPixCode()" id="copyPixBtn" class="w-full px-4 py-3 rounded-lg bg-emerald-500 hover:bg-emerald-600 text-white font-semibold mb-2">
+                        Copiar Código PIX
+                    </button>
+                    <p id="pixExpiration" class="text-xs text-amber-600 mb-2"></p>
+                    <p class="text-sm text-gray-500 mb-4">
+                        Após o pagamento, o sistema será atualizado automaticamente em alguns instantes.
+                    </p>
+                    <button onclick="resetPaymentModal()" class="text-sm text-gray-500 hover:text-gray-700 hover:underline">
+                        ← Voltar
+                    </button>
                 </div>
             </div>
 
@@ -475,10 +529,65 @@
     </div>
 
     <script>
+        // Configuração do Supabase
+        const SUPABASE_URL = 'https://slsmtndfsydmaixsqkcj.supabase.co';
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNsc210bmRmc3lkbWFpeHNxa2NqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDg1NTk4MjUsImV4cCI6MjA2NDEzNTgyNX0.rnfsRR45lIkcea6DcZpLGCKuN7GNdpdpFgRYytCPT0c';
+        
+        // Variáveis globais
         let selectedPlanType = 'professional';
         let selectedPlanPrice = 199;
+        let selectedPaymentMethod = 'PIX'; // 'PIX' | 'CREDIT_CARD'
+        let currentPixPayload = null;
 
-        // Load condo info
+        // Garantir que funções estejam no escopo global (window)
+        window.selectedPlanType = selectedPlanType;
+        window.selectedPlanPrice = selectedPlanPrice;
+        window.selectedPaymentMethod = selectedPaymentMethod;
+
+        // Selecionar método de pagamento (função global)
+        function selectPaymentMethod(method) {
+            selectedPaymentMethod = method;
+            const btnPix = document.getElementById('btnPix');
+            const btnCard = document.getElementById('btnCard');
+            const cardForm = document.getElementById('cardForm');
+            const pixMessage = document.getElementById('pixMessage');
+            const pixQrCodeContainer = document.getElementById('pixQrCodeContainer');
+
+            // Esconder QR Code se estiver visível
+            pixQrCodeContainer.classList.add('hidden');
+
+            if (method === 'PIX') {
+                btnPix.className = 'flex-1 px-4 py-3 rounded-lg text-sm font-bold transition-all bg-emerald-600 text-white shadow-lg';
+                btnCard.className = 'flex-1 px-4 py-3 rounded-lg text-sm font-bold transition-all bg-gray-100 text-gray-700 hover:bg-gray-200';
+                cardForm.classList.add('hidden');
+                pixMessage.classList.remove('hidden');
+            } else {
+                btnPix.className = 'flex-1 px-4 py-3 rounded-lg text-sm font-bold transition-all bg-gray-100 text-gray-700 hover:bg-gray-200';
+                btnCard.className = 'flex-1 px-4 py-3 rounded-lg text-sm font-bold transition-all bg-emerald-600 text-white shadow-lg';
+                cardForm.classList.remove('hidden');
+                pixMessage.classList.add('hidden');
+            }
+        }
+
+        // Copiar código PIX (função global)
+        function copyPixCode() {
+            if (currentPixPayload) {
+                navigator.clipboard.writeText(currentPixPayload).then(() => {
+                    const btn = document.getElementById('copyPixBtn');
+                    const originalText = btn.textContent;
+                    btn.textContent = '✓ Copiado!';
+                    btn.classList.add('bg-green-500');
+                    setTimeout(() => {
+                        btn.textContent = originalText;
+                        btn.classList.remove('bg-green-500');
+                    }, 2000);
+                }).catch(err => {
+                    alert('Erro ao copiar código. Tente selecionar e copiar manualmente.');
+                });
+            }
+        }
+
+        // Load condo info (função global)
         function loadCondoInfo() {
             const keyFor = (table) => `condotrack_${table}`;
             const read = (table) => JSON.parse(localStorage.getItem(keyFor(table)) || '[]');
@@ -486,11 +595,30 @@
             const urlParams = new URLSearchParams(window.location.search);
             let condoId = urlParams.get('condo');
 
+            // Tentar múltiplas chaves do localStorage
             if (!condoId) {
+                // Tentar condotrack_session (usado no App.jsx)
+                const session = localStorage.getItem('condotrack_session');
+                if (session) {
+                    try {
+                        const parsed = JSON.parse(session);
+                        condoId = parsed.condo_id || parsed.condoId;
+                    } catch (e) {
+                        console.warn('Erro ao parsear condotrack_session:', e);
+                    }
+                }
+            }
+
+            if (!condoId) {
+                // Tentar condotrack_last_session (fallback)
                 const lastSession = localStorage.getItem('condotrack_last_session');
                 if (lastSession) {
-                    const session = JSON.parse(lastSession);
-                    condoId = session.condoId;
+                    try {
+                        const session = JSON.parse(lastSession);
+                        condoId = session.condoId || session.condo_id;
+                    } catch (e) {
+                        console.warn('Erro ao parsear condotrack_last_session:', e);
+                    }
                 }
             }
 
@@ -534,9 +662,12 @@
             }
         }
 
+        // Função global para selecionar plano
         function selectPlan(planType, price) {
             selectedPlanType = planType;
             selectedPlanPrice = price;
+            window.selectedPlanType = planType;
+            window.selectedPlanPrice = price;
 
             const planNames = {
                 basic: 'Basico',
@@ -546,18 +677,250 @@
 
             document.getElementById('selectedPlanName').textContent = planNames[planType];
             document.getElementById('selectedPlanPrice').textContent = price;
+            
+            // Resetar método de pagamento para PIX ao abrir modal
+            selectedPaymentMethod = 'PIX';
+            window.selectedPaymentMethod = 'PIX';
+            selectPaymentMethod('PIX');
+            
             document.getElementById('paymentModal').classList.remove('hidden');
         }
 
+        // Garantir que selectPlan esteja no escopo global
+        window.selectPlan = selectPlan;
+
+        // Fechar modal (função global)
         function closeModal() {
             document.getElementById('paymentModal').classList.add('hidden');
+            resetPaymentModal();
         }
 
-        function processPayment() {
+        // Resetar modal para estado inicial (função global)
+        function resetPaymentModal() {
+            const pixQrCodeContainer = document.getElementById('pixQrCodeContainer');
+            const cardForm = document.getElementById('cardForm');
+            const pixMessage = document.getElementById('pixMessage');
+            const payBtn = document.getElementById('payBtn');
+
+            // Esconder QR Code
+            pixQrCodeContainer.classList.add('hidden');
+            
+            // Mostrar botão novamente
+            payBtn.classList.remove('hidden');
+            payBtn.disabled = false;
+            payBtn.innerHTML = 'Assinar Agora';
+
+            // Resetar método de pagamento para PIX
+            selectedPaymentMethod = 'PIX';
+            selectPaymentMethod('PIX');
+        }
+
+        // Processar pagamento (função global)
+        async function processPayment() {
+            // Validar método de pagamento selecionado
+            if (selectedPaymentMethod === 'CREDIT_CARD') {
+                const cardNumber = document.getElementById('cardNumber').value.replace(/\s/g, '');
+                const cardExpiry = document.getElementById('cardExpiry').value;
+                const cardCvv = document.getElementById('cardCvv').value;
+
+                if (!cardNumber || cardNumber.length < 13) {
+                    alert('Por favor, preencha o número do cartão corretamente.');
+                    return;
+                }
+                if (!cardExpiry || cardExpiry.length < 5) {
+                    alert('Por favor, preencha a validade do cartão.');
+                    return;
+                }
+                if (!cardCvv || cardCvv.length < 3) {
+                    alert('Por favor, preencha o CVV do cartão.');
+                    return;
+                }
+            }
+
             const btn = document.getElementById('payBtn');
             btn.disabled = true;
             btn.innerHTML = '<svg class="animate-spin h-5 w-5 inline mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> Processando...';
 
+            try {
+                // Usar anon key por padrão
+                // Nota: A Edge Function pode exigir autenticação JWT válida
+                // Se você estiver autenticado, o token será obtido automaticamente
+                // Obter condoId do localStorage (PRIMEIRO - mais importante)
+                let condoId = null;
+                try {
+                    const sessionData = localStorage.getItem('condotrack_session');
+                    if (sessionData) {
+                        const parsed = JSON.parse(sessionData);
+                        condoId = parsed.condo_id || parsed.condoId;
+                        console.log('✅ CondoId obtido do localStorage:', condoId);
+                    }
+                } catch (e) {
+                    console.warn('Erro ao obter condoId do localStorage:', e);
+                }
+
+                // Se não houver condoId, o usuário precisa fazer login
+                if (!condoId) {
+                    const shouldContinue = confirm(
+                        '⚠️ Você não está autenticado.\n\n' +
+                        'É necessário fazer login no sistema primeiro.\n\n' +
+                        'Deseja ir para a página de login agora?'
+                    );
+                    
+                    if (shouldContinue) {
+                        window.location.href = '/app.html';
+                    } else {
+                        btn.disabled = false;
+                        btn.innerHTML = 'Assinar Agora';
+                    }
+                    return;
+                }
+
+                // Tentar obter token JWT do Supabase (opcional - a Edge Function aceita condoId no body)
+                let authToken = SUPABASE_ANON_KEY; // Fallback para anon key
+                
+                try {
+                    // Aguardar um pouco caso o Supabase ainda esteja inicializando
+                    let attempts = 0;
+                    while (!window.supabaseClient && attempts < 5) {
+                        await new Promise(resolve => setTimeout(resolve, 200));
+                        attempts++;
+                    }
+                    
+                    if (window.supabaseClient) {
+                        console.log('🔍 Verificando sessão do Supabase (opcional)...');
+                        const { data: { session }, error: sessionError } = await window.supabaseClient.auth.getSession();
+                        
+                        if (sessionError) {
+                            console.warn('⚠️ Erro ao obter sessão:', sessionError);
+                        }
+                        
+                        if (session?.access_token) {
+                            authToken = session.access_token;
+                            console.log('✅ JWT obtido (opcional):', {
+                                userId: session.user.id,
+                                email: session.user.email
+                            });
+                        } else {
+                            console.log('ℹ️ Nenhuma sessão Supabase Auth encontrada. Usando condoId do body.');
+                        }
+                    }
+                } catch (e) {
+                    console.warn('⚠️ Erro ao obter sessão do Supabase (continuando com condoId):', e);
+                }
+
+                // Chamar Edge Function create-payment
+                // Nota: A Edge Function tenta obter condoId do JWT primeiro, depois do body como fallback
+                console.log('📤 Chamando Edge Function create-payment...', {
+                    planId: selectedPlanType,
+                    billingType: selectedPaymentMethod,
+                    hasJWT: !!authToken,
+                    condoId: condoId
+                });
+
+                const response = await fetch(`${SUPABASE_URL}/functions/v1/create-payment`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${authToken || SUPABASE_ANON_KEY}`,
+                        'apikey': SUPABASE_ANON_KEY
+                    },
+                    body: JSON.stringify({
+                        planId: selectedPlanType,
+                        billingType: selectedPaymentMethod,
+                        ...(condoId ? { condoId: condoId } : {}) // Enviar condoId se disponível
+                    })
+                });
+
+                const data = await response.json();
+
+                if (!response.ok || data.error) {
+                    // Se erro 401 ou 403, usuário não autenticado ou sem condo_id
+                    if (response.status === 401 || response.status === 403) {
+                        const errorMsg = data.error || data.message || 'Você precisa estar autenticado para fazer o pagamento.';
+                        const shouldRedirect = confirm(errorMsg + '\n\nDeseja fazer login agora?');
+                        if (shouldRedirect) {
+                            window.location.href = '/app.html';
+                        } else {
+                            btn.disabled = false;
+                            btn.innerHTML = 'Assinar Agora';
+                        }
+                        return;
+                    }
+                    throw new Error(data.error || data.message || 'Erro ao processar pagamento');
+                }
+
+                // Se for PIX, exibir QR Code
+                if (selectedPaymentMethod === 'PIX' && data.pixQrCode) {
+                    displayPixQrCode(data.pixQrCode);
+                    btn.disabled = false;
+                    btn.innerHTML = 'Assinar Agora';
+                } 
+                // Se for Cartão, redirecionar para paymentLink
+                else if (selectedPaymentMethod === 'CREDIT_CARD' && data.paymentLink) {
+                    window.location.href = data.paymentLink;
+                } 
+                else {
+                    throw new Error('Resposta inesperada do servidor');
+                }
+
+            } catch (error) {
+                console.error('Erro ao processar pagamento:', error);
+                alert('Erro: ' + error.message);
+                btn.disabled = false;
+                btn.innerHTML = 'Assinar Agora';
+            }
+        }
+
+        // Exibir QR Code PIX (função global)
+        function displayPixQrCode(pixQrCode) {
+            const pixQrCodeContainer = document.getElementById('pixQrCodeContainer');
+            const pixQrCodeImage = document.getElementById('pixQrCodeImage');
+            const pixPayloadContainer = document.getElementById('pixPayloadContainer');
+            const pixPayload = document.getElementById('pixPayload');
+            const pixExpiration = document.getElementById('pixExpiration');
+            const cardForm = document.getElementById('cardForm');
+            const pixMessage = document.getElementById('pixMessage');
+            const payBtn = document.getElementById('payBtn');
+
+            // Esconder formulário de cartão e mensagem placeholder
+            cardForm.classList.add('hidden');
+            pixMessage.classList.add('hidden');
+            payBtn.classList.add('hidden');
+
+            // Limpar conteúdo anterior
+            pixQrCodeImage.innerHTML = '';
+            pixPayloadContainer.classList.add('hidden');
+
+            // Armazenar payload para copiar
+            currentPixPayload = pixQrCode.payload || pixQrCode;
+
+            // Exibir QR Code como imagem (se tiver encodedImage)
+            if (pixQrCode.encodedImage) {
+                const img = document.createElement('img');
+                img.src = `data:image/png;base64,${pixQrCode.encodedImage}`;
+                img.alt = 'QR Code PIX';
+                img.className = 'w-64 h-64 mx-auto';
+                pixQrCodeImage.appendChild(img);
+            } else {
+                // Fallback: exibir payload como texto
+                pixPayload.textContent = currentPixPayload;
+                pixPayloadContainer.classList.remove('hidden');
+            }
+
+            // Exibir data de expiração
+            if (pixQrCode.expirationDate) {
+                const expirationDate = new Date(pixQrCode.expirationDate);
+                pixExpiration.textContent = `⏰ Expira em: ${expirationDate.toLocaleString('pt-BR')}`;
+            } else {
+                pixExpiration.textContent = '';
+            }
+
+            // Mostrar container do QR Code
+            pixQrCodeContainer.classList.remove('hidden');
+        }
+
+        // Função antiga (modo demo - mantida para compatibilidade)
+        function processPaymentOld() {
             setTimeout(() => {
                 const keyFor = (table) => `condotrack_${table}`;
                 const read = (table) => JSON.parse(localStorage.getItem(keyFor(table)) || '[]');
@@ -626,6 +989,56 @@
             e.target.value = value.substring(0, 5);
         });
 
+        // Inicializar Supabase Client (tentar carregar dinamicamente)
+        (async function initSupabase() {
+            try {
+                // Tentar importar Supabase
+                const { createClient } = await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm');
+                
+                // Criar cliente com as mesmas configurações do App.jsx
+                window.supabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+                    auth: {
+                        autoRefreshToken: true,
+                        persistSession: true,
+                        detectSessionInUrl: false
+                    }
+                });
+                console.log('✅ Supabase client inicializado');
+                
+                // Verificar se há sessão ativa (persistida pelo App.jsx)
+                const { data: { session }, error: sessionError } = await window.supabaseClient.auth.getSession();
+                
+                if (sessionError) {
+                    console.warn('⚠️ Erro ao verificar sessão:', sessionError);
+                }
+                
+                if (session) {
+                    console.log('✅ Sessão encontrada:', {
+                        userId: session.user.id,
+                        email: session.user.email,
+                        hasAccessToken: !!session.access_token
+                    });
+                } else {
+                    console.warn('⚠️ Nenhuma sessão ativa encontrada.');
+                    console.log('ℹ️ O usuário precisará fazer login no App.jsx primeiro.');
+                }
+            } catch (error) {
+                console.warn('⚠️ Não foi possível inicializar Supabase client:', error);
+                console.log('ℹ️ A Edge Function pode exigir autenticação. O usuário será redirecionado para login se necessário.');
+            }
+        })();
+
+        // Garantir que todas as funções estejam no escopo global
+        window.selectPlan = selectPlan;
+        window.selectPaymentMethod = selectPaymentMethod;
+        window.copyPixCode = copyPixCode;
+        window.closeModal = closeModal;
+        window.resetPaymentModal = resetPaymentModal;
+        window.processPayment = processPayment;
+        window.displayPixQrCode = displayPixQrCode;
+        window.loadCondoInfo = loadCondoInfo;
+
+        // Inicializar página
         loadCondoInfo();
     </script>
 </body>

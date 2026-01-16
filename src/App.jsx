@@ -461,6 +461,21 @@ export async function createAsaasCheckout(planKey, billingType) {
         throw new Error(data.error);
       }
 
+      console.log('📦 Dados recebidos da Edge Function:', {
+        paymentLink: data.paymentLink,
+        pixQrCode: data.pixQrCode,
+        billingType: billingType,
+        paymentId: data.paymentId,
+      });
+
+      // Validar que temos pelo menos um método de pagamento
+      if (billingType === 'PIX' && !data.pixQrCode) {
+        console.warn('⚠️ PIX selecionado mas pixQrCode não veio na resposta');
+      }
+      if ((billingType === 'CREDIT_CARD' || billingType === 'BOLETO') && !data.paymentLink) {
+        console.warn('⚠️ Cartão/Boleto selecionado mas paymentLink não veio na resposta');
+      }
+
       return {
         success: true,
         checkoutUrl: data.paymentLink, // URL para Boleto/Cartão
@@ -1502,7 +1517,16 @@ function BillingCheckout({ condoInfo, onPaymentSuccess, onLogout, isAdmin = fals
   const [isProcessing, setIsProcessing] = useState(false);
   const [isRedirecting, setIsRedirecting] = useState(false);
   const [pixData, setPixData] = useState(null); // NOVO ESTADO PARA O PIX
+  // Modal de pagamento desabilitado em produção - sempre false
   const [showPaymentModal, setShowPaymentModal] = useState(false);
+  
+  // Em produção, garantir que o modal nunca seja exibido
+  useEffect(() => {
+    if (IS_PRODUCTION && showPaymentModal) {
+      console.warn('⚠️ Modal de pagamento tentou abrir em produção. Fechando...');
+      setShowPaymentModal(false);
+    }
+  }, [showPaymentModal]);
   const [paymentSuccess, setPaymentSuccess] = useState(false);
   const [showTestPanel, setShowTestPanel] = useState(false);
   const [error, setError] = useState('');
@@ -1535,24 +1559,30 @@ function BillingCheckout({ condoInfo, onPaymentSuccess, onLogout, isAdmin = fals
     setPixData(null);
 
     try {
+      console.log('🔄 Iniciando checkout:', { planKey, paymentMethod });
       const session = await createAsaasCheckout(planKey, paymentMethod);
+      console.log('✅ Resposta do checkout:', session);
 
-      if (session.success) {
-        // NOVO FLUXO: Trata PIX ou redireciona
-        if (session.billingType === 'PIX' && session.pixQrCode) {
-          // pixQrCode agora é um objeto com payload, encodedImage, expirationDate
-          setPixData(session.pixQrCode);
-          setIsProcessing(false);
-        } else if (session.checkoutUrl) {
-          setIsRedirecting(true);
-          console.log('🔄 Redirecionando para Asaas:', session.checkoutUrl);
-          window.location.href = session.checkoutUrl;
-        } else {
-          throw new Error('Não foi possível obter um link de pagamento ou QR Code.');
-        }
+      if (!session || !session.success) {
+        throw new Error('Resposta inválida do servidor. Tente novamente.');
+      }
+
+      // NOVO FLUXO: Trata PIX ou redireciona
+      if (session.billingType === 'PIX' && session.pixQrCode) {
+        console.log('💚 PIX detectado, exibindo QR Code:', session.pixQrCode);
+        // pixQrCode agora é um objeto com payload, encodedImage, expirationDate
+        setPixData(session.pixQrCode);
+        setIsProcessing(false);
+      } else if (session.checkoutUrl) {
+        console.log('🔄 Redirecionando para Asaas:', session.checkoutUrl);
+        setIsRedirecting(true);
+        window.location.href = session.checkoutUrl;
+      } else {
+        console.error('❌ Resposta sem PIX nem checkoutUrl:', session);
+        throw new Error('Não foi possível obter um link de pagamento ou QR Code. Verifique os logs do console.');
       }
     } catch (err) {
-      console.error('Erro ao criar sessão de checkout:', err);
+      console.error('❌ Erro ao criar sessão de checkout:', err);
       setError(err.message || 'Erro ao iniciar checkout. Tente novamente.');
       setIsProcessing(false);
     }
@@ -1768,36 +1798,50 @@ function BillingCheckout({ condoInfo, onPaymentSuccess, onLogout, isAdmin = fals
         </div>
 
         {/* Título */}
-        <div className="text-center mb-8">
+        <div className="text-center mb-6">
           <h2 className="text-2xl font-bold text-gray-800 dark:text-white mb-2">Escolha seu Plano</h2>
           <p className="text-gray-600 dark:text-gray-400">Selecione o plano ideal e continue gerenciando seu condomínio</p>
         </div>
 
-        {/* Método de Pagamento */}
-        <div className="flex justify-center mb-8">
-          <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-2 inline-flex gap-2">
-            <button
-              type="button"
-              onClick={() => setPaymentMethod('PIX')}
-              className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${
-                paymentMethod === 'PIX'
-                  ? 'bg-emerald-600 text-white'
-                  : 'bg-transparent text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700'
-              }`}
-            >
-              Pix
-            </button>
-            <button
-              type="button"
-              onClick={() => setPaymentMethod('CREDIT_CARD')}
-              className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${
-                paymentMethod === 'CREDIT_CARD'
-                  ? 'bg-emerald-600 text-white'
-                  : 'bg-transparent text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700'
-              }`}
-            >
-              Cartão
-            </button>
+        {/* Método de Pagamento - SEMPRE VISÍVEL */}
+        <div className="mb-8" style={{ display: 'block' }}>
+          <div className="text-center mb-4">
+            <h3 className="text-lg font-semibold text-gray-700 dark:text-gray-300 mb-2">Forma de Pagamento</h3>
+            <p className="text-sm text-gray-500 dark:text-gray-400">Escolha como deseja pagar</p>
+          </div>
+          <div className="flex justify-center">
+            <div className="bg-white dark:bg-gray-800 border-2 border-emerald-500 dark:border-emerald-600 rounded-xl p-2 inline-flex gap-2 shadow-lg" style={{ display: 'flex' }}>
+              <button
+                type="button"
+                onClick={() => {
+                  console.log('💳 Método de pagamento alterado para: PIX');
+                  setPaymentMethod('PIX');
+                }}
+                className={`px-8 py-3 rounded-lg text-base font-bold transition-all min-w-[120px] ${
+                  paymentMethod === 'PIX'
+                    ? 'bg-emerald-600 text-white shadow-lg scale-105'
+                    : 'bg-transparent text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700'
+                }`}
+                style={{ display: 'block' }}
+              >
+                💚 Pix
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  console.log('💳 Método de pagamento alterado para: CREDIT_CARD');
+                  setPaymentMethod('CREDIT_CARD');
+                }}
+                className={`px-8 py-3 rounded-lg text-base font-bold transition-all min-w-[120px] ${
+                  paymentMethod === 'CREDIT_CARD'
+                    ? 'bg-emerald-600 text-white shadow-lg scale-105'
+                    : 'bg-transparent text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700'
+                }`}
+                style={{ display: 'block' }}
+              >
+                💳 Cartão
+              </button>
+            </div>
           </div>
         </div>
 
@@ -1954,8 +1998,8 @@ function BillingCheckout({ condoInfo, onPaymentSuccess, onLogout, isAdmin = fals
         </div>
       </div>
 
-      {/* Modal de Pagamento (Modo Demo) */}
-      {showPaymentModal && (
+      {/* Modal de Pagamento (APENAS MODO DEMO - Desabilitado em produção) */}
+      {showPaymentModal && !IS_PRODUCTION && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6 max-w-md w-full border border-gray-200 dark:border-gray-700">
             <div className="flex justify-between items-center mb-6">
@@ -1975,6 +2019,37 @@ function BillingCheckout({ condoInfo, onPaymentSuccess, onLogout, isAdmin = fals
               </p>
             </div>
 
+            {/* Seleção de Método de Pagamento no Modal */}
+            <div className="mb-6">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+                Escolha a forma de pagamento:
+              </label>
+              <div className="flex gap-2 mb-4">
+                <button
+                  type="button"
+                  onClick={() => setPaymentMethod('PIX')}
+                  className={`flex-1 px-4 py-3 rounded-lg text-sm font-bold transition-all ${
+                    paymentMethod === 'PIX'
+                      ? 'bg-emerald-600 text-white shadow-lg'
+                      : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+                  }`}
+                >
+                  💚 Pix
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPaymentMethod('CREDIT_CARD')}
+                  className={`flex-1 px-4 py-3 rounded-lg text-sm font-bold transition-all ${
+                    paymentMethod === 'CREDIT_CARD'
+                      ? 'bg-emerald-600 text-white shadow-lg'
+                      : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+                  }`}
+                >
+                  💳 Cartão
+                </button>
+              </div>
+            </div>
+
             <div className="text-center mb-6">
               <p className="text-gray-600 dark:text-gray-400">Plano selecionado</p>
               <p className="text-2xl font-bold text-cyan-500">{PLANS_CONFIG[selectedPlan]?.name}</p>
@@ -1983,44 +2058,55 @@ function BillingCheckout({ condoInfo, onPaymentSuccess, onLogout, isAdmin = fals
               </p>
             </div>
 
-            {/* Formulário de Cartão (Simulado) */}
-            <div className="space-y-4 mb-6">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  Número do Cartão
-                </label>
-                <input
-                  type="text"
-                  placeholder="4242 4242 4242 4242"
-                  maxLength={19}
-                  className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-xl text-gray-800 dark:text-white placeholder-gray-400 focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20 outline-none"
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
+            {/* Formulário de Cartão (Apenas se Cartão selecionado) */}
+            {paymentMethod === 'CREDIT_CARD' && (
+              <div className="space-y-4 mb-6">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Validade
+                    Número do Cartão
                   </label>
                   <input
                     type="text"
-                    placeholder="12/25"
-                    maxLength={5}
+                    placeholder="4242 4242 4242 4242"
+                    maxLength={19}
                     className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-xl text-gray-800 dark:text-white placeholder-gray-400 focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20 outline-none"
                   />
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    CVV
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="123"
-                    maxLength={4}
-                    className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-xl text-gray-800 dark:text-white placeholder-gray-400 focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20 outline-none"
-                  />
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      Validade
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="12/25"
+                      maxLength={5}
+                      className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-xl text-gray-800 dark:text-white placeholder-gray-400 focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20 outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      CVV
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="123"
+                      maxLength={4}
+                      className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-xl text-gray-800 dark:text-white placeholder-gray-400 focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20 outline-none"
+                    />
+                  </div>
                 </div>
               </div>
-            </div>
+            )}
+
+            {/* Mensagem para PIX */}
+            {paymentMethod === 'PIX' && (
+              <div className="bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-300 dark:border-emerald-700 rounded-lg p-4 mb-6">
+                <p className="text-sm text-emerald-700 dark:text-emerald-400 text-center">
+                  💚 Em produção, o QR Code PIX seria exibido aqui após clicar em "Assinar Agora"
+                </p>
+              </div>
+            )}
 
             {error && (
               <div className="bg-red-50 dark:bg-red-900/20 border border-red-300 dark:border-red-700 text-red-600 dark:text-red-400 px-4 py-3 rounded-lg mb-4 text-sm">

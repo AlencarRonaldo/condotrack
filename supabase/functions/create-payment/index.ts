@@ -31,6 +31,7 @@ const corsHeaders = {
 interface PaymentRequestBody {
   planId: string; // ou slug do plano
   billingType: 'PIX' | 'BOLETO' | 'CREDIT_CARD';
+  condoId?: string; // Opcional: usado como fallback quando não há JWT válido
 }
 
 Deno.serve(async (req) => {
@@ -45,16 +46,7 @@ Deno.serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     );
 
-    // 1. Autenticar o usuário via JWT
-    const authHeader = req.headers.get('Authorization')!;
-    const jwt = authHeader.replace('Bearer ', '');
-    const { data: { user }, error: userError } = await supabaseAdmin.auth.getUser(jwt);
-
-    if (userError || !user) {
-      throw { status: 401, message: 'Usuário não autenticado.' };
-    }
-
-    const { planId, billingType } = await req.json() as PaymentRequestBody;
+    const { planId, billingType, condoId: condoIdFromBody } = await req.json() as PaymentRequestBody & { condoId?: string };
     if (!planId || !billingType) {
       throw { status: 400, message: 'planId e billingType são obrigatórios.' };
     }
@@ -66,9 +58,34 @@ Deno.serve(async (req) => {
     }
 
     // --- Lógica Principal ---
-    const condoId = user.user_metadata?.condo_id;
+    // Tentar obter condoId do JWT primeiro, depois do body como fallback
+    let condoId: string | null = null;
+
+    // 1. Tentar autenticar via JWT (método preferido)
+    const authHeader = req.headers.get('Authorization');
+    if (authHeader) {
+      try {
+        const jwt = authHeader.replace('Bearer ', '');
+        const { data: { user }, error: userError } = await supabaseAdmin.auth.getUser(jwt);
+
+        if (!userError && user) {
+          condoId = user.user_metadata?.condo_id || null;
+          console.log('[create-payment] CondoId obtido do JWT:', condoId);
+        }
+      } catch (jwtError) {
+        console.warn('[create-payment] Erro ao validar JWT (continuando com fallback):', jwtError);
+      }
+    }
+
+    // 2. Fallback: usar condoId do body se não veio do JWT
+    if (!condoId && condoIdFromBody) {
+      condoId = condoIdFromBody;
+      console.log('[create-payment] CondoId obtido do body:', condoId);
+    }
+
+    // 3. Validar que temos um condoId
     if (!condoId) {
-      throw { status: 403, message: 'Usuário não associado a um condomínio.' };
+      throw { status: 403, message: 'Condomínio não identificado. É necessário estar autenticado ou fornecer condoId.' };
     }
 
     // 2. Buscar dados do plano e do condomínio
@@ -210,20 +227,37 @@ Deno.serve(async (req) => {
     };
 
     // Se for PIX, incluir dados do QR Code
-    if (billingType === 'PIX' && pixQrCodeData) {
-        responseData.pixQrCode = {
-            payload: pixQrCodeData.payload, // Código copia e cola
-            encodedImage: pixQrCodeData.encodedImage, // QR Code em Base64 (opcional)
-            expirationDate: pixQrCodeData.expirationDate, // Data de expiração
-        };
-    } else if (billingType === 'PIX' && asaasPayment.pixQrCode) {
-        // Fallback: usar dados que vieram na resposta do pagamento
-        responseData.pixQrCode = {
-            payload: asaasPayment.pixQrCode.payload,
-            encodedImage: asaasPayment.pixQrCode.encodedImage,
-            expirationDate: asaasPayment.pixQrCode.expirationDate,
-        };
+    if (billingType === 'PIX') {
+        if (pixQrCodeData) {
+            console.log('✅ QR Code PIX obtido via endpoint específico');
+            responseData.pixQrCode = {
+                payload: pixQrCodeData.payload, // Código copia e cola
+                encodedImage: pixQrCodeData.encodedImage, // QR Code em Base64 (opcional)
+                expirationDate: pixQrCodeData.expirationDate, // Data de expiração
+            };
+        } else if (asaasPayment.pixQrCode) {
+            console.log('✅ QR Code PIX obtido da resposta do pagamento');
+            // Fallback: usar dados que vieram na resposta do pagamento
+            responseData.pixQrCode = {
+                payload: asaasPayment.pixQrCode.payload,
+                encodedImage: asaasPayment.pixQrCode.encodedImage,
+                expirationDate: asaasPayment.pixQrCode.expirationDate,
+            };
+        } else {
+            console.error('❌ ERRO: PIX selecionado mas QR Code não foi obtido!');
+            throw { 
+                status: 500, 
+                message: 'Não foi possível obter o QR Code PIX. Tente novamente ou escolha outro método de pagamento.' 
+            };
+        }
     }
+
+    console.log('📤 Retornando resposta:', {
+        paymentId: responseData.paymentId,
+        billingType: responseData.billingType,
+        hasPixQrCode: !!responseData.pixQrCode,
+        hasPaymentLink: !!responseData.paymentLink,
+    });
 
     return new Response(JSON.stringify(responseData), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
