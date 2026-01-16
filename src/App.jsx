@@ -727,11 +727,27 @@ export default function CondoTrackApp() {
       return 'inactive';
     }
 
-    // Verifica se trial expirou
-    if (condoData.trial_end_date) {
+    // Se está em trial, verifica se expirou
+    if (condoData.subscription_status === 'trial' && condoData.trial_end_date) {
       const trialEnd = new Date(condoData.trial_end_date);
       const now = new Date();
       if (now > trialEnd) {
+        return 'expired';
+      }
+      // Trial ainda ativo - permite uso mas mostra contador
+      return 'active';
+    }
+
+    // Se subscription_status é 'expired', 'past_due', 'canceled' ou 'inactive'
+    if (['expired', 'past_due', 'canceled', 'inactive'].includes(condoData.subscription_status)) {
+      return 'expired';
+    }
+
+    // Verifica se trial_end_date expirou (fallback para casos antigos)
+    if (condoData.trial_end_date) {
+      const trialEnd = new Date(condoData.trial_end_date);
+      const now = new Date();
+      if (now > trialEnd && condoData.subscription_status !== 'active') {
         return 'expired';
       }
     }
@@ -2966,6 +2982,31 @@ function BillingManager({ condoInfo, staff }) {
   const adminCount = staff?.filter(s => s.role === 'admin').length || 0;
   const currentPlanType = condoInfo?.plan_type || 'basic';
   const staffLimit = condoInfo?.staff_limit || 2;
+  
+  // Verifica se está em trial
+  const isTrial = condoInfo?.subscription_status === 'trial';
+  const trialEndDate = condoInfo?.trial_end_date;
+  
+  // Debug: log para verificar dados
+  console.log('[BillingManager] CondoInfo:', {
+    subscription_status: condoInfo?.subscription_status,
+    trial_end_date: condoInfo?.trial_end_date,
+    plan_type: condoInfo?.plan_type,
+    isTrial
+  });
+  
+  // Calcula dias restantes do trial
+  const getTrialDaysRemaining = () => {
+    if (!trialEndDate) return null;
+    const trialEnd = new Date(trialEndDate);
+    const now = new Date();
+    const diffTime = trialEnd - now;
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    return diffDays;
+  };
+  
+  const trialDaysRemaining = getTrialDaysRemaining();
+  const isTrialExpired = trialDaysRemaining !== null && trialDaysRemaining <= 0;
 
   const plans = [
     {
@@ -3028,20 +3069,57 @@ function BillingManager({ condoInfo, staff }) {
 
   return (
     <div className="space-y-6">
-      {/* Header do Plano Atual */}
-      <div className="bg-blue-500 dark:bg-blue-600 rounded-xl p-6 text-white">
+      {/* Header do Plano Atual / Trial */}
+      <div className={`rounded-xl p-6 text-white ${
+        isTrial && !isTrialExpired 
+          ? 'bg-gradient-to-r from-green-500 to-emerald-600 dark:from-green-600 dark:to-emerald-700'
+          : isTrialExpired
+          ? 'bg-gradient-to-r from-red-500 to-red-600 dark:from-red-600 dark:to-red-700'
+          : 'bg-blue-500 dark:bg-blue-600'
+      }`}>
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div className="flex items-center gap-4">
             <div className="bg-white/20 p-3 rounded-xl">
               <CreditCard size={24} />
             </div>
             <div>
-              <p className="text-blue-100 text-sm">Seu plano atual</p>
-              <h2 className="text-2xl font-bold">Plano {currentPlan.name}</h2>
+              <p className="text-white/80 text-sm">
+                {isTrial && !isTrialExpired ? 'Período de teste' : isTrialExpired ? 'Trial expirado' : 'Seu plano atual'}
+              </p>
+              <h2 className="text-2xl font-bold">
+                {isTrial && !isTrialExpired 
+                  ? `Trial - ${trialDaysRemaining} ${trialDaysRemaining === 1 ? 'dia restante' : 'dias restantes'}`
+                  : isTrialExpired
+                  ? 'Trial Expirado'
+                  : `Plano ${currentPlan.name}`
+                }
+              </h2>
+              {isTrial && !isTrialExpired && (
+                <p className="text-white/70 text-sm mt-1">
+                  Escolha um plano para continuar após o trial
+                </p>
+              )}
+              {isTrialExpired && (
+                <p className="text-white/70 text-sm mt-1">
+                  Escolha um plano para continuar usando o sistema
+                </p>
+              )}
             </div>
           </div>
           <div className="text-left sm:text-right">
-            <p className="text-3xl font-bold">R$ {currentPlan.price}<span className="text-lg font-normal text-blue-100">/mês</span></p>
+            {isTrial && !isTrialExpired ? (
+              <div>
+                <p className="text-3xl font-bold">Grátis</p>
+                <p className="text-white/70 text-sm">Por {trialDaysRemaining} {trialDaysRemaining === 1 ? 'dia' : 'dias'}</p>
+              </div>
+            ) : isTrialExpired ? (
+              <div>
+                <p className="text-2xl font-bold">Bloqueado</p>
+                <p className="text-white/70 text-sm">Escolha um plano</p>
+              </div>
+            ) : (
+              <p className="text-3xl font-bold">R$ {currentPlan.price}<span className="text-lg font-normal text-white/80">/mês</span></p>
+            )}
           </div>
         </div>
       </div>
@@ -3147,7 +3225,7 @@ function BillingManager({ condoInfo, staff }) {
                     ))}
                   </ul>
 
-                  {isCurrent ? (
+                  {(isCurrent && !isTrial) ? (
                     <button disabled className="w-full bg-gray-200 dark:bg-gray-700 text-gray-500 dark:text-gray-400 py-2.5 rounded-lg font-medium cursor-not-allowed">
                       Plano Atual
                     </button>
