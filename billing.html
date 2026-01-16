@@ -409,104 +409,180 @@
 
     <!-- Payment Modal -->
     <div id="paymentModal" class="hidden fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-        <div class="bg-white rounded-2xl p-8 max-w-md w-full shadow-2xl">
-            <div class="text-center mb-6">
-                <div class="bg-blue-100 p-4 rounded-full w-16 h-16 mx-auto mb-4 flex items-center justify-center">
-                    <svg class="w-8 h-8 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"></path>
-                    </svg>
+        <div class="bg-white rounded-2xl p-8 max-w-lg w-full shadow-2xl">
+            <!-- Header com branding Asaas -->
+            <div class="text-center mb-6 border-b border-gray-200 pb-6">
+                <div class="flex items-center justify-center gap-2 mb-4">
+                    <div class="bg-gradient-to-r from-blue-600 to-blue-700 p-3 rounded-xl">
+                        <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"></path>
+                        </svg>
+                    </div>
                 </div>
-                <h3 class="text-2xl font-bold text-gray-900 mb-1">Finalizar Assinatura</h3>
-                <p class="text-gray-500">Plano <span id="selectedPlanName" class="text-blue-600 font-semibold">Profissional</span></p>
-                <p class="text-3xl font-bold text-gray-900 mt-2">R$ <span id="selectedPlanPrice">199</span><span class="text-lg font-normal text-gray-500">/mes</span></p>
+                <h3 class="text-2xl font-bold text-gray-900 mb-2">Finalizar Assinatura</h3>
+                <div class="bg-gray-50 rounded-lg p-4 mb-3">
+                    <p class="text-sm text-gray-600 mb-1">Plano selecionado</p>
+                    <p class="text-lg font-semibold text-gray-900"><span id="selectedPlanName" class="text-blue-600">Profissional</span></p>
+                    <p class="text-3xl font-bold text-gray-900 mt-2">R$ <span id="selectedPlanPrice">199</span><span class="text-lg font-normal text-gray-500">/mês</span></p>
+                </div>
+                <p class="text-xs text-gray-500 flex items-center justify-center gap-1">
+                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path>
+                    </svg>
+                    Pagamento processado com segurança pelo <strong class="text-blue-600">Asaas</strong>
+                </p>
             </div>
 
             <!-- Seleção de Método de Pagamento -->
             <div class="mb-6">
-                <label class="block text-sm font-medium text-gray-700 mb-3 text-center">Escolha a forma de pagamento:</label>
-                <div class="flex gap-2">
+                <label class="block text-sm font-semibold text-gray-800 mb-4 text-center">Escolha a forma de pagamento</label>
+                <div class="grid grid-cols-2 gap-3">
                     <button
                         id="btnPix"
                         onclick="selectPaymentMethod('PIX')"
-                        class="flex-1 px-4 py-3 rounded-lg text-sm font-bold transition-all bg-emerald-600 text-white shadow-lg"
+                        class="flex flex-col items-center justify-center px-4 py-4 rounded-xl text-sm font-semibold transition-all bg-emerald-50 border-2 border-emerald-500 text-emerald-700 hover:bg-emerald-100 shadow-sm"
                     >
-                        💚 Pix
+                        <svg class="w-8 h-8 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z"></path>
+                        </svg>
+                        <span>PIX</span>
+                        <span class="text-xs text-emerald-600 mt-1">Aprovação instantânea</span>
                     </button>
                     <button
                         id="btnCard"
                         onclick="selectPaymentMethod('CREDIT_CARD')"
-                        class="flex-1 px-4 py-3 rounded-lg text-sm font-bold transition-all bg-gray-100 text-gray-700 hover:bg-gray-200"
+                        class="flex flex-col items-center justify-center px-4 py-4 rounded-xl text-sm font-semibold transition-all bg-gray-50 border-2 border-gray-300 text-gray-700 hover:bg-gray-100 hover:border-gray-400"
                     >
-                        💳 Cartão
+                        <svg class="w-8 h-8 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"></path>
+                        </svg>
+                        <span>Cartão</span>
+                        <span class="text-xs text-gray-500 mt-1">Crédito ou débito</span>
                     </button>
                 </div>
             </div>
 
             <!-- Formulário de Cartão (apenas se Cartão selecionado) -->
             <div id="cardForm" class="space-y-4 mb-6 hidden">
+                <div class="bg-blue-50 border-l-4 border-blue-500 rounded-lg p-3 mb-4">
+                    <p class="text-xs text-blue-800">
+                        <strong>Nota:</strong> Para pagamento com cartão, você será redirecionado para a página segura do <strong>Asaas</strong> para finalizar o pagamento.
+                    </p>
+                </div>
                 <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-2">Numero do Cartao</label>
+                    <label class="block text-sm font-semibold text-gray-800 mb-2">Número do Cartão</label>
                     <input type="text" id="cardNumber" placeholder="0000 0000 0000 0000" maxlength="19"
-                        class="w-full px-4 py-3 bg-gray-50 border border-gray-300 rounded-xl text-gray-900 placeholder-gray-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all">
+                        class="w-full px-4 py-3 bg-white border-2 border-gray-300 rounded-xl text-gray-900 placeholder-gray-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all">
                 </div>
                 <div class="grid grid-cols-2 gap-4">
                     <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-2">Validade</label>
+                        <label class="block text-sm font-semibold text-gray-800 mb-2">Validade</label>
                         <input type="text" id="cardExpiry" placeholder="MM/AA" maxlength="5"
-                            class="w-full px-4 py-3 bg-gray-50 border border-gray-300 rounded-xl text-gray-900 placeholder-gray-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all">
+                            class="w-full px-4 py-3 bg-white border-2 border-gray-300 rounded-xl text-gray-900 placeholder-gray-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all">
                     </div>
                     <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-2">CVV</label>
+                        <label class="block text-sm font-semibold text-gray-800 mb-2">CVV</label>
                         <input type="text" id="cardCvv" placeholder="123" maxlength="4"
-                            class="w-full px-4 py-3 bg-gray-50 border border-gray-300 rounded-xl text-gray-900 placeholder-gray-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all">
+                            class="w-full px-4 py-3 bg-white border-2 border-gray-300 rounded-xl text-gray-900 placeholder-gray-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all">
                     </div>
                 </div>
+                <p class="text-xs text-gray-500 text-center mt-2">
+                    Você será redirecionado para o checkout seguro do <strong class="text-blue-600">Asaas</strong>
+                </p>
             </div>
 
             <!-- Mensagem para PIX (placeholder) -->
-            <div id="pixMessage" class="bg-emerald-50 border border-emerald-300 rounded-lg p-4 mb-6 hidden">
-                <p class="text-sm text-emerald-700 text-center">
-                    💚 Clique em "Assinar Agora" para gerar o QR Code PIX
-                </p>
+            <div id="pixMessage" class="bg-gradient-to-r from-emerald-50 to-green-50 border-l-4 border-emerald-500 rounded-lg p-4 mb-6 hidden">
+                <div class="flex items-start gap-3">
+                    <svg class="w-5 h-5 text-emerald-600 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                    </svg>
+                    <div>
+                        <p class="text-sm font-medium text-emerald-800 mb-1">Pagamento via PIX</p>
+                        <p class="text-xs text-emerald-700">
+                            Clique em "Assinar Agora" para gerar o QR Code PIX. O pagamento será processado instantaneamente pelo <strong>Asaas</strong>.
+                        </p>
+                    </div>
+                </div>
             </div>
 
             <!-- QR Code PIX (exibido após processar pagamento) -->
             <div id="pixQrCodeContainer" class="hidden mb-6">
-                <div class="bg-white border-2 border-emerald-500 rounded-xl p-6 text-center">
-                    <h4 class="text-lg font-bold text-gray-900 mb-4">Pague com PIX</h4>
-                    <div id="pixQrCodeImage" class="mb-4 flex justify-center">
-                        <!-- QR Code será inserido aqui -->
+                <div class="bg-gradient-to-br from-emerald-50 to-green-50 border-2 border-emerald-500 rounded-xl p-6 text-center">
+                    <div class="flex items-center justify-center gap-2 mb-4">
+                        <svg class="w-6 h-6 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z"></path>
+                        </svg>
+                        <h4 class="text-xl font-bold text-gray-900">Pague com PIX</h4>
                     </div>
-                    <div id="pixPayloadContainer" class="bg-gray-100 p-3 rounded-lg mb-4 hidden">
-                        <p class="text-xs text-gray-500 mb-2">Código PIX (Copia e Cola):</p>
-                        <pre id="pixPayload" class="text-xs break-all text-left text-gray-600"></pre>
+                    <p class="text-xs text-gray-600 mb-4">Processado com segurança pelo <strong class="text-blue-600">Asaas</strong></p>
+                    
+                    <div class="bg-white rounded-lg p-4 mb-4 shadow-sm">
+                        <div id="pixQrCodeImage" class="mb-4 flex justify-center">
+                            <!-- QR Code será inserido aqui -->
+                        </div>
+                        <div id="pixPayloadContainer" class="bg-gray-50 p-3 rounded-lg mb-4 hidden border border-gray-200">
+                            <p class="text-xs font-medium text-gray-700 mb-2">Código PIX (Copia e Cola):</p>
+                            <pre id="pixPayload" class="text-xs break-all text-left text-gray-600 bg-white p-2 rounded border"></pre>
+                        </div>
                     </div>
-                    <button onclick="copyPixCode()" id="copyPixBtn" class="w-full px-4 py-3 rounded-lg bg-emerald-500 hover:bg-emerald-600 text-white font-semibold mb-2">
-                        Copiar Código PIX
+                    
+                    <button onclick="copyPixCode()" id="copyPixBtn" class="w-full px-4 py-3 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-semibold mb-3 shadow-md transition-all">
+                        <span class="flex items-center justify-center gap-2">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
+                            </svg>
+                            Copiar Código PIX
+                        </span>
                     </button>
-                    <p id="pixExpiration" class="text-xs text-amber-600 mb-2"></p>
-                    <p class="text-sm text-gray-500 mb-4">
-                        Após o pagamento, o sistema será atualizado automaticamente em alguns instantes.
-                    </p>
-                    <button onclick="resetPaymentModal()" class="text-sm text-gray-500 hover:text-gray-700 hover:underline">
-                        ← Voltar
+                    
+                    <p id="pixExpiration" class="text-xs text-amber-700 bg-amber-50 rounded-lg p-2 mb-3 font-medium"></p>
+                    
+                    <div class="bg-blue-50 border-l-4 border-blue-500 rounded-lg p-3 mb-4">
+                        <p class="text-xs text-blue-800 text-left">
+                            <strong>Importante:</strong> Após realizar o pagamento via PIX, o sistema será atualizado automaticamente em alguns instantes. O pagamento é processado e confirmado pelo <strong>Asaas</strong>.
+                        </p>
+                    </div>
+                    
+                    <button onclick="resetPaymentModal()" class="text-sm text-gray-600 hover:text-gray-800 hover:underline font-medium">
+                        ← Voltar para seleção
                     </button>
                 </div>
             </div>
 
-            <button onclick="processPayment()" id="payBtn" class="w-full bg-blue-500 hover:bg-blue-600 text-white px-6 py-4 rounded-xl font-semibold transition-all mb-3">
-                Assinar Agora
-            </button>
-            <button onclick="closeModal()" class="w-full bg-gray-100 hover:bg-gray-200 text-gray-700 px-6 py-3 rounded-xl font-medium transition-all">
-                Cancelar
-            </button>
+            <div class="space-y-3">
+                <button onclick="processPayment()" id="payBtn" class="w-full bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white px-6 py-4 rounded-xl font-semibold transition-all shadow-lg hover:shadow-xl flex items-center justify-center gap-2">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                    </svg>
+                    Finalizar Pagamento
+                </button>
+                <button onclick="closeModal()" class="w-full bg-gray-100 hover:bg-gray-200 text-gray-700 px-6 py-3 rounded-xl font-medium transition-all">
+                    Cancelar
+                </button>
+            </div>
 
-            <p class="text-center text-gray-500 text-xs mt-4 flex items-center justify-center gap-1">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path>
-                </svg>
-                Pagamento seguro com criptografia SSL
-            </p>
+            <!-- Footer com informações de segurança e Asaas -->
+            <div class="mt-6 pt-6 border-t border-gray-200">
+                <div class="flex flex-col items-center gap-3 text-center">
+                    <div class="flex items-center gap-2 text-xs text-gray-600">
+                        <svg class="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path>
+                        </svg>
+                        <span>Pagamento 100% seguro e criptografado</span>
+                    </div>
+                    <div class="flex items-center gap-2 text-xs text-gray-500">
+                        <span>Processado por</span>
+                        <span class="font-semibold text-blue-600">Asaas</span>
+                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path>
+                        </svg>
+                    </div>
+                    <p class="text-xs text-gray-400 mt-1">
+                        Seus dados estão protegidos. Não armazenamos informações do cartão.
+                    </p>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -557,13 +633,13 @@
             pixQrCodeContainer.classList.add('hidden');
 
             if (method === 'PIX') {
-                btnPix.className = 'flex-1 px-4 py-3 rounded-lg text-sm font-bold transition-all bg-emerald-600 text-white shadow-lg';
-                btnCard.className = 'flex-1 px-4 py-3 rounded-lg text-sm font-bold transition-all bg-gray-100 text-gray-700 hover:bg-gray-200';
+                btnPix.className = 'flex flex-col items-center justify-center px-4 py-4 rounded-xl text-sm font-semibold transition-all bg-emerald-50 border-2 border-emerald-500 text-emerald-700 hover:bg-emerald-100 shadow-sm';
+                btnCard.className = 'flex flex-col items-center justify-center px-4 py-4 rounded-xl text-sm font-semibold transition-all bg-gray-50 border-2 border-gray-300 text-gray-700 hover:bg-gray-100 hover:border-gray-400';
                 cardForm.classList.add('hidden');
                 pixMessage.classList.remove('hidden');
             } else {
-                btnPix.className = 'flex-1 px-4 py-3 rounded-lg text-sm font-bold transition-all bg-gray-100 text-gray-700 hover:bg-gray-200';
-                btnCard.className = 'flex-1 px-4 py-3 rounded-lg text-sm font-bold transition-all bg-emerald-600 text-white shadow-lg';
+                btnPix.className = 'flex flex-col items-center justify-center px-4 py-4 rounded-xl text-sm font-semibold transition-all bg-gray-50 border-2 border-gray-300 text-gray-700 hover:bg-gray-100 hover:border-gray-400';
+                btnCard.className = 'flex flex-col items-center justify-center px-4 py-4 rounded-xl text-sm font-semibold transition-all bg-emerald-50 border-2 border-emerald-500 text-emerald-700 hover:bg-emerald-100 shadow-sm';
                 cardForm.classList.remove('hidden');
                 pixMessage.classList.add('hidden');
             }
