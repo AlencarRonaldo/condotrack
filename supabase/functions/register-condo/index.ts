@@ -12,6 +12,15 @@ serve(async (req) => {
     return new Response('ok', { headers: corsHeaders })
   }
 
+  // Valida apikey (anon key é permitida para registro público)
+  const apikey = req.headers.get('apikey') || req.headers.get('authorization')?.replace('Bearer ', '')
+  if (!apikey) {
+    return new Response(
+      JSON.stringify({ error: 'API key não fornecida' }),
+      { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    )
+  }
+
   try {
     // Get service role client (bypasses RLS)
     const supabaseAdmin = createClient(
