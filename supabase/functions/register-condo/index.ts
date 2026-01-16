@@ -87,12 +87,20 @@ serve(async (req) => {
     ].filter(Boolean).join(', ')
 
     // 1. Cria o condomínio
+    // Mapeia planType para valor correto da constraint (lowercase)
+    const planTypeMap: Record<string, string> = {
+      basic: 'basic',
+      professional: 'professional',
+      premium: 'premium'
+    }
+    const dbPlanType = planTypeMap[planType] || 'basic'
+
     const { data: condoData, error: condoError } = await supabaseAdmin
       .from('condos')
       .insert([{
         id: newCondoId,
         name: condoName,
-        plan_type: 'BASICO',
+        plan_type: dbPlanType,
         staff_limit: limits.staff,
         unit_limit: limits.units,
         trial_end_date: trialEndDate,
