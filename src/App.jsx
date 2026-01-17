@@ -752,6 +752,16 @@ export default function CondoTrackApp() {
       return 'inactive';
     }
 
+    // ✅ CRÍTICO: Verificar se plano pago está vencido (plan_end_date)
+    if (condoData.subscription_status === 'active' && condoData.plan_end_date) {
+      const planEnd = new Date(condoData.plan_end_date);
+      const now = new Date();
+      if (now > planEnd) {
+        // Plano vencido - bloquear acesso
+        return 'expired';
+      }
+    }
+
     // Se está em trial, verifica se expirou
     if (condoData.subscription_status === 'trial' && condoData.trial_end_date) {
       const trialEnd = new Date(condoData.trial_end_date);

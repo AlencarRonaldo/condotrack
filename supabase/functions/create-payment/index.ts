@@ -289,6 +289,7 @@ Deno.serve(async (req) => {
         amount: asaasPayment.value,
         due_date: asaasPayment.dueDate,
         billing_type: asaasPayment.billingType,
+        plan_slug: plan.slug, // ✅ CRÍTICO: Armazenar qual plano foi contratado
     };
     
     // Adicionar payment_link se existir
