@@ -128,15 +128,24 @@ Deno.serve(async (req) => {
       throw { status: 404, message: `Plano '${planId}' não encontrado.` };
     }
     
+    console.log('[create-payment] 🔍 Buscando condomínio:', condoId);
     const { data: condo, error: condoError } = await supabaseAdmin
         .from('condos')
-        .select('name, document_number, email, phone, postal_code')
+        .select('name, document_number')
         .eq('id', condoId)
         .single();
 
-    if (condoError || !condo) {
+    if (condoError) {
+        console.error('[create-payment] ❌ Erro ao buscar condomínio:', condoError);
+        throw { status: 404, message: `Condomínio não encontrado: ${condoError.message}` };
+    }
+
+    if (!condo) {
+        console.error('[create-payment] ❌ Condomínio não encontrado para ID:', condoId);
         throw { status: 404, message: 'Condomínio não encontrado.' };
     }
+
+    console.log('[create-payment] ✅ Condomínio encontrado:', condo.name);
 
     // 3. Buscar ou criar cliente no Asaas
     let { data: customer, error: customerError } = await supabaseAdmin
@@ -151,25 +160,44 @@ Deno.serve(async (req) => {
 
     if (!customer) {
         // Cliente não existe, criar no Asaas
+        console.log('[create-payment] 📝 Criando novo cliente no Asaas para condomínio:', condo.name);
+        
+        // Validar document_number (obrigatório para criar cliente no Asaas)
+        if (!condo.document_number) {
+            console.error('[create-payment] ❌ Condomínio não possui document_number');
+            throw { status: 400, message: 'Condomínio não possui document_number. É necessário para criar cliente no Asaas.' };
+        }
+
+        // Nota: email, phone e postalCode são opcionais na API do Asaas
+        const asaasCustomerBody = {
+            name: condo.name,
+            cpfCnpj: condo.document_number,
+        };
+        
+        console.log('[create-payment] 📤 Enviando requisição para criar cliente no Asaas:', asaasCustomerBody);
+
         const asaasCustomerResponse = await fetch('https://api.asaas.com/v3/customers', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
                 'access_token': Deno.env.get('ASAAS_API_KEY')!,
             },
-            body: JSON.stringify({
-                name: condo.name,
-                cpfCnpj: condo.document_number,
-                email: condo.email,
-                phone: condo.phone,
-                postalCode: condo.postal_code,
-            }),
+            body: JSON.stringify(asaasCustomerBody),
         });
 
         const newAsaasCustomer = await asaasCustomerResponse.json();
+        console.log('[create-payment] 📥 Resposta do Asaas (criar cliente):', {
+            status: asaasCustomerResponse.status,
+            ok: asaasCustomerResponse.ok,
+            data: newAsaasCustomer
+        });
+        
         if (!asaasCustomerResponse.ok) {
-            throw { status: 500, message: 'Erro ao criar cliente no Asaas.', details: newAsaasCustomer.errors };
+            console.error('[create-payment] ❌ Erro ao criar cliente no Asaas:', newAsaasCustomer);
+            throw { status: 500, message: 'Erro ao criar cliente no Asaas.', details: newAsaasCustomer.errors || newAsaasCustomer };
         }
+        
+        console.log('[create-payment] ✅ Cliente criado no Asaas com ID:', newAsaasCustomer.id);
 
         // Salvar o novo cliente no nosso banco
         const { data: newLocalCustomer, error: newCustomerError } = await supabaseAdmin
@@ -185,8 +213,19 @@ Deno.serve(async (req) => {
     }
 
     // 4. Criar a cobrança no Asaas
+    console.log('[create-payment] 💳 Criando cobrança no Asaas...');
     const dueDate = new Date();
     dueDate.setDate(dueDate.getDate() + 5); // Vencimento em 5 dias
+
+    const paymentBody = {
+        customer: customer.asaas_customer_id,
+        billingType,
+        value: plan.price_monthly,
+        dueDate: dueDate.toISOString().split('T')[0],
+        description: `Assinatura Plano ${planId} - Condotrack`,
+    };
+    
+    console.log('[create-payment] 📤 Enviando requisição para criar pagamento no Asaas:', paymentBody);
 
     const asaasPaymentResponse = await fetch('https://api.asaas.com/v3/payments', {
         method: 'POST',
@@ -194,19 +233,22 @@ Deno.serve(async (req) => {
             'Content-Type': 'application/json',
             'access_token': Deno.env.get('ASAAS_API_KEY')!,
         },
-        body: JSON.stringify({
-            customer: customer.asaas_customer_id,
-            billingType,
-            value: plan.price_monthly,
-            dueDate: dueDate.toISOString().split('T')[0],
-            description: `Assinatura Plano ${planId} - Condotrack`,
-        }),
+        body: JSON.stringify(paymentBody),
     });
 
     const asaasPayment = await asaasPaymentResponse.json();
+    console.log('[create-payment] 📥 Resposta do Asaas (criar pagamento):', {
+        status: asaasPaymentResponse.status,
+        ok: asaasPaymentResponse.ok,
+        data: asaasPayment
+    });
+    
     if (!asaasPaymentResponse.ok) {
-        throw { status: 500, message: 'Erro ao criar cobrança no Asaas.', details: asaasPayment.errors };
+        console.error('[create-payment] ❌ Erro ao criar cobrança no Asaas:', asaasPayment);
+        throw { status: 500, message: 'Erro ao criar cobrança no Asaas.', details: asaasPayment.errors || asaasPayment };
     }
+    
+    console.log('[create-payment] ✅ Pagamento criado no Asaas com ID:', asaasPayment.id);
 
     // 5. Se for PIX e não vier pixQrCode na resposta, buscar via endpoint específico
     let pixQrCodeData = null;
@@ -230,19 +272,40 @@ Deno.serve(async (req) => {
     }
 
     // 6. Persistir a cobrança no nosso banco de dados
-    const { data: newInvoice, error: invoiceInsertError } = await supabaseAdmin
-      .from('invoices')
-      .insert({
+    console.log('[create-payment] 💾 Salvando invoice no banco de dados...');
+    console.log('[create-payment] 📋 Dados do pagamento Asaas:', {
+        id: asaasPayment.id,
+        status: asaasPayment.status,
+        value: asaasPayment.value,
+        dueDate: asaasPayment.dueDate,
+        billingType: asaasPayment.billingType,
+        invoiceUrl: asaasPayment.invoiceUrl
+    });
+    
+    const invoiceData: any = {
         customer_id: customer.id, // O ID do nosso DB, não do Asaas
         asaas_payment_id: asaasPayment.id,
-        status: asaasPayment.status, // Geralmente PENDING
+        status: asaasPayment.status || 'PENDING', // Geralmente PENDING
         amount: asaasPayment.value,
         due_date: asaasPayment.dueDate,
         billing_type: asaasPayment.billingType,
-        payment_link: asaasPayment.invoiceUrl,
-        pix_qr_code: pixQrCodeData?.payload || asaasPayment.pixQrCode?.payload, // Payload do PIX (copia e cola)
-        barcode: asaasPayment.barcode, // Apenas para Boleto
-      })
+    };
+    
+    // Adicionar payment_link se existir
+    if (asaasPayment.invoiceUrl) {
+        invoiceData.payment_link = asaasPayment.invoiceUrl;
+    }
+    
+    // Adicionar pix_qr_code se existir
+    if (pixQrCodeData?.payload) {
+        invoiceData.pix_qr_code = pixQrCodeData.payload;
+    }
+    
+    console.log('[create-payment] 📤 Dados para inserir na tabela invoices:', invoiceData);
+    
+    const { data: newInvoice, error: invoiceInsertError } = await supabaseAdmin
+      .from('invoices')
+      .insert(invoiceData)
       .select('id')
       .single();
 
@@ -295,14 +358,22 @@ Deno.serve(async (req) => {
         status: 200,
     });
 
-  } catch (error) {
-    console.error('Erro na Edge Function create-payment:', error);
+  } catch (error: any) {
+    console.error('❌ Erro na Edge Function create-payment:', error);
+    console.error('❌ Tipo do erro:', typeof error);
+    console.error('❌ Stack:', error?.stack);
+    
+    // Tratar erro customizado (objeto com status e message)
+    const errorStatus = error?.status || 500;
+    const errorMessage = error?.message || error?.toString() || 'Erro interno do servidor';
+    const errorDetails = error?.details || null;
+    
     return new Response(JSON.stringify({ 
-        error: error.message || 'Erro interno.',
-        details: error.details || null
+        error: errorMessage,
+        details: errorDetails
     }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: error.status || 500,
+        status: errorStatus,
     });
   }
 });

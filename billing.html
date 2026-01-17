@@ -416,22 +416,22 @@
     </footer>
 
     <!-- Payment Modal -->
-    <div id="paymentModal" class="hidden fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-        <div class="bg-white rounded-2xl p-8 max-w-lg w-full shadow-2xl">
+    <div id="paymentModal" class="hidden fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
+        <div class="bg-white rounded-2xl p-6 max-w-md w-full shadow-2xl my-4">
             <!-- Header com branding Asaas -->
-            <div class="text-center mb-6 border-b border-gray-200 pb-6">
-                <div class="flex items-center justify-center gap-2 mb-4">
-                    <div class="bg-gradient-to-r from-blue-600 to-blue-700 p-3 rounded-xl">
-                        <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div class="text-center mb-4 border-b border-gray-200 pb-4">
+                <div class="flex items-center justify-center gap-2 mb-3">
+                    <div class="bg-gradient-to-r from-blue-600 to-blue-700 p-2 rounded-lg">
+                        <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"></path>
                         </svg>
                     </div>
                 </div>
-                <h3 class="text-2xl font-bold text-gray-900 mb-2">Finalizar Assinatura</h3>
-                <div class="bg-gray-50 rounded-lg p-4 mb-3">
-                    <p class="text-sm text-gray-600 mb-1">Plano selecionado</p>
-                    <p class="text-lg font-semibold text-gray-900"><span id="selectedPlanName" class="text-blue-600">Profissional</span></p>
-                    <p class="text-3xl font-bold text-gray-900 mt-2">R$ <span id="selectedPlanPrice">199</span><span class="text-lg font-normal text-gray-500">/mês</span></p>
+                <h3 class="text-xl font-bold text-gray-900 mb-2">Finalizar Assinatura</h3>
+                <div class="bg-gray-50 rounded-lg p-3 mb-2">
+                    <p class="text-xs text-gray-600 mb-1">Plano selecionado</p>
+                    <p class="text-base font-semibold text-gray-900"><span id="selectedPlanName" class="text-blue-600">Profissional</span></p>
+                    <p class="text-2xl font-bold text-gray-900 mt-1">R$ <span id="selectedPlanPrice">199</span><span class="text-sm font-normal text-gray-500">/mês</span></p>
                 </div>
                 <p class="text-xs text-gray-500 flex items-center justify-center gap-1">
                     <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -442,30 +442,30 @@
             </div>
 
             <!-- Seleção de Método de Pagamento -->
-            <div class="mb-6">
-                <label class="block text-sm font-semibold text-gray-800 mb-4 text-center">Escolha a forma de pagamento</label>
-                <div class="grid grid-cols-2 gap-3">
+            <div class="mb-4">
+                <label class="block text-sm font-semibold text-gray-800 mb-3 text-center">Escolha a forma de pagamento</label>
+                <div class="grid grid-cols-2 gap-2">
                     <button
                         id="btnPix"
                         onclick="selectPaymentMethod('PIX')"
-                        class="flex flex-col items-center justify-center px-4 py-4 rounded-xl text-sm font-semibold transition-all bg-emerald-50 border-2 border-emerald-500 text-emerald-700 hover:bg-emerald-100 shadow-sm"
+                        class="flex flex-col items-center justify-center px-3 py-3 rounded-xl text-sm font-semibold transition-all bg-emerald-50 border-2 border-emerald-500 text-emerald-700 hover:bg-emerald-100 shadow-sm"
                     >
-                        <svg class="w-8 h-8 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <svg class="w-6 h-6 mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z"></path>
                         </svg>
                         <span>PIX</span>
-                        <span class="text-xs text-emerald-600 mt-1">Aprovação instantânea</span>
+                        <span class="text-xs text-emerald-600 mt-0.5">Aprovação instantânea</span>
                     </button>
                     <button
                         id="btnCard"
                         onclick="selectPaymentMethod('CREDIT_CARD')"
-                        class="flex flex-col items-center justify-center px-4 py-4 rounded-xl text-sm font-semibold transition-all bg-gray-50 border-2 border-gray-300 text-gray-700 hover:bg-gray-100 hover:border-gray-400"
+                        class="flex flex-col items-center justify-center px-3 py-3 rounded-xl text-sm font-semibold transition-all bg-gray-50 border-2 border-gray-300 text-gray-700 hover:bg-gray-100 hover:border-gray-400"
                     >
-                        <svg class="w-8 h-8 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <svg class="w-6 h-6 mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"></path>
                         </svg>
                         <span>Cartão</span>
-                        <span class="text-xs text-gray-500 mt-1">Crédito ou débito</span>
+                        <span class="text-xs text-gray-500 mt-0.5">Crédito ou débito</span>
                     </button>
                 </div>
             </div>
@@ -500,7 +500,7 @@
             </div>
 
             <!-- Mensagem para PIX (placeholder) -->
-            <div id="pixMessage" class="bg-gradient-to-r from-emerald-50 to-green-50 border-l-4 border-emerald-500 rounded-lg p-4 mb-6 hidden">
+            <div id="pixMessage" class="bg-gradient-to-r from-emerald-50 to-green-50 border-l-4 border-emerald-500 rounded-lg p-3 mb-4 hidden">
                 <div class="flex items-start gap-3">
                     <svg class="w-5 h-5 text-emerald-600 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
@@ -515,63 +515,72 @@
             </div>
 
             <!-- QR Code PIX (exibido após processar pagamento) -->
-            <div id="pixQrCodeContainer" class="hidden mb-6">
-                <div class="bg-gradient-to-br from-emerald-50 to-green-50 border-2 border-emerald-500 rounded-xl p-6 text-center">
-                    <div class="flex items-center justify-center gap-2 mb-4">
-                        <svg class="w-6 h-6 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div id="pixQrCodeContainer" class="hidden mb-4">
+                <div class="bg-gradient-to-br from-emerald-50 to-green-50 border-2 border-emerald-500 rounded-xl p-4 text-center">
+                    <div class="flex items-center justify-center gap-2 mb-3">
+                        <svg class="w-5 h-5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z"></path>
                         </svg>
-                        <h4 class="text-xl font-bold text-gray-900">Pague com PIX</h4>
+                        <h4 class="text-lg font-bold text-gray-900">Pague com PIX</h4>
                     </div>
-                    <p class="text-xs text-gray-600 mb-4">Processado com segurança pelo <strong class="text-blue-600">Asaas</strong></p>
+                    <p class="text-xs text-gray-600 mb-3">Processado com segurança pelo <strong class="text-blue-600">Asaas</strong></p>
                     
-                    <div class="bg-white rounded-lg p-4 mb-4 shadow-sm">
-                        <div id="pixQrCodeImage" class="mb-4 flex justify-center">
+                    <div class="bg-white rounded-lg p-3 mb-3 shadow-sm">
+                        <div id="pixQrCodeImage" class="mb-3 flex justify-center">
                             <!-- QR Code será inserido aqui -->
                         </div>
-                        <div id="pixPayloadContainer" class="bg-gray-50 p-3 rounded-lg mb-4 hidden border border-gray-200">
-                            <p class="text-xs font-medium text-gray-700 mb-2">Código PIX (Copia e Cola):</p>
+                        <div id="pixPayloadContainer" class="bg-gray-50 p-2 rounded-lg mb-3 hidden border border-gray-200">
+                            <p class="text-xs font-medium text-gray-700 mb-1">Código PIX (Copia e Cola):</p>
                             <pre id="pixPayload" class="text-xs break-all text-left text-gray-600 bg-white p-2 rounded border"></pre>
                         </div>
                     </div>
                     
-                    <button onclick="copyPixCode()" id="copyPixBtn" class="w-full px-4 py-3 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-semibold mb-3 shadow-md transition-all">
+                    <button onclick="copyPixCode()" id="copyPixBtn" class="w-full px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-semibold mb-2 shadow-md transition-all text-sm">
                         <span class="flex items-center justify-center gap-2">
-                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
                             </svg>
                             Copiar Código PIX
                         </span>
                     </button>
                     
-                    <p id="pixExpiration" class="text-xs text-amber-700 bg-amber-50 rounded-lg p-2 mb-3 font-medium"></p>
+                    <p id="pixExpiration" class="text-xs text-amber-700 bg-amber-50 rounded-lg p-2 mb-2 font-medium"></p>
                     
-                    <div class="bg-blue-50 border-l-4 border-blue-500 rounded-lg p-3 mb-4">
+                    <div class="bg-blue-50 border-l-4 border-blue-500 rounded-lg p-2 mb-3">
                         <p class="text-xs text-blue-800 text-left">
-                            <strong>Importante:</strong> Após realizar o pagamento via PIX, o sistema será atualizado automaticamente em alguns instantes. O pagamento é processado e confirmado pelo <strong>Asaas</strong>.
+                            <strong>Importante:</strong> Após realizar o pagamento via PIX, o sistema verificará automaticamente a confirmação. O pagamento é processado instantaneamente pelo <strong>Asaas</strong>.
                         </p>
                     </div>
                     
-                    <button onclick="resetPaymentModal()" class="text-sm text-gray-600 hover:text-gray-800 hover:underline font-medium">
+                    <div id="pollingStatus" class="bg-amber-50 border-l-4 border-amber-500 rounded-lg p-2 mb-3">
+                        <p class="text-xs text-amber-800 text-left flex items-center gap-2">
+                            <svg class="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                            </svg>
+                            <span>Aguardando confirmação do pagamento...</span>
+                        </p>
+                    </div>
+                    
+                    <button onclick="resetPaymentModal()" class="text-xs text-gray-600 hover:text-gray-800 hover:underline font-medium">
                         ← Voltar para seleção
                     </button>
                 </div>
             </div>
 
             <div class="space-y-3">
-                <button onclick="processPayment()" id="payBtn" class="w-full bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white px-6 py-4 rounded-xl font-semibold transition-all shadow-lg hover:shadow-xl flex items-center justify-center gap-2">
+                <button onclick="processPayment()" id="payBtn" class="w-full bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white px-4 py-3 rounded-xl font-semibold transition-all shadow-lg hover:shadow-xl flex items-center justify-center gap-2 text-sm">
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
                     </svg>
                     Finalizar Pagamento
                 </button>
-                <button onclick="closeModal()" class="w-full bg-gray-100 hover:bg-gray-200 text-gray-700 px-6 py-3 rounded-xl font-medium transition-all">
+                <button onclick="closeModal()" class="w-full bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2 rounded-xl font-medium transition-all text-sm">
                     Cancelar
                 </button>
             </div>
 
             <!-- Footer com informações de segurança e Asaas -->
-            <div class="mt-6 pt-6 border-t border-gray-200">
+            <div class="mt-4 pt-4 border-t border-gray-200">
                 <div class="flex flex-col items-center gap-3 text-center">
                     <div class="flex items-center gap-2 text-xs text-gray-600">
                         <svg class="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -622,6 +631,9 @@
         let selectedPlanPrice = 199;
         let selectedPaymentMethod = 'PIX'; // 'PIX' | 'CREDIT_CARD'
         let currentPixPayload = null;
+        let currentPaymentId = null; // ID da invoice para polling
+        let paymentPollingInterval = null; // Interval do polling
+        let paymentPollingTimeout = null; // Timeout do polling
 
         // Garantir que funções estejam no escopo global (window)
         window.selectedPlanType = selectedPlanType;
@@ -802,12 +814,20 @@
             resetPaymentModal();
         }
 
+        // Limpar polling quando a página for fechada (cleanup)
+        window.addEventListener('beforeunload', () => {
+            stopPaymentPolling();
+        });
+
         // Resetar modal para estado inicial (função global)
         function resetPaymentModal() {
             const pixQrCodeContainer = document.getElementById('pixQrCodeContainer');
             const cardForm = document.getElementById('cardForm');
             const pixMessage = document.getElementById('pixMessage');
             const payBtn = document.getElementById('payBtn');
+
+            // Parar polling se estiver rodando
+            stopPaymentPolling();
 
             // Esconder QR Code
             pixQrCodeContainer.classList.add('hidden');
@@ -820,6 +840,9 @@
             // Resetar método de pagamento para PIX
             selectedPaymentMethod = 'PIX';
             selectPaymentMethod('PIX');
+
+            // Limpar paymentId
+            currentPaymentId = null;
         }
 
         // Processar pagamento (função global)
@@ -980,6 +1003,36 @@
                         }
                         return;
                     }
+                    
+                    // Tratamento para 404 (plano ou condomínio não encontrado)
+                    if (response.status === 404) {
+                        const errorMsg = data.error || data.message || 'Recurso não encontrado.';
+                        console.error('❌ Erro 404:', errorMsg);
+                        console.error('📋 Detalhes do erro:', data);
+                        alert('Erro: ' + errorMsg + '\n\n' + 
+                              'Possíveis causas:\n' +
+                              '• Plano não existe no banco de dados\n' +
+                              '• Condomínio não encontrado\n\n' +
+                              'Verifique os logs do console para mais detalhes.');
+                        btn.disabled = false;
+                        btn.innerHTML = 'Assinar Agora';
+                        return;
+                    }
+                    
+                    // Tratamento para 500 (erro interno do servidor)
+                    if (response.status === 500) {
+                        const errorMsg = data.error || data.message || 'Erro interno do servidor.';
+                        console.error('❌ Erro 500:', errorMsg);
+                        console.error('📋 Detalhes do erro:', data);
+                        console.error('📋 Erro completo:', data);
+                        alert('Erro interno: ' + errorMsg + '\n\n' +
+                              'Detalhes: ' + (data.details ? JSON.stringify(data.details) : 'Nenhum detalhe disponível') +
+                              '\n\nVerifique os logs do console para mais informações.');
+                        btn.disabled = false;
+                        btn.innerHTML = 'Assinar Agora';
+                        return;
+                    }
+                    
                     throw new Error(data.error || data.message || 'Erro ao processar pagamento');
                 }
 
@@ -1051,6 +1104,139 @@
 
             // Mostrar container do QR Code
             pixQrCodeContainer.classList.remove('hidden');
+        }
+
+        // Iniciar polling para verificar status do pagamento (função global)
+        function startPaymentPolling(paymentId) {
+            // Limpar qualquer polling anterior
+            stopPaymentPolling();
+
+            console.log('🔄 Iniciando polling para paymentId:', paymentId);
+            
+            // Mostrar status de polling
+            const pollingStatus = document.getElementById('pollingStatus');
+            if (pollingStatus) {
+                pollingStatus.classList.remove('hidden');
+            }
+            
+            let attempts = 0;
+            const maxAttempts = 120; // 10 minutos (120 * 5 segundos)
+            const pollInterval = 5000; // 5 segundos
+
+            paymentPollingInterval = setInterval(async () => {
+                attempts++;
+                
+                try {
+                    console.log(`🔄 Verificando status do pagamento (tentativa ${attempts}/${maxAttempts})...`);
+                    
+                    const response = await fetch(
+                        `${SUPABASE_URL}/functions/v1/check-payment-status?paymentId=${paymentId}`,
+                        {
+                            method: 'GET',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'apikey': SUPABASE_ANON_KEY,
+                                'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
+                            }
+                        }
+                    );
+
+                    if (!response.ok) {
+                        console.error('❌ Erro ao verificar status:', response.status);
+                        if (attempts >= maxAttempts) {
+                            stopPaymentPolling();
+                            showPaymentTimeoutMessage();
+                        }
+                        return;
+                    }
+
+                    const data = await response.json();
+                    console.log('📋 Status do pagamento:', data);
+
+                    if (data.isPaid && data.status === 'PAID') {
+                        console.log('✅ Pagamento confirmado!');
+                        stopPaymentPolling();
+                        showPaymentSuccess();
+                        return;
+                    }
+
+                    // Se atingiu o máximo de tentativas
+                    if (attempts >= maxAttempts) {
+                        console.warn('⏰ Timeout: Polling encerrado após 10 minutos');
+                        stopPaymentPolling();
+                        showPaymentTimeoutMessage();
+                    }
+
+                } catch (error) {
+                    console.error('❌ Erro no polling:', error);
+                    if (attempts >= maxAttempts) {
+                        stopPaymentPolling();
+                        showPaymentTimeoutMessage();
+                    }
+                }
+            }, pollInterval);
+
+            // Timeout de segurança (10 minutos)
+            paymentPollingTimeout = setTimeout(() => {
+                console.warn('⏰ Timeout de segurança: Encerrando polling após 10 minutos');
+                stopPaymentPolling();
+                showPaymentTimeoutMessage();
+            }, 600000); // 10 minutos
+        }
+
+        // Parar polling (função global)
+        function stopPaymentPolling() {
+            if (paymentPollingInterval) {
+                clearInterval(paymentPollingInterval);
+                paymentPollingInterval = null;
+                console.log('🛑 Polling encerrado');
+            }
+            if (paymentPollingTimeout) {
+                clearTimeout(paymentPollingTimeout);
+                paymentPollingTimeout = null;
+            }
+            
+            // Esconder status de polling
+            const pollingStatus = document.getElementById('pollingStatus');
+            if (pollingStatus) {
+                pollingStatus.classList.add('hidden');
+            }
+        }
+
+        // Mostrar modal de sucesso quando pagamento for confirmado (função global)
+        function showPaymentSuccess() {
+            // Esconder modal de pagamento
+            const paymentModal = document.getElementById('paymentModal');
+            if (paymentModal) {
+                paymentModal.classList.add('hidden');
+            }
+
+            // Resetar modal
+            resetPaymentModal();
+
+            // Mostrar modal de sucesso
+            const successModal = document.getElementById('successModal');
+            if (successModal) {
+                successModal.classList.remove('hidden');
+                console.log('✅ Modal de sucesso exibido');
+            }
+
+            // Limpar paymentId atual
+            currentPaymentId = null;
+        }
+
+        // Mostrar mensagem de timeout quando polling expirar (função global)
+        function showPaymentTimeoutMessage() {
+            const pixQrCodeContainer = document.getElementById('pixQrCodeContainer');
+            if (pixQrCodeContainer && !pixQrCodeContainer.classList.contains('hidden')) {
+                alert('⏰ Não foi possível confirmar o pagamento automaticamente.\n\n' +
+                      'O pagamento pode ainda estar sendo processado.\n\n' +
+                      'Você pode:\n' +
+                      '• Fechar este modal e verificar depois\n' +
+                      '• Recarregar a página para atualizar o status\n' +
+                      '• Aguardar alguns minutos e tentar novamente');
+            }
+            currentPaymentId = null;
         }
 
         // Função antiga (modo demo - mantida para compatibilidade)
@@ -1171,6 +1357,9 @@
         window.processPayment = processPayment;
         window.displayPixQrCode = displayPixQrCode;
         window.loadCondoInfo = loadCondoInfo;
+        window.startPaymentPolling = startPaymentPolling;
+        window.stopPaymentPolling = stopPaymentPolling;
+        window.showPaymentSuccess = showPaymentSuccess;
 
         // Inicializar página
         loadCondoInfo();

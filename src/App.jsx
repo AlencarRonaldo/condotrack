@@ -435,36 +435,46 @@ const PLANS_CONFIG = {
 // ==================================================================================
 // Cria uma assinatura/cobrança recorrente no Asaas via Edge Function (produção) ou simula (demo)
 // Retorna URL para redirecionar o usuário para a página de pagamento (invoiceUrl)
-export async function createAsaasCheckout(planKey, billingType) {
+export async function createAsaasCheckout(planKey, billingType, condoId) {
   const plan = PLANS_CONFIG[planKey];
   if (!plan) {
     throw new Error('Plano inválido');
   }
 
   // ========================================================================
-  // MODO PRODUÇÃO: Chama a nova Edge Function 'create-payment'
+  // MODO PRODUÇÃO: Chama a nova Edge Function 'create-payment' com fetch manual
   // ========================================================================
   if (IS_PRODUCTION) {
+    if (!condoId) {
+      throw new Error('Condo ID é necessário para criar o pagamento.');
+    }
     try {
-      const { data, error } = await supabase.functions.invoke('create-payment', {
-        body: {
-          planId: planKey, // A Edge Function espera 'planId' que corresponde ao 'slug' do plano
-          billingType: billingType,
+      const paymentUrl = `${SUPABASE_URL}/functions/v1/create-payment`;
+      
+      const response = await fetch(paymentUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': SUPABASE_ANON_KEY,
+          // NÃO ENVIAR 'Authorization' para evitar erro de "Invalid JWT" com anon_key
         },
+        body: JSON.stringify({
+          planId: planKey,
+          billingType: billingType,
+          condoId: condoId, // Passa o condoId no body para fallback
+        }),
       });
 
-      if (error) {
-        throw new Error(error.message || 'Erro ao invocar a função de pagamento.');
-      }
+      const data = await response.json();
 
-      if (data.error) {
-        throw new Error(data.error);
+      if (!response.ok || data.error) {
+        throw new Error(data.error || 'Erro ao invocar a função de pagamento.');
       }
-
+      
       console.log('📦 Dados recebidos da Edge Function:', {
         paymentLink: data.paymentLink,
         pixQrCode: data.pixQrCode,
-        billingType: billingType,
+        billingType: data.billingType,
         paymentId: data.paymentId,
       });
 
@@ -480,7 +490,7 @@ export async function createAsaasCheckout(planKey, billingType) {
         success: true,
         checkoutUrl: data.paymentLink, // URL para Boleto/Cartão
         pixQrCode: data.pixQrCode,   // QR Code para PIX (objeto com payload, encodedImage, expirationDate)
-        billingType: billingType,
+        billingType: data.billingType,
         paymentId: data.paymentId,
       };
 
@@ -501,7 +511,7 @@ export async function createAsaasCheckout(planKey, billingType) {
         id: fakeSessionId,
         plan: plan.name,
         price: plan.priceFormatted,
-        condoId
+        condoId: condoId // Usando o condoId passado
       });
 
       resolve({
@@ -1551,7 +1561,7 @@ function BillingCheckout({ condoInfo, onPaymentSuccess, onLogout, isAdmin = fals
   // ========================================================================
   // HANDLE SUBSCRIBE - Cria checkout (Asaas) e redireciona ou mostra QR Code
   // ========================================================================
-  const handleSubscribe = async (planKey) => {
+  const handleSubscribe = async (planKey, condoId) => {
     // A função `createAsaasCheckout` agora usa a nova Edge Function
     setSelectedPlan(planKey);
     setIsProcessing(true);
@@ -1559,8 +1569,8 @@ function BillingCheckout({ condoInfo, onPaymentSuccess, onLogout, isAdmin = fals
     setPixData(null);
 
     try {
-      console.log('🔄 Iniciando checkout:', { planKey, paymentMethod });
-      const session = await createAsaasCheckout(planKey, paymentMethod);
+      console.log('🔄 Iniciando checkout:', { planKey, paymentMethod, condoId });
+      const session = await createAsaasCheckout(planKey, paymentMethod, condoId);
       console.log('✅ Resposta do checkout:', session);
 
       if (!session || !session.success) {
@@ -1881,7 +1891,7 @@ function BillingCheckout({ condoInfo, onPaymentSuccess, onLogout, isAdmin = fals
                 ))}
               </ul>
               <button
-                onClick={() => handleSubscribe(key)}
+                onClick={() => handleSubscribe(key, condoInfo.id)}
                 disabled={isProcessing}
                 className={`w-full py-3 rounded-xl font-bold transition-all ${
                   isProcessing
