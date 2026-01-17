@@ -18,6 +18,14 @@
                 }
             }
         }
+        
+        // Definir selectPlan ANTES do HTML ser renderizado
+        // Esta função será sobrescrita pelo script principal, mas garante que existe
+        window.selectPlan = function(planType, price) {
+            // Armazenar valores temporariamente para quando o script principal carregar
+            window._pendingSelectPlan = { planType: planType, price: price };
+            console.log('selectPlan chamado (aguardando script principal):', planType, price);
+        };
     </script>
     <style>
         body { font-family: 'Inter', sans-serif; }
@@ -620,6 +628,53 @@
         window.selectedPlanPrice = selectedPlanPrice;
         window.selectedPaymentMethod = selectedPaymentMethod;
 
+        // Definir selectPlan IMEDIATAMENTE no escopo global (substitui a versão temporária do head)
+        function selectPlanFunction(planType, price) {
+            selectedPlanType = planType;
+            selectedPlanPrice = price;
+            window.selectedPlanType = planType;
+            window.selectedPlanPrice = price;
+
+            const planNames = {
+                basic: 'Basico',
+                professional: 'Profissional',
+                premium: 'Premium'
+            };
+
+            const planNameEl = document.getElementById('selectedPlanName');
+            const planPriceEl = document.getElementById('selectedPlanPrice');
+            
+            if (planNameEl) {
+                planNameEl.textContent = planNames[planType];
+            }
+            if (planPriceEl) {
+                planPriceEl.textContent = price;
+            }
+            
+            // Resetar método de pagamento para PIX ao abrir modal
+            selectedPaymentMethod = 'PIX';
+            window.selectedPaymentMethod = 'PIX';
+            
+            if (typeof selectPaymentMethod === 'function') {
+                selectPaymentMethod('PIX');
+            }
+            
+            const modal = document.getElementById('paymentModal');
+            if (modal) {
+                modal.classList.remove('hidden');
+            }
+        }
+        
+        // Substituir a função temporária pela função real
+        window.selectPlan = selectPlanFunction;
+        
+        // Se havia uma chamada pendente, executá-la agora
+        if (window._pendingSelectPlan) {
+            const pending = window._pendingSelectPlan;
+            delete window._pendingSelectPlan;
+            selectPlanFunction(pending.planType, pending.price);
+        }
+
         // Selecionar método de pagamento (função global)
         function selectPaymentMethod(method) {
             selectedPaymentMethod = method;
@@ -738,32 +793,8 @@
             }
         }
 
-        // Função global para selecionar plano
-        function selectPlan(planType, price) {
-            selectedPlanType = planType;
-            selectedPlanPrice = price;
-            window.selectedPlanType = planType;
-            window.selectedPlanPrice = price;
-
-            const planNames = {
-                basic: 'Basico',
-                professional: 'Profissional',
-                premium: 'Premium'
-            };
-
-            document.getElementById('selectedPlanName').textContent = planNames[planType];
-            document.getElementById('selectedPlanPrice').textContent = price;
-            
-            // Resetar método de pagamento para PIX ao abrir modal
-            selectedPaymentMethod = 'PIX';
-            window.selectedPaymentMethod = 'PIX';
-            selectPaymentMethod('PIX');
-            
-            document.getElementById('paymentModal').classList.remove('hidden');
-        }
-
-        // Garantir que selectPlan esteja no escopo global
-        window.selectPlan = selectPlan;
+        // Função selectPlan já está definida no início do script (window.selectPlan)
+        // Não precisa de referência local, já está em window.selectPlan
 
         // Fechar modal (função global)
         function closeModal() {
@@ -893,19 +924,20 @@
                     condoId: condoId
                 });
 
-                // Não enviar Authorization header se não houver JWT válido
-                // A Edge Function aceita condoId no body como fallback
-                const headers: Record<string, string> = {
+                // ✅ Headers para Edge Function
+                // IMPORTANTE: Supabase Gateway exige Authorization header para autenticar
+                // Mas a função detecta se é anon key e não valida como JWT de usuário
+                const headers = {
                     'Content-Type': 'application/json',
-                    'apikey': SUPABASE_ANON_KEY
+                    'apikey': SUPABASE_ANON_KEY,
+                    'Authorization': `Bearer ${(authToken && authToken !== SUPABASE_ANON_KEY) ? authToken : SUPABASE_ANON_KEY}`
                 };
 
-                // Só adicionar Authorization se tiver JWT válido (não anon key)
                 if (authToken && authToken !== SUPABASE_ANON_KEY) {
-                    headers['Authorization'] = `Bearer ${authToken}`;
-                    console.log('📤 Enviando com JWT válido');
+                    console.log('📤 Enviando com JWT válido de usuário');
                 } else {
-                    console.log('📤 Enviando sem JWT (usando condoId do body)');
+                    // Enviando anon key como Authorization (gateway exige, função detecta e ignora como JWT)
+                    console.log('📤 Enviando com anon key no Authorization (Edge Function detectará e usará condoId do body)');
                 }
 
                 const response = await fetch(`${SUPABASE_URL}/functions/v1/create-payment`, {
@@ -918,12 +950,27 @@
                     })
                 });
 
-                const data = await response.json();
+                let data;
+                try {
+                    data = await response.json();
+                } catch (parseError) {
+                    console.error('Erro ao parsear resposta:', parseError);
+                    const text = await response.text();
+                    console.error('Resposta do servidor (texto):', text);
+                    throw new Error(`Erro ao processar resposta do servidor: ${response.status} ${response.statusText}`);
+                }
+
+                console.log('📥 Resposta da Edge Function:', {
+                    status: response.status,
+                    statusText: response.statusText,
+                    data: data
+                });
 
                 if (!response.ok || data.error) {
                     // Se erro 401 ou 403, usuário não autenticado ou sem condo_id
                     if (response.status === 401 || response.status === 403) {
                         const errorMsg = data.error || data.message || 'Você precisa estar autenticado para fazer o pagamento.';
+                        console.error('❌ Erro de autenticação:', errorMsg);
                         const shouldRedirect = confirm(errorMsg + '\n\nDeseja fazer login agora?');
                         if (shouldRedirect) {
                             window.location.href = '/app.html';
@@ -1116,7 +1163,7 @@
         })();
 
         // Garantir que todas as funções estejam no escopo global
-        window.selectPlan = selectPlan;
+        // selectPlan já está definido no início (linha 705), não precisa verificar
         window.selectPaymentMethod = selectPaymentMethod;
         window.copyPixCode = copyPixCode;
         window.closeModal = closeModal;

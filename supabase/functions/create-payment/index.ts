@@ -41,61 +41,80 @@ Deno.serve(async (req) => {
   }
 
   try {
+    // ✅ 1. Validar apikey PRIMEIRO (segurança básica)
+    const apikey = req.headers.get('apikey') || req.headers.get('authorization')?.replace('Bearer ', '');
+    if (!apikey) {
+      return new Response(
+        JSON.stringify({ error: 'API key não fornecida' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // ✅ 2. Inicializar cliente admin (bypass RLS)
     const supabaseAdmin = createClient(
       Deno.env.get('SUPABASE_URL')!,
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     );
 
+    // ✅ 3. Obter dados do body
     const { planId, billingType, condoId: condoIdFromBody } = await req.json() as PaymentRequestBody & { condoId?: string };
     if (!planId || !billingType) {
-      throw { status: 400, message: 'planId e billingType são obrigatórios.' };
+      return new Response(
+        JSON.stringify({ error: 'planId e billingType são obrigatórios.' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
     }
 
     // Validar billingType
     const validBillingTypes = ['PIX', 'CREDIT_CARD', 'BOLETO'];
     if (!validBillingTypes.includes(billingType)) {
-      throw { status: 400, message: `billingType inválido. Deve ser um de: ${validBillingTypes.join(', ')}` };
+      return new Response(
+        JSON.stringify({ error: `billingType inválido. Deve ser um de: ${validBillingTypes.join(', ')}` }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
     }
 
-    // --- Lógica Principal ---
-    // Tentar obter condoId do JWT primeiro, depois do body como fallback
+    // ✅ 4. Tentar obter condoId do JWT (SE houver Authorization com JWT de usuário)
     let condoId: string | null = null;
-
-    // 1. Tentar autenticar via JWT (método preferido, mas opcional)
     const authHeader = req.headers.get('Authorization');
-    if (authHeader && !authHeader.includes(Deno.env.get('SUPABASE_ANON_KEY') || '')) {
-      // Só tenta validar JWT se não for anon key
-      try {
-        const jwt = authHeader.replace('Bearer ', '').trim();
-        
-        // Verificar se não é anon key (anon key não é JWT válido)
-        if (jwt && jwt !== Deno.env.get('SUPABASE_ANON_KEY')) {
-          const { data: { user }, error: userError } = await supabaseAdmin.auth.getUser(jwt);
-
-          if (!userError && user && user.user_metadata?.condo_id) {
+    
+    if (authHeader) {
+      const token = authHeader.replace('Bearer ', '').trim();
+      
+      // ✅ IMPORTANTE: Só tenta validar se NÃO for a mesma chave do apikey (anon key)
+      // Se o token for igual ao apikey, é anon key e não devemos validar como JWT de usuário
+      if (token && token !== apikey) {
+        try {
+          const { data: { user }, error: userError } = await supabaseAdmin.auth.getUser(token);
+          
+          if (!userError && user?.user_metadata?.condo_id) {
             condoId = user.user_metadata.condo_id;
             console.log('[create-payment] ✅ CondoId obtido do JWT:', condoId);
           } else if (userError) {
             console.log('[create-payment] ⚠️ JWT inválido ou sem condo_id, usando fallback:', userError.message);
           }
+        } catch (jwtError: any) {
+          console.log('[create-payment] ⚠️ Erro ao validar JWT (ignorando):', jwtError?.message || jwtError);
         }
-      } catch (jwtError: any) {
-        // Ignorar erros de JWT e continuar com fallback
-        console.log('[create-payment] ⚠️ Erro ao validar JWT (ignorando, usando fallback):', jwtError?.message || jwtError);
+      } else {
+        console.log('[create-payment] ℹ️ Authorization contém anon key (mesma do apikey), usando condoId do body.');
       }
     } else {
-      console.log('[create-payment] ℹ️ Sem JWT válido no header, usando condoId do body');
+      console.log('[create-payment] ℹ️ Sem Authorization header, usando condoId do body.');
     }
 
-    // 2. Fallback: usar condoId do body se não veio do JWT
+    // ✅ 5. Fallback: usar condoId do body
     if (!condoId && condoIdFromBody) {
       condoId = condoIdFromBody.trim();
       console.log('[create-payment] ✅ CondoId obtido do body:', condoId);
     }
 
-    // 3. Validar que temos um condoId
+    // ✅ 6. Validar que temos condoId
     if (!condoId) {
-      throw { status: 403, message: 'Condomínio não identificado. É necessário estar autenticado ou fornecer condoId no body da requisição.' };
+      return new Response(
+        JSON.stringify({ error: 'Condomínio não identificado. É necessário estar autenticado ou fornecer condoId no body da requisição.' }),
+        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
     }
 
     // 2. Buscar dados do plano e do condomínio
@@ -111,7 +130,7 @@ Deno.serve(async (req) => {
     
     const { data: condo, error: condoError } = await supabaseAdmin
         .from('condos')
-        .select('name, document_number')
+        .select('name, document_number, email, phone, postal_code')
         .eq('id', condoId)
         .single();
 
@@ -122,7 +141,7 @@ Deno.serve(async (req) => {
     // 3. Buscar ou criar cliente no Asaas
     let { data: customer, error: customerError } = await supabaseAdmin
       .from('customers')
-      .select('asaas_customer_id')
+      .select('id, asaas_customer_id')
       .eq('condo_id', condoId)
       .single();
 
@@ -141,7 +160,9 @@ Deno.serve(async (req) => {
             body: JSON.stringify({
                 name: condo.name,
                 cpfCnpj: condo.document_number,
-                // Adicionar outros campos obrigatórios como email, phone, etc.
+                email: condo.email,
+                phone: condo.phone,
+                postalCode: condo.postal_code,
             }),
         });
 
@@ -154,7 +175,7 @@ Deno.serve(async (req) => {
         const { data: newLocalCustomer, error: newCustomerError } = await supabaseAdmin
             .from('customers')
             .insert({ condo_id: condoId, asaas_customer_id: newAsaasCustomer.id })
-            .select('asaas_customer_id')
+            .select('id, asaas_customer_id')
             .single();
         
         if(newCustomerError){
