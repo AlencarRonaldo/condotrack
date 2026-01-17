@@ -417,7 +417,7 @@
 
     <!-- Payment Modal -->
     <div id="paymentModal" class="hidden fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
-        <div class="bg-white rounded-2xl p-6 max-w-md w-full shadow-2xl my-4">
+        <div class="bg-white rounded-2xl p-4 max-w-sm w-full shadow-2xl my-4">
             <!-- Header com branding Asaas -->
             <div class="text-center mb-4 border-b border-gray-200 pb-4">
                 <div class="flex items-center justify-center gap-2 mb-3">
@@ -516,16 +516,16 @@
 
             <!-- QR Code PIX (exibido após processar pagamento) -->
             <div id="pixQrCodeContainer" class="hidden mb-4">
-                <div class="bg-gradient-to-br from-emerald-50 to-green-50 border-2 border-emerald-500 rounded-xl p-4 text-center">
-                    <div class="flex items-center justify-center gap-2 mb-3">
-                        <svg class="w-5 h-5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <div class="bg-gradient-to-br from-emerald-50 to-green-50 border-2 border-emerald-500 rounded-xl p-3 text-center">
+                    <div class="flex items-center justify-center gap-2 mb-2">
+                        <svg class="w-4 h-4 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z"></path>
                         </svg>
-                        <h4 class="text-lg font-bold text-gray-900">Pague com PIX</h4>
+                        <h4 class="text-base font-bold text-gray-900">Pague com PIX</h4>
                     </div>
-                    <p class="text-xs text-gray-600 mb-3">Processado com segurança pelo <strong class="text-blue-600">Asaas</strong></p>
+                    <p class="text-xs text-gray-600 mb-2">Processado com segurança pelo <strong class="text-blue-600">Asaas</strong></p>
                     
-                    <div class="bg-white rounded-lg p-3 mb-3 shadow-sm">
+                    <div class="bg-white rounded-lg p-2 mb-2 shadow-sm">
                         <div id="pixQrCodeImage" class="mb-3 flex justify-center">
                             <!-- QR Code será inserido aqui -->
                         </div>
@@ -535,7 +535,7 @@
                         </div>
                     </div>
                     
-                    <button onclick="copyPixCode()" id="copyPixBtn" class="w-full px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-semibold mb-2 shadow-md transition-all text-sm">
+                    <button onclick="copyPixCode()" id="copyPixBtn" class="w-full px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-semibold mb-2 shadow-md transition-all text-sm">
                         <span class="flex items-center justify-center gap-2">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
@@ -544,15 +544,15 @@
                         </span>
                     </button>
                     
-                    <p id="pixExpiration" class="text-xs text-amber-700 bg-amber-50 rounded-lg p-2 mb-2 font-medium"></p>
+                    <p id="pixExpiration" class="text-xs text-amber-700 bg-amber-50 rounded-lg p-1.5 mb-2 font-medium"></p>
                     
-                    <div class="bg-blue-50 border-l-4 border-blue-500 rounded-lg p-2 mb-3">
+                    <div class="bg-blue-50 border-l-4 border-blue-500 rounded-lg p-2 mb-2">
                         <p class="text-xs text-blue-800 text-left">
                             <strong>Importante:</strong> Após realizar o pagamento via PIX, o sistema verificará automaticamente a confirmação. O pagamento é processado instantaneamente pelo <strong>Asaas</strong>.
                         </p>
                     </div>
                     
-                    <div id="pollingStatus" class="bg-amber-50 border-l-4 border-amber-500 rounded-lg p-2 mb-3">
+                    <div id="pollingStatus" class="bg-amber-50 border-l-4 border-amber-500 rounded-lg p-2 mb-2">
                         <p class="text-xs text-amber-800 text-left flex items-center gap-2">
                             <svg class="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
@@ -634,6 +634,8 @@
         let currentPaymentId = null; // ID da invoice para polling
         let paymentPollingInterval = null; // Interval do polling
         let paymentPollingTimeout = null; // Timeout do polling
+        let pixExpirationDate = null; // Data de expiração do QR Code PIX
+        let pixExpirationCheckInterval = null; // Interval para verificar expiração do QR Code
 
         // Garantir que funções estejam no escopo global (window)
         window.selectedPlanType = selectedPlanType;
@@ -826,8 +828,9 @@
             const pixMessage = document.getElementById('pixMessage');
             const payBtn = document.getElementById('payBtn');
 
-            // Parar polling se estiver rodando
+            // Parar polling e verificação de expiração se estiverem rodando
             stopPaymentPolling();
+            stopPixExpirationCheck();
 
             // Esconder QR Code
             pixQrCodeContainer.classList.add('hidden');
@@ -1039,6 +1042,11 @@
                 // Se for PIX, exibir QR Code
                 if (selectedPaymentMethod === 'PIX' && data.pixQrCode) {
                     displayPixQrCode(data.pixQrCode);
+                    // Iniciar polling se paymentId estiver disponível
+                    if (data.paymentId) {
+                        currentPaymentId = data.paymentId;
+                        startPaymentPolling(data.paymentId);
+                    }
                     btn.disabled = false;
                     btn.innerHTML = 'Assinar Agora';
                 } 
@@ -1086,7 +1094,7 @@
                 const img = document.createElement('img');
                 img.src = `data:image/png;base64,${pixQrCode.encodedImage}`;
                 img.alt = 'QR Code PIX';
-                img.className = 'w-64 h-64 mx-auto';
+                img.className = 'w-48 h-48 mx-auto';
                 pixQrCodeImage.appendChild(img);
             } else {
                 // Fallback: exibir payload como texto
@@ -1094,12 +1102,19 @@
                 pixPayloadContainer.classList.remove('hidden');
             }
 
-            // Exibir data de expiração
+            // Exibir data de expiração e armazenar para verificação
             if (pixQrCode.expirationDate) {
-                const expirationDate = new Date(pixQrCode.expirationDate);
-                pixExpiration.textContent = `⏰ Expira em: ${expirationDate.toLocaleString('pt-BR')}`;
+                pixExpirationDate = new Date(pixQrCode.expirationDate);
+                pixExpiration.textContent = `⏰ Expira em: ${pixExpirationDate.toLocaleString('pt-BR')}`;
+                
+                // Iniciar verificação periódica de expiração
+                startPixExpirationCheck();
             } else {
+                pixExpirationDate = null;
                 pixExpiration.textContent = '';
+                // Se não houver expirationDate, usar timeout padrão de 30 minutos
+                pixExpirationDate = new Date(Date.now() + 30 * 60 * 1000);
+                startPixExpirationCheck();
             }
 
             // Mostrar container do QR Code
@@ -1176,12 +1191,26 @@
                 }
             }, pollInterval);
 
-            // Timeout de segurança (10 minutos)
+            // Timeout de segurança: usar o menor entre 10 minutos e tempo até expiração do QR Code
+            let timeoutDuration = 600000; // 10 minutos padrão
+            
+            if (pixExpirationDate) {
+                const now = new Date();
+                const timeUntilExpiration = pixExpirationDate.getTime() - now.getTime();
+                // Usar o menor entre 10 minutos e tempo até expiração (com margem de 30 segundos)
+                timeoutDuration = Math.min(600000, Math.max(30000, timeUntilExpiration + 30000));
+                console.log(`⏰ Timeout do polling ajustado para ${Math.round(timeoutDuration / 1000)} segundos (expiração do QR Code: ${Math.round(timeUntilExpiration / 1000)} segundos)`);
+            }
+            
             paymentPollingTimeout = setTimeout(() => {
-                console.warn('⏰ Timeout de segurança: Encerrando polling após 10 minutos');
+                console.warn('⏰ Timeout de segurança: Encerrando polling');
                 stopPaymentPolling();
-                showPaymentTimeoutMessage();
-            }, 600000); // 10 minutos
+                // Se o QR Code ainda não expirou, mostrar mensagem de timeout
+                // Caso contrário, a mensagem de expiração já foi mostrada
+                if (!pixExpirationDate || new Date() < pixExpirationDate) {
+                    showPaymentTimeoutMessage();
+                }
+            }, timeoutDuration);
         }
 
         // Parar polling (função global)
@@ -1360,6 +1389,9 @@
         window.startPaymentPolling = startPaymentPolling;
         window.stopPaymentPolling = stopPaymentPolling;
         window.showPaymentSuccess = showPaymentSuccess;
+        window.startPixExpirationCheck = startPixExpirationCheck;
+        window.stopPixExpirationCheck = stopPixExpirationCheck;
+        window.showPixExpiredMessage = showPixExpiredMessage;
 
         // Inicializar página
         loadCondoInfo();
