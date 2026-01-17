@@ -925,19 +925,20 @@
                 });
 
                 // ✅ Headers para Edge Function
-                // IMPORTANTE: Supabase Gateway exige Authorization header para autenticar
-                // Mas a função detecta se é anon key e não valida como JWT de usuário
+                // IMPORTANTE: NÃO enviar Authorization quando usando anon key
+                // O Gateway Supabase rejeita anon key no Authorization header
                 const headers = {
                     'Content-Type': 'application/json',
-                    'apikey': SUPABASE_ANON_KEY,
-                    'Authorization': `Bearer ${(authToken && authToken !== SUPABASE_ANON_KEY) ? authToken : SUPABASE_ANON_KEY}`
+                    'apikey': SUPABASE_ANON_KEY
                 };
 
+                // ✅ Só adicionar Authorization se tivermos JWT válido de usuário (não anon key)
                 if (authToken && authToken !== SUPABASE_ANON_KEY) {
+                    headers['Authorization'] = `Bearer ${authToken}`;
                     console.log('📤 Enviando com JWT válido de usuário');
                 } else {
-                    // Enviando anon key como Authorization (gateway exige, função detecta e ignora como JWT)
-                    console.log('📤 Enviando com anon key no Authorization (Edge Function detectará e usará condoId do body)');
+                    // NÃO enviar Authorization - apenas apikey (Gateway aceita isso)
+                    console.log('📤 Enviando apenas com apikey (sem Authorization header)');
                 }
 
                 const response = await fetch(`${SUPABASE_URL}/functions/v1/create-payment`, {
