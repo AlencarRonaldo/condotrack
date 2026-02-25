@@ -5,7 +5,7 @@ import {
   FileText, Download, Printer, Filter, FileSpreadsheet, FileJson, Settings, Building2, Save,
   Users, CreditCard, TrendingUp, Calendar, ArrowUpRight, ArrowDownRight, BarChart3,
   Mail, ShoppingBag, UtensilsCrossed, HelpCircle,
-  Camera, Loader2
+  Camera, Loader2, UserPlus
 } from 'lucide-react';
 
 // ==================================================================================
@@ -2509,7 +2509,7 @@ function ConciergeView({ onAdd, packages, onDelete, onCollect, residents, reside
     setForm(prev => ({ ...prev, recipient: v }));
     const suggestions = searchResidentsByName(v);
     setRecipientSuggestions(suggestions);
-    setShowRecipientDropdown(suggestions.length > 0);
+    setShowRecipientDropdown(v.length >= 2);
     if (suggestions.length === 1 && suggestions[0].name.toLowerCase() === v.toLowerCase().trim()) {
       selectResident(suggestions[0]);
       setShowRecipientDropdown(false);
@@ -2521,7 +2521,7 @@ function ConciergeView({ onAdd, packages, onDelete, onCollect, residents, reside
     setForm(prev => ({ ...prev, unit: v }));
     const suggestions = searchResidentsByUnit(v);
     setUnitSuggestions(suggestions);
-    setShowUnitDropdown(suggestions.length > 0);
+    setShowUnitDropdown(v.length >= 1);
     if (suggestions.length === 1 && String(suggestions[0].unit).toLowerCase() === v.toLowerCase().trim()) {
       selectResident(suggestions[0]);
       setShowUnitDropdown(false);
@@ -3153,28 +3153,47 @@ function ConciergeView({ onAdd, packages, onDelete, onCollect, residents, reside
                 <div className="relative">
                   <label className="block text-sm font-semibold text-slate-700 dark:text-gray-300 mb-2">Unidade *</label>
                   <input type="text" placeholder="Ex: 104-B" className="w-full px-4 py-3 border-2 border-slate-200 dark:border-gray-600 rounded-xl focus:border-blue-600 focus:ring-4 focus:ring-blue-500/20 outline-none bg-white dark:bg-gray-700 text-slate-800 dark:text-white transition-all placeholder:text-slate-400" value={form.unit} onChange={handleUnitChange} onBlur={handleUnitBlur} onFocus={() => { const s = searchResidentsByUnit(form.unit); setUnitSuggestions(s); setShowUnitDropdown(s.length > 0); }} required />
-                  {showUnitDropdown && unitSuggestions.length > 0 && (
+                  {showUnitDropdown && form.unit.length >= 1 && (
                     <div className="absolute z-20 mt-1 w-full bg-white dark:bg-gray-800 border-2 border-slate-200 dark:border-gray-600 rounded-xl shadow-lg max-h-48 overflow-y-auto">
-                      {unitSuggestions.map(r => (
-                        <button key={r.id} type="button" className="w-full px-4 py-2.5 text-left hover:bg-blue-50 dark:hover:bg-blue-900/30 flex justify-between items-center" onClick={() => selectResident(r)}>
-                          <span className="font-medium text-slate-800 dark:text-white">{r.name}</span>
-                          <span className="text-sm text-slate-500 dark:text-slate-400">{r.unit}</span>
-                        </button>
-                      ))}
+                      {unitSuggestions.length > 0 ? (
+                        unitSuggestions.map(r => (
+                          <button key={r.id} type="button" className="w-full px-4 py-2.5 text-left hover:bg-blue-50 dark:hover:bg-blue-900/30 flex justify-between items-center" onClick={() => selectResident(r)}>
+                            <span className="font-medium text-slate-800 dark:text-white">{r.name}</span>
+                            <span className="text-sm text-slate-500 dark:text-slate-400">{r.unit}</span>
+                          </button>
+                        ))
+                      ) : (
+                        <div className="px-4 py-3 text-center">
+                          <p className="text-sm text-gray-500 dark:text-gray-400">Nenhum morador encontrado para esta unidade</p>
+                          <button type="button" onClick={() => { setOcrPendingResident({ unit: form.unit, name: form.recipient || '', phone: '', source: 'manual' }); setTab('residents'); setShowUnitDropdown(false); }} className="mt-2 text-sm text-blue-600 dark:text-blue-400 hover:underline font-medium flex items-center gap-1 mx-auto">
+                            <UserPlus size={14} /> Cadastrar morador
+                          </button>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
                 <div className="relative">
                   <label className="block text-sm font-semibold text-slate-700 dark:text-gray-300 mb-2">Destinatário *</label>
                   <input type="text" placeholder="Nome do morador" className="w-full px-4 py-3 border-2 border-slate-200 dark:border-gray-600 rounded-xl focus:border-blue-600 focus:ring-4 focus:ring-blue-500/20 outline-none bg-white dark:bg-gray-700 text-slate-800 dark:text-white transition-all placeholder:text-slate-400" value={form.recipient} onChange={handleRecipientChange} onBlur={handleRecipientBlur} onFocus={() => { const s = searchResidentsByName(form.recipient); setRecipientSuggestions(s); setShowRecipientDropdown(s.length > 0); }} required />
-                  {showRecipientDropdown && recipientSuggestions.length > 0 && (
+                  {showRecipientDropdown && form.recipient.length >= 2 && (
                     <div className="absolute z-20 mt-1 w-full bg-white dark:bg-gray-800 border-2 border-slate-200 dark:border-gray-600 rounded-xl shadow-lg max-h-48 overflow-y-auto">
-                      {recipientSuggestions.map(r => (
-                        <button key={r.id} type="button" className="w-full px-4 py-2.5 text-left hover:bg-blue-50 dark:hover:bg-blue-900/30 flex justify-between items-center" onClick={() => selectResident(r)}>
-                          <span className="font-medium text-slate-800 dark:text-white">{r.name}</span>
-                          <span className="text-sm text-slate-500 dark:text-slate-400">{r.unit}</span>
-                        </button>
-                      ))}
+                      {recipientSuggestions.length > 0 ? (
+                        recipientSuggestions.map(r => (
+                          <button key={r.id} type="button" className="w-full px-4 py-2.5 text-left hover:bg-blue-50 dark:hover:bg-blue-900/30 flex justify-between items-center" onClick={() => selectResident(r)}>
+                            <span className="font-medium text-slate-800 dark:text-white">{r.name}</span>
+                            <span className="text-sm text-slate-500 dark:text-slate-400">{r.unit}</span>
+                          </button>
+                        ))
+                      ) : (
+                        <div className="px-4 py-3 text-center">
+                          <p className="text-sm text-gray-500 dark:text-gray-400">Nenhum morador encontrado com este nome</p>
+                          <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">Se a encomenda é para um morador cadastrado, preencha a unidade correta</p>
+                          <button type="button" onClick={() => { setOcrPendingResident({ unit: form.unit || '', name: form.recipient, phone: '', source: 'manual' }); setTab('residents'); setShowRecipientDropdown(false); }} className="mt-2 text-sm text-blue-600 dark:text-blue-400 hover:underline font-medium flex items-center gap-1 mx-auto">
+                            <UserPlus size={14} /> Cadastrar morador
+                          </button>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
