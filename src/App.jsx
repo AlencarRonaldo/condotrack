@@ -2640,11 +2640,11 @@ function ConciergeView({ onAdd, packages, onDelete, onCollect, residents, reside
         phone: prev.phone || formatPhoneMask(found.phone || '')
       }));
     }
-    setTimeout(() => setShowUnitDropdown(false), 150);
+    setTimeout(() => setShowUnitDropdown(false), 250);
   };
 
   const handleRecipientBlur = () => {
-    setTimeout(() => setShowRecipientDropdown(false), 150);
+    setTimeout(() => setShowRecipientDropdown(false), 250);
   };
 
   // Lembretes: encomendas pendentes há mais de 24h
@@ -3152,7 +3152,7 @@ function ConciergeView({ onAdd, packages, onDelete, onCollect, residents, reside
               <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-5">
                 <div className="relative">
                   <label className="block text-sm font-semibold text-slate-700 dark:text-gray-300 mb-2">Unidade *</label>
-                  <input type="text" placeholder="Ex: 104-B" className="w-full px-4 py-3 border-2 border-slate-200 dark:border-gray-600 rounded-xl focus:border-blue-600 focus:ring-4 focus:ring-blue-500/20 outline-none bg-white dark:bg-gray-700 text-slate-800 dark:text-white transition-all placeholder:text-slate-400" value={form.unit} onChange={handleUnitChange} onBlur={handleUnitBlur} onFocus={() => { const s = searchResidentsByUnit(form.unit); setUnitSuggestions(s); setShowUnitDropdown(s.length > 0); }} required />
+                  <input type="text" placeholder="Ex: 104-B" className="w-full px-4 py-3 border-2 border-slate-200 dark:border-gray-600 rounded-xl focus:border-blue-600 focus:ring-4 focus:ring-blue-500/20 outline-none bg-white dark:bg-gray-700 text-slate-800 dark:text-white transition-all placeholder:text-slate-400" value={form.unit} onChange={handleUnitChange} onBlur={handleUnitBlur} onFocus={() => { const s = searchResidentsByUnit(form.unit); setUnitSuggestions(s); setShowUnitDropdown(form.unit.length >= 1); }} required />
                   {showUnitDropdown && form.unit.length >= 1 && (
                     <div className="absolute z-20 mt-1 w-full bg-white dark:bg-gray-800 border-2 border-slate-200 dark:border-gray-600 rounded-xl shadow-lg max-h-48 overflow-y-auto">
                       {unitSuggestions.length > 0 ? (
@@ -3175,7 +3175,7 @@ function ConciergeView({ onAdd, packages, onDelete, onCollect, residents, reside
                 </div>
                 <div className="relative">
                   <label className="block text-sm font-semibold text-slate-700 dark:text-gray-300 mb-2">Destinatário *</label>
-                  <input type="text" placeholder="Nome do morador" className="w-full px-4 py-3 border-2 border-slate-200 dark:border-gray-600 rounded-xl focus:border-blue-600 focus:ring-4 focus:ring-blue-500/20 outline-none bg-white dark:bg-gray-700 text-slate-800 dark:text-white transition-all placeholder:text-slate-400" value={form.recipient} onChange={handleRecipientChange} onBlur={handleRecipientBlur} onFocus={() => { const s = searchResidentsByName(form.recipient); setRecipientSuggestions(s); setShowRecipientDropdown(s.length > 0); }} required />
+                  <input type="text" placeholder="Nome do morador" className="w-full px-4 py-3 border-2 border-slate-200 dark:border-gray-600 rounded-xl focus:border-blue-600 focus:ring-4 focus:ring-blue-500/20 outline-none bg-white dark:bg-gray-700 text-slate-800 dark:text-white transition-all placeholder:text-slate-400" value={form.recipient} onChange={handleRecipientChange} onBlur={handleRecipientBlur} onFocus={() => { const s = searchResidentsByName(form.recipient); setRecipientSuggestions(s); setShowRecipientDropdown(form.recipient.length >= 2); }} required />
                   {showRecipientDropdown && form.recipient.length >= 2 && (
                     <div className="absolute z-20 mt-1 w-full bg-white dark:bg-gray-800 border-2 border-slate-200 dark:border-gray-600 rounded-xl shadow-lg max-h-48 overflow-y-auto">
                       {recipientSuggestions.length > 0 ? (
