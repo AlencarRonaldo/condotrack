@@ -2485,6 +2485,8 @@ function ConciergeView({ onAdd, packages, onDelete, onCollect, residents, reside
   const [ocrError, setOcrError] = useState(null);
   const [ocrRawText, setOcrRawText] = useState(null);
   const [ocrPendingResident, setOcrPendingResident] = useState(null);
+  const [unitNotFound, setUnitNotFound] = useState(false);
+  const [recipientNotFound, setRecipientNotFound] = useState(false);
 
   // Autocomplete: busca moradores por nome (ilike/similarity)
   const searchResidentsByName = (query) => {
@@ -2507,6 +2509,7 @@ function ConciergeView({ onAdd, packages, onDelete, onCollect, residents, reside
   const handleRecipientChange = (e) => {
     const v = e.target.value;
     setForm(prev => ({ ...prev, recipient: v }));
+    setRecipientNotFound(false);
     const suggestions = searchResidentsByName(v);
     setRecipientSuggestions(suggestions);
     setShowRecipientDropdown(v.length >= 2);
@@ -2519,6 +2522,7 @@ function ConciergeView({ onAdd, packages, onDelete, onCollect, residents, reside
   const handleUnitChange = (e) => {
     const v = e.target.value;
     setForm(prev => ({ ...prev, unit: v }));
+    setUnitNotFound(false);
     const suggestions = searchResidentsByUnit(v);
     setUnitSuggestions(suggestions);
     setShowUnitDropdown(v.length >= 1);
@@ -2537,6 +2541,8 @@ function ConciergeView({ onAdd, packages, onDelete, onCollect, residents, reside
     }));
     setShowRecipientDropdown(false);
     setShowUnitDropdown(false);
+    setUnitNotFound(false);
+    setRecipientNotFound(false);
   };
 
   const handleSubmit = (e) => {
@@ -2546,6 +2552,8 @@ function ConciergeView({ onAdd, packages, onDelete, onCollect, residents, reside
     setForm({ unit: '', recipient: '', phone: '', type: 'Caixa', description: '' });
     setShowRecipientDropdown(false);
     setShowUnitDropdown(false);
+    setUnitNotFound(false);
+    setRecipientNotFound(false);
     setOcrError(null);
     setOcrRawText(null);
   };
@@ -2639,11 +2647,23 @@ function ConciergeView({ onAdd, packages, onDelete, onCollect, residents, reside
         recipient: prev.recipient || found.name || '',
         phone: prev.phone || formatPhoneMask(found.phone || '')
       }));
+      setUnitNotFound(false);
+    } else if (form.unit && form.unit.length >= 1) {
+      const bySearch = searchResidentsByUnit(form.unit);
+      setUnitNotFound(bySearch.length === 0);
+    } else {
+      setUnitNotFound(false);
     }
     setTimeout(() => setShowUnitDropdown(false), 250);
   };
 
   const handleRecipientBlur = () => {
+    if (form.recipient && form.recipient.length >= 2) {
+      const bySearch = searchResidentsByName(form.recipient);
+      setRecipientNotFound(bySearch.length === 0);
+    } else {
+      setRecipientNotFound(false);
+    }
     setTimeout(() => setShowRecipientDropdown(false), 250);
   };
 
@@ -3172,6 +3192,14 @@ function ConciergeView({ onAdd, packages, onDelete, onCollect, residents, reside
                       )}
                     </div>
                   )}
+                  {unitNotFound && (
+                    <div className="mt-2 p-2.5 bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-700 rounded-lg flex items-center justify-between gap-2">
+                      <p className="text-xs text-amber-700 dark:text-amber-300">Unidade <strong>{form.unit}</strong> não cadastrada</p>
+                      <button type="button" onClick={() => { setOcrPendingResident({ unit: form.unit, name: form.recipient || '', phone: '', source: 'manual' }); setTab('residents'); }} className="text-xs text-blue-600 dark:text-blue-400 hover:underline font-semibold whitespace-nowrap flex items-center gap-1">
+                        <UserPlus size={12} /> Cadastrar
+                      </button>
+                    </div>
+                  )}
                 </div>
                 <div className="relative">
                   <label className="block text-sm font-semibold text-slate-700 dark:text-gray-300 mb-2">Destinatário *</label>
@@ -3194,6 +3222,17 @@ function ConciergeView({ onAdd, packages, onDelete, onCollect, residents, reside
                           </button>
                         </div>
                       )}
+                    </div>
+                  )}
+                  {recipientNotFound && (
+                    <div className="mt-2 p-2.5 bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-700 rounded-lg">
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-xs text-amber-700 dark:text-amber-300">Morador <strong>{form.recipient}</strong> não encontrado</p>
+                        <button type="button" onClick={() => { setOcrPendingResident({ unit: form.unit || '', name: form.recipient, phone: '', source: 'manual' }); setTab('residents'); }} className="text-xs text-blue-600 dark:text-blue-400 hover:underline font-semibold whitespace-nowrap flex items-center gap-1">
+                          <UserPlus size={12} /> Cadastrar
+                        </button>
+                      </div>
+                      <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">Se a encomenda é para um morador cadastrado, preencha a unidade correta</p>
                     </div>
                   )}
                 </div>
