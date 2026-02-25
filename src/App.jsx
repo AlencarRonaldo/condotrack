@@ -5,7 +5,7 @@ import {
   FileText, Download, Printer, Filter, FileSpreadsheet, FileJson, Settings, Building2, Save,
   Users, CreditCard, TrendingUp, Calendar, ArrowUpRight, ArrowDownRight, BarChart3,
   Mail, ShoppingBag, UtensilsCrossed, HelpCircle,
-  Camera, Loader2, UserPlus
+  Camera, Loader2, UserPlus, ArrowLeft
 } from 'lucide-react';
 
 // ==================================================================================
@@ -705,6 +705,7 @@ export default function CondoTrackApp() {
   const SESSION_KEY = 'condotrack_session'; // Agora inclui condo_id
   const THEME_KEY = 'condotrack_theme';
   const [viewMode, setViewMode] = useState('concierge'); // 'concierge' | 'resident'
+  const [accessMode, setAccessMode] = useState(null); // null | 'concierge' | 'resident' — null = tela de seleção
   const [isConciergeAuthed, setIsConciergeAuthed] = useState(false);
   const [currentUser, setCurrentUser] = useState(null); // {id, name, role, username, condo_id}
   // Multi-Tenant: estado do condomínio atual
@@ -844,6 +845,7 @@ export default function CondoTrackApp() {
     setCondoId(null);
     setCondoInfo(null);
     setCondoStatus('active');
+    setAccessMode(null);
   };
 
   // Restaura sessão ao carregar (Multi-Tenant: inclui condo_id)
@@ -881,6 +883,7 @@ export default function CondoTrackApp() {
               setCurrentUser(parsed);
               setCondoId(parsed.condo_id);
               setIsConciergeAuthed(true);
+              setAccessMode('concierge');
               // Resetar showBillingWhenExpired quando status é expired/inactive
               if (status === 'expired' || status === 'inactive') {
                 setShowBillingWhenExpired(true);
@@ -922,6 +925,7 @@ export default function CondoTrackApp() {
         try { localStorage.removeItem(SESSION_KEY); } catch {}
         setIsConciergeAuthed(false);
         setCurrentUser(null);
+        setAccessMode(null);
         setShowInactivityModal(true);
       }, TIMEOUT_MS);
     };
@@ -1004,6 +1008,7 @@ export default function CondoTrackApp() {
     setCurrentUser(null);
     setCondoId(null);
     setCondoInfo(null);
+    setAccessMode(null);
     // Limpa dados do tenant anterior
     setPackages([]);
     setResidents([]);
@@ -1263,6 +1268,61 @@ export default function CondoTrackApp() {
         </div>
       )}
 
+      {/* Tela de Seleção: Portaria ou Morador */}
+      {accessMode === null && !isConciergeAuthed ? (
+        <div className="min-h-screen flex flex-col items-center justify-center px-4 py-8">
+          <div className="w-full max-w-sm text-center">
+            <img
+              src={LOGO_PATH}
+              alt="CondoTrack Logo"
+              className="h-20 sm:h-24 w-auto mx-auto mb-6"
+              onError={(e) => { e.target.style.display = 'none'; }}
+            />
+            <h1 className="text-2xl sm:text-3xl font-bold text-slate-800 dark:text-white mb-2">CondoTrack</h1>
+            <p className="text-sm text-slate-500 dark:text-slate-400 mb-10">Gestão de Encomendas para Condomínios</p>
+
+            <p className="text-base font-medium text-slate-700 dark:text-slate-300 mb-6">Como deseja acessar?</p>
+
+            <div className="space-y-4">
+              <button
+                onClick={() => { setAccessMode('concierge'); setViewMode('concierge'); }}
+                className="w-full flex items-center gap-4 p-5 bg-white dark:bg-gray-800 border-2 border-gray-200 dark:border-gray-700 rounded-2xl shadow-sm hover:border-blue-500 hover:shadow-md transition-all group"
+              >
+                <div className="flex-shrink-0 w-14 h-14 bg-blue-100 dark:bg-blue-900/50 rounded-xl flex items-center justify-center group-hover:bg-blue-500 transition-colors">
+                  <Shield size={28} className="text-blue-600 dark:text-blue-400 group-hover:text-white transition-colors" />
+                </div>
+                <div className="text-left">
+                  <p className="text-lg font-bold text-slate-800 dark:text-white">Portaria</p>
+                  <p className="text-sm text-slate-500 dark:text-slate-400">Acesso para porteiros e administradores</p>
+                </div>
+              </button>
+
+              <button
+                onClick={() => { setAccessMode('resident'); setViewMode('resident'); }}
+                className="w-full flex items-center gap-4 p-5 bg-white dark:bg-gray-800 border-2 border-gray-200 dark:border-gray-700 rounded-2xl shadow-sm hover:border-emerald-500 hover:shadow-md transition-all group"
+              >
+                <div className="flex-shrink-0 w-14 h-14 bg-emerald-100 dark:bg-emerald-900/50 rounded-xl flex items-center justify-center group-hover:bg-emerald-500 transition-colors">
+                  <User size={28} className="text-emerald-600 dark:text-emerald-400 group-hover:text-white transition-colors" />
+                </div>
+                <div className="text-left">
+                  <p className="text-lg font-bold text-slate-800 dark:text-white">Sou Morador</p>
+                  <p className="text-sm text-slate-500 dark:text-slate-400">Consultar minhas encomendas</p>
+                </div>
+              </button>
+            </div>
+
+            {/* Toggle tema */}
+            <button
+              onClick={() => setTheme(prev => prev === 'dark' ? 'light' : 'dark')}
+              className="mt-8 inline-flex items-center gap-2 text-sm text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
+            >
+              {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
+              {theme === 'dark' ? 'Modo Claro' : 'Modo Escuro'}
+            </button>
+          </div>
+        </div>
+      ) : (
+      <>
       <header className={`${headerBg} text-white shadow-md sticky top-0 z-40`}>
         <div className="max-w-5xl mx-auto px-4 sm:px-6 py-3">
           {/* Layout: Logo + Nav Toggle + User */}
@@ -1499,7 +1559,7 @@ export default function CondoTrackApp() {
               onUpdateSettings={handleUpdateSettings}
             />
           ) : (
-            <ConciergeLogin onSuccess={(user, condoData, backendCondoStatus) => {
+            <ConciergeLogin onBack={() => setAccessMode(null)} onSuccess={(user, condoData, backendCondoStatus) => {
               // Em produção, usa status do backend; em demo, calcula localmente
               const status = backendCondoStatus || checkCondoStatus(condoData);
               setCondoStatus(status);
@@ -1525,6 +1585,7 @@ export default function CondoTrackApp() {
             onCollect={handleCollectPackage}
             residentsIndex={residentsIndex}
             condoName={condoSettings.condo_name}
+            onBack={() => setAccessMode(null)}
           />
         )}
       </main>
@@ -1553,6 +1614,8 @@ export default function CondoTrackApp() {
           </div>
         </div>
       </footer>
+      </>
+      )}
     </div>
   );
 }
@@ -2198,7 +2261,7 @@ function BillingCheckout({ condoInfo, onPaymentSuccess, onLogout, isAdmin = fals
   );
 }
 
-function ConciergeLogin({ onSuccess }) {
+function ConciergeLogin({ onSuccess, onBack }) {
   const [condoIdInput, setCondoIdInput] = useState('');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -2367,6 +2430,11 @@ function ConciergeLogin({ onSuccess }) {
   return (
     <div className="min-h-[70vh] flex items-center justify-center py-8">
       <div className="w-full max-w-md">
+        {onBack && (
+          <button onClick={onBack} className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 mb-4 transition-colors">
+            <ArrowLeft size={16} /> Voltar
+          </button>
+        )}
         <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-lg overflow-hidden">
           {/* Header com gradiente */}
           <div className="bg-gradient-to-r from-slate-800 to-slate-700 px-6 py-8 text-center">
@@ -4000,7 +4068,7 @@ function ResidentsManager({ residents, onAddResident, onDeleteResident, onUpdate
   );
 }
 
-function ResidentView({ packages, onCollect, residentsIndex, condoName }) {
+function ResidentView({ packages, onCollect, residentsIndex, condoName, onBack }) {
   const [unitInput, setUnitInput] = useState('');
   const [authorizedUnit, setAuthorizedUnit] = useState(null);
   const [pinModalUnit, setPinModalUnit] = useState(null);
@@ -4057,6 +4125,11 @@ function ResidentView({ packages, onCollect, residentsIndex, condoName }) {
       {!authorizedUnit && (
         <div className="min-h-[50vh] flex items-center justify-center py-4">
           <div className="w-full max-w-md">
+            {onBack && (
+              <button onClick={onBack} className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 mb-4 transition-colors">
+                <ArrowLeft size={16} /> Voltar
+              </button>
+            )}
             {/* Card Principal */}
             <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
               {/* Header com gradiente */}
