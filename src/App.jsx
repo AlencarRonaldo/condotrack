@@ -4,7 +4,8 @@ import {
   User, Box, Shield, Trash2, AlertTriangle, X, Phone, LogIn, CheckCheck, Briefcase, LogOut, MessageCircle, Sun, Moon,
   FileText, Download, Printer, Filter, FileSpreadsheet, FileJson, Settings, Building2, Save,
   Users, CreditCard, TrendingUp, Calendar, ArrowUpRight, ArrowDownRight, BarChart3,
-  Mail, ShoppingBag, UtensilsCrossed, HelpCircle
+  Mail, ShoppingBag, UtensilsCrossed, HelpCircle,
+  Camera, Loader2
 } from 'lucide-react';
 
 // ==================================================================================
@@ -120,6 +121,11 @@ const ASAAS_CHECKOUT_ENDPOINT = IS_PRODUCTION
 
 const ASAAS_WEBHOOK_ENDPOINT = IS_PRODUCTION
   ? `${SUPABASE_URL}/functions/v1/asaas-webhook`
+  : null;
+
+// URL da Edge Function de OCR (leitura de etiquetas)
+const OCR_LABEL_ENDPOINT = IS_PRODUCTION
+  ? `${SUPABASE_URL}/functions/v1/ocr-label`
   : null;
 
 // Log para debug (apenas em desenvolvimento)
@@ -661,6 +667,31 @@ function formatPhoneMask(value) {
   if (d.length <= 2) return d;
   if (d.length <= 7) return `(${p1}) ${p2}`;
   return `(${p1}) ${p2}-${p3}`;
+}
+function compressImageToBase64(file, maxWidth = 1280, quality = 0.75) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        let w = img.width;
+        let h = img.height;
+        if (w > maxWidth) { h = Math.round(h * (maxWidth / w)); w = maxWidth; }
+        if (h > maxWidth) { w = Math.round(w * (maxWidth / h)); h = maxWidth; }
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, w, h);
+        const dataUrl = canvas.toDataURL('image/jpeg', quality);
+        resolve(dataUrl.split(',')[1]);
+      };
+      img.onerror = reject;
+      img.src = e.target.result;
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
 }
 function isValidFullName(name) {
   const parts = String(name || '').trim().split(/\s+/).filter(Boolean);
@@ -2445,12 +2476,158 @@ function ConciergeView({ onAdd, packages, onDelete, onCollect, residents, reside
   const [collectDoc, setCollectDoc] = useState('');
   const [deleteConfirmPassword, setDeleteConfirmPassword] = useState('');
   const [deletePasswordError, setDeletePasswordError] = useState('');
+  const [recipientSuggestions, setRecipientSuggestions] = useState([]);
+  const [showRecipientDropdown, setShowRecipientDropdown] = useState(false);
+  const [unitSuggestions, setUnitSuggestions] = useState([]);
+  const [showUnitDropdown, setShowUnitDropdown] = useState(false);
+  const [showRemindersModal, setShowRemindersModal] = useState(false);
+  const [ocrLoading, setOcrLoading] = useState(false);
+  const [ocrError, setOcrError] = useState(null);
+  const [ocrRawText, setOcrRawText] = useState(null);
+  const [ocrPendingResident, setOcrPendingResident] = useState(null);
+
+  // Autocomplete: busca moradores por nome (ilike/similarity)
+  const searchResidentsByName = (query) => {
+    if (!query || query.length < 2) return [];
+    const q = String(query).toLowerCase().trim();
+    return (residents || []).filter(r =>
+      r && r.name && String(r.name).toLowerCase().includes(q)
+    ).slice(0, 8);
+  };
+
+  // Autocomplete: busca moradores por unidade
+  const searchResidentsByUnit = (query) => {
+    if (!query || query.length < 1) return [];
+    const q = String(query).toLowerCase().trim();
+    return (residents || []).filter(r =>
+      r && r.unit && String(r.unit).toLowerCase().includes(q)
+    ).slice(0, 8);
+  };
+
+  const handleRecipientChange = (e) => {
+    const v = e.target.value;
+    setForm(prev => ({ ...prev, recipient: v }));
+    const suggestions = searchResidentsByName(v);
+    setRecipientSuggestions(suggestions);
+    setShowRecipientDropdown(suggestions.length > 0);
+    if (suggestions.length === 1 && suggestions[0].name.toLowerCase() === v.toLowerCase().trim()) {
+      selectResident(suggestions[0]);
+      setShowRecipientDropdown(false);
+    }
+  };
+
+  const handleUnitChange = (e) => {
+    const v = e.target.value;
+    setForm(prev => ({ ...prev, unit: v }));
+    const suggestions = searchResidentsByUnit(v);
+    setUnitSuggestions(suggestions);
+    setShowUnitDropdown(suggestions.length > 0);
+    if (suggestions.length === 1 && String(suggestions[0].unit).toLowerCase() === v.toLowerCase().trim()) {
+      selectResident(suggestions[0]);
+      setShowUnitDropdown(false);
+    }
+  };
+
+  const selectResident = (r) => {
+    setForm(prev => ({
+      ...prev,
+      unit: r.unit || prev.unit,
+      recipient: r.name || prev.recipient,
+      phone: prev.phone || formatPhoneMask(r.phone || '')
+    }));
+    setShowRecipientDropdown(false);
+    setShowUnitDropdown(false);
+  };
 
   const handleSubmit = (e) => {
     e.preventDefault();
     if (!form.unit || !form.recipient) return;
     onAdd(form);
     setForm({ unit: '', recipient: '', phone: '', type: 'Caixa', description: '' });
+    setShowRecipientDropdown(false);
+    setShowUnitDropdown(false);
+    setOcrError(null);
+    setOcrRawText(null);
+  };
+
+  const handleOcrCapture = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setOcrError(null);
+    setOcrRawText(null);
+    if (!file.type.startsWith('image/')) { setOcrError('Selecione uma imagem valida.'); return; }
+    if (file.size > 10 * 1024 * 1024) { setOcrError('Imagem muito grande (max 10MB).'); return; }
+    if (!OCR_LABEL_ENDPOINT) { setOcrError('OCR nao disponivel no modo demo.'); return; }
+    setOcrLoading(true);
+    try {
+      const base64 = await compressImageToBase64(file, 1280, 0.75);
+      const response = await fetch(OCR_LABEL_ENDPOINT, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_ANON_KEY },
+        body: JSON.stringify({ imageBase64: base64, condoId: condoInfo?.id || null }),
+      });
+      const data = await response.json();
+      if (!response.ok || data.error) throw new Error(data.error || 'Erro ao processar imagem.');
+      setOcrRawText(data.rawText || '');
+      const parsed = data.parsed || {};
+
+      // Tentar encontrar morador pelo apartamento ou nome detectado
+      let matched = null;
+      if (parsed.unit) {
+        const byUnit = searchResidentsByUnit(parsed.unit);
+        if (byUnit.length === 1) matched = byUnit[0];
+        else if (byUnit.length > 1 && parsed.recipient) {
+          const nameLower = parsed.recipient.toLowerCase();
+          matched = byUnit.find(r => r.name && r.name.toLowerCase().includes(nameLower)) || byUnit[0];
+        }
+      }
+      if (!matched && parsed.recipient) {
+        const byName = searchResidentsByName(parsed.recipient);
+        if (byName.length === 1) matched = byName[0];
+        else if (byName.length > 1) matched = byName[0];
+      }
+
+      if (matched) {
+        // Morador encontrado: preencher com dados cadastrados (igual autocomplete)
+        setForm(prev => ({
+          ...prev,
+          unit: matched.unit || parsed.unit || prev.unit,
+          recipient: matched.name || parsed.recipient || prev.recipient,
+          phone: prev.phone || formatPhoneMask(matched.phone || parsed.phone || ''),
+          type: parsed.type || prev.type,
+          description: parsed.description || prev.description,
+        }));
+        setShowRecipientDropdown(false);
+        setShowUnitDropdown(false);
+      } else {
+        // Sem match: salvar dados OCR e redirecionar para cadastro de morador
+        setOcrPendingResident({
+          unit: parsed.unit || '',
+          name: parsed.recipient || '',
+          phone: parsed.phone ? formatPhoneMask(parsed.phone) : '',
+          source: 'ocr',
+        });
+
+        // Preservar dados OCR no form de encomenda para uso posterior
+        setForm(prev => ({
+          ...prev,
+          unit: parsed.unit || prev.unit,
+          recipient: parsed.recipient || prev.recipient,
+          phone: parsed.phone ? formatPhoneMask(parsed.phone) : prev.phone,
+          type: parsed.type || prev.type,
+          description: parsed.description || prev.description,
+        }));
+
+        // Redirecionar para aba de moradores
+        setTab('residents');
+      }
+    } catch (err) {
+      console.error('[OCR] Error:', err);
+      setOcrError(err.message || 'Erro ao ler etiqueta.');
+    } finally {
+      setOcrLoading(false);
+      e.target.value = '';
+    }
   };
 
   const handleUnitBlur = () => {
@@ -2463,7 +2640,25 @@ function ConciergeView({ onAdd, packages, onDelete, onCollect, residents, reside
         phone: prev.phone || formatPhoneMask(found.phone || '')
       }));
     }
+    setTimeout(() => setShowUnitDropdown(false), 150);
   };
+
+  const handleRecipientBlur = () => {
+    setTimeout(() => setShowRecipientDropdown(false), 150);
+  };
+
+  // Lembretes: encomendas pendentes há mais de 24h
+  const REMINDER_HOURS = 24;
+  const packagesNeedingReminder = useMemo(() => {
+    const cutoff = new Date();
+    cutoff.setHours(cutoff.getHours() - REMINDER_HOURS);
+    return (packages || []).filter(p =>
+      p.status === 'pending' &&
+      p.created_at &&
+      new Date(p.created_at) < cutoff &&
+      (p.phone || p.recipient)
+    );
+  }, [packages]);
   const handlePhoneChange = (e) => {
     const v = e.target.value;
     setForm(prev => ({ ...prev, phone: formatPhoneMask(v) }));
@@ -2601,6 +2796,54 @@ function ConciergeView({ onAdd, packages, onDelete, onCollect, residents, reside
                 Confirmar
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Lembretes - Encomendas pendentes há mais de 24h */}
+      {showRemindersModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm px-4">
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6 w-full max-w-md max-h-[85vh] overflow-hidden flex flex-col animate-scale-in border border-gray-200 dark:border-gray-700">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 bg-amber-100 dark:bg-amber-800 rounded-lg">
+                  <Clock size={22} className="text-amber-600 dark:text-amber-200" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-slate-800 dark:text-white">Enviar Lembretes</h3>
+                  <p className="text-xs text-slate-500">Encomendas pendentes há mais de 24h</p>
+                </div>
+              </div>
+              <button onClick={() => setShowRemindersModal(false)} className="p-2 text-slate-500 hover:bg-slate-100 dark:hover:bg-gray-700 rounded-lg transition-colors">
+                <X size={20} />
+              </button>
+            </div>
+            <div className="overflow-y-auto flex-1 space-y-2 mb-4">
+              {packagesNeedingReminder.map(pkg => {
+                const phone = extractDigits(pkg.phone || residentsIndex[String(pkg.unit || '').toLowerCase()]?.phone || '');
+                const text = encodeURIComponent(`Olá ${pkg.recipient}! Lembrete: você tem uma encomenda (${pkg.type || 'pacote'}) aguardando retirada na portaria há mais de 24h. 📦 Disponível para retirada.`);
+                const waUrl = phone ? `https://wa.me/55${phone}?text=${text}` : null;
+                const hoursAgo = pkg.created_at ? Math.round((Date.now() - new Date(pkg.created_at).getTime()) / 3600000) : 0;
+                return (
+                  <div key={pkg.id} className="flex items-center justify-between gap-3 p-3 bg-slate-50 dark:bg-gray-700 rounded-lg">
+                    <div className="min-w-0 flex-1">
+                      <p className="font-medium text-slate-800 dark:text-white truncate">{pkg.recipient}</p>
+                      <p className="text-sm text-slate-500 dark:text-slate-400">{pkg.unit} • {pkg.type} • há {hoursAgo}h</p>
+                    </div>
+                    {waUrl ? (
+                      <a href={waUrl} target="_blank" rel="noopener noreferrer" className="flex-shrink-0 px-3 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg text-sm font-semibold flex items-center gap-1.5 transition-colors">
+                        <MessageCircle size={16} /> Enviar
+                      </a>
+                    ) : (
+                      <span className="text-xs text-slate-400 dark:text-slate-500">Sem telefone</span>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+            <button onClick={() => setShowRemindersModal(false)} className="w-full py-3 rounded-xl bg-slate-200 dark:bg-gray-700 text-slate-700 dark:text-slate-300 font-medium hover:bg-slate-300 dark:hover:bg-gray-600 transition-colors">
+              Fechar
+            </button>
           </div>
         </div>
       )}
@@ -2865,24 +3108,75 @@ function ConciergeView({ onAdd, packages, onDelete, onCollect, residents, reside
         <>
           {/* Formulário Encomenda - Design moderno */}
           <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
-            <div className="px-5 sm:px-6 py-4 flex items-center gap-3 bg-blue-500 dark:bg-blue-600">
-              <div className="p-2.5 bg-white/20 rounded-lg">
-                <Package className="text-white" size={20} />
+            <div className="px-5 sm:px-6 py-4 flex items-center justify-between gap-3 bg-blue-500 dark:bg-blue-600">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 bg-white/20 rounded-lg">
+                  <Package className="text-white" size={20} />
+                </div>
+                <div>
+                  <h2 className="font-bold text-white">Registrar Encomenda</h2>
+                  <p className="text-xs text-blue-100">Preencha os dados ou tire foto da etiqueta</p>
+                </div>
               </div>
-              <div>
-                <h2 className="font-bold text-white">Registrar Encomenda</h2>
-                <p className="text-xs text-blue-100">Preencha os dados da nova encomenda</p>
+              <div className="flex items-center gap-2">
+                <label className={`flex items-center gap-2 px-3 py-1.5 ${ocrLoading ? 'bg-gray-400 cursor-wait' : 'bg-white/20 hover:bg-white/30 cursor-pointer'} text-white rounded-lg text-sm font-semibold shadow-md transition-colors`}>
+                  {ocrLoading ? (<><Loader2 size={16} className="animate-spin" /> Lendo...</>) : (<><Camera size={16} /><span className="hidden sm:inline">Ler Etiqueta</span></>)}
+                  <input type="file" accept="image/*" capture="environment" onChange={handleOcrCapture} disabled={ocrLoading} className="hidden" />
+                </label>
+                {packagesNeedingReminder.length > 0 && (
+                  <button type="button" onClick={() => setShowRemindersModal(true)} className="flex items-center gap-2 px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white rounded-lg text-sm font-semibold shadow-md transition-colors">
+                    <Clock size={16} />
+                    {packagesNeedingReminder.length} lembrete{packagesNeedingReminder.length !== 1 ? 's' : ''}
+                  </button>
+                )}
               </div>
             </div>
             <div className="p-5 sm:p-6">
-              <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                <div>
-                  <label className="block text-sm font-semibold text-slate-700 dark:text-gray-300 mb-2">Unidade *</label>
-                  <input type="text" placeholder="Ex: 104-B" className="w-full px-4 py-3 border-2 border-slate-200 dark:border-gray-600 rounded-xl focus:border-blue-600 focus:ring-4 focus:ring-blue-500/20 outline-none bg-white dark:bg-gray-700 text-slate-800 dark:text-white transition-all placeholder:text-slate-400" value={form.unit} onChange={e => setForm({ ...form, unit: e.target.value })} onBlur={handleUnitBlur} required />
+              {ocrError && (
+                <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl flex items-center gap-2 text-red-700 dark:text-red-300 text-sm">
+                  <AlertTriangle size={16} />
+                  <span className="flex-1">{ocrError}</span>
+                  <button onClick={() => setOcrError(null)}><X size={14} /></button>
                 </div>
-                <div>
+              )}
+              {ocrRawText && !ocrError && (
+                <div className="mb-4 p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-xl text-green-700 dark:text-green-300 text-sm">
+                  <div className="flex items-center gap-2 font-semibold mb-1">
+                    <CheckCircle size={16} />
+                    Texto detectado na etiqueta
+                  </div>
+                  <p className="text-xs opacity-75 line-clamp-3">{ocrRawText}</p>
+                  <button onClick={() => setOcrRawText(null)} className="text-xs underline mt-1">Fechar</button>
+                </div>
+              )}
+              <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                <div className="relative">
+                  <label className="block text-sm font-semibold text-slate-700 dark:text-gray-300 mb-2">Unidade *</label>
+                  <input type="text" placeholder="Ex: 104-B" className="w-full px-4 py-3 border-2 border-slate-200 dark:border-gray-600 rounded-xl focus:border-blue-600 focus:ring-4 focus:ring-blue-500/20 outline-none bg-white dark:bg-gray-700 text-slate-800 dark:text-white transition-all placeholder:text-slate-400" value={form.unit} onChange={handleUnitChange} onBlur={handleUnitBlur} onFocus={() => { const s = searchResidentsByUnit(form.unit); setUnitSuggestions(s); setShowUnitDropdown(s.length > 0); }} required />
+                  {showUnitDropdown && unitSuggestions.length > 0 && (
+                    <div className="absolute z-20 mt-1 w-full bg-white dark:bg-gray-800 border-2 border-slate-200 dark:border-gray-600 rounded-xl shadow-lg max-h-48 overflow-y-auto">
+                      {unitSuggestions.map(r => (
+                        <button key={r.id} type="button" className="w-full px-4 py-2.5 text-left hover:bg-blue-50 dark:hover:bg-blue-900/30 flex justify-between items-center" onClick={() => selectResident(r)}>
+                          <span className="font-medium text-slate-800 dark:text-white">{r.name}</span>
+                          <span className="text-sm text-slate-500 dark:text-slate-400">{r.unit}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <div className="relative">
                   <label className="block text-sm font-semibold text-slate-700 dark:text-gray-300 mb-2">Destinatário *</label>
-                  <input type="text" placeholder="Nome do morador" className="w-full px-4 py-3 border-2 border-slate-200 dark:border-gray-600 rounded-xl focus:border-blue-600 focus:ring-4 focus:ring-blue-500/20 outline-none bg-white dark:bg-gray-700 text-slate-800 dark:text-white transition-all placeholder:text-slate-400" value={form.recipient} onChange={e => setForm({ ...form, recipient: e.target.value })} required />
+                  <input type="text" placeholder="Nome do morador" className="w-full px-4 py-3 border-2 border-slate-200 dark:border-gray-600 rounded-xl focus:border-blue-600 focus:ring-4 focus:ring-blue-500/20 outline-none bg-white dark:bg-gray-700 text-slate-800 dark:text-white transition-all placeholder:text-slate-400" value={form.recipient} onChange={handleRecipientChange} onBlur={handleRecipientBlur} onFocus={() => { const s = searchResidentsByName(form.recipient); setRecipientSuggestions(s); setShowRecipientDropdown(s.length > 0); }} required />
+                  {showRecipientDropdown && recipientSuggestions.length > 0 && (
+                    <div className="absolute z-20 mt-1 w-full bg-white dark:bg-gray-800 border-2 border-slate-200 dark:border-gray-600 rounded-xl shadow-lg max-h-48 overflow-y-auto">
+                      {recipientSuggestions.map(r => (
+                        <button key={r.id} type="button" className="w-full px-4 py-2.5 text-left hover:bg-blue-50 dark:hover:bg-blue-900/30 flex justify-between items-center" onClick={() => selectResident(r)}>
+                          <span className="font-medium text-slate-800 dark:text-white">{r.name}</span>
+                          <span className="text-sm text-slate-500 dark:text-slate-400">{r.unit}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
                 <div>
                   <label className="block text-sm font-semibold text-slate-700 dark:text-gray-300 mb-2 flex items-center gap-1.5">
@@ -3022,6 +3316,17 @@ function ConciergeView({ onAdd, packages, onDelete, onCollect, residents, reside
           onAddResident={onAddResident}
           onDeleteResident={onDeleteResident}
           onUpdateResident={onUpdateResident}
+          ocrPendingResident={ocrPendingResident}
+          onResidentRegistered={(newResident) => {
+            setOcrPendingResident(null);
+            setForm(prev => ({
+              ...prev,
+              unit: newResident.unit || prev.unit,
+              recipient: newResident.name || prev.recipient,
+              phone: formatPhoneMask(newResident.phone || '') || prev.phone,
+            }));
+            setTab('packages');
+          }}
         />
       )}
 
@@ -3443,12 +3748,26 @@ function BillingManager({ condoInfo, staff }) {
   );
 }
 
-function ResidentsManager({ residents, onAddResident, onDeleteResident, onUpdateResident }) {
+function ResidentsManager({ residents, onAddResident, onDeleteResident, onUpdateResident, ocrPendingResident, onResidentRegistered }) {
   const [form, setForm] = useState({ unit: '', name: '', phone: '', document: '' });
   const [errors, setErrors] = useState({});
   const [editId, setEditId] = useState(null);
   const [editForm, setEditForm] = useState({ unit: '', name: '', phone: '', document: '' });
   const [editErrors, setEditErrors] = useState({});
+
+  // Pre-preencher form com dados do OCR quando morador nao encontrado
+  useEffect(() => {
+    if (ocrPendingResident) {
+      setForm({
+        unit: ocrPendingResident.unit || '',
+        name: ocrPendingResident.name || '',
+        phone: ocrPendingResident.phone || '',
+        document: '',
+      });
+      setErrors({});
+    }
+  }, [ocrPendingResident]);
+
   const handleSubmit = (e) => {
     e.preventDefault();
     const newErrors = {};
@@ -3468,6 +3787,12 @@ function ResidentsManager({ residents, onAddResident, onDeleteResident, onUpdate
       document: String(form.document).trim(),
       access_code: accessCode
     });
+
+    // Se veio do OCR, notificar e voltar para encomendas
+    if (ocrPendingResident && onResidentRegistered) {
+      onResidentRegistered({ unit: form.unit, name: form.name.trim(), phone: phoneDigits });
+    }
+
     setForm({ unit: '', name: '', phone: '', document: '' });
     setErrors({});
   };
@@ -3515,6 +3840,19 @@ function ResidentsManager({ residents, onAddResident, onDeleteResident, onUpdate
         <h2 className="font-semibold text-white">Gerir Moradores</h2>
       </div>
       <div className="p-6 space-y-6">
+        {ocrPendingResident && (
+          <div className="bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-700 rounded-lg p-4 flex items-start gap-3">
+            <AlertTriangle className="text-amber-500 shrink-0 mt-0.5" size={20} />
+            <div>
+              <p className="text-sm font-medium text-amber-800 dark:text-amber-200">
+                Morador não encontrado na base de dados
+              </p>
+              <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
+                Os dados da etiqueta foram preenchidos automaticamente. Complete o cadastro com telefone e documento, depois clique em "Salvar Morador".
+              </p>
+            </div>
+          </div>
+        )}
         <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Unidade *</label>
