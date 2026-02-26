@@ -8,6 +8,20 @@ const corsHeaders = {
   'Content-Type': 'application/json',
 }
 
+function generateSlug(name: string): string {
+  if (!name) return 'condo'
+  return name
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9\s-]/g, '')
+    .trim()
+    .replace(/\s+/g, '-')
+    .replace(/-+/g, '-')
+    .substring(0, 50)
+    || 'condo'
+}
+
 serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
@@ -88,6 +102,19 @@ serve(async (req) => {
     const newCondoId = crypto.randomUUID()
     const now = new Date().toISOString()
 
+    // Gera slug amigável a partir do nome do condomínio
+    const baseSlug = generateSlug(condoName)
+    let slug = baseSlug
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const { data: existing } = await supabaseAdmin
+        .from('condos')
+        .select('id')
+        .eq('slug', slug)
+        .maybeSingle()
+      if (!existing) break
+      slug = baseSlug + '-' + Math.random().toString(36).substring(2, 6)
+    }
+
     // Calcula trial_end_date (15 dias a partir de hoje)
     const trialEnd = new Date()
     trialEnd.setDate(trialEnd.getDate() + 15)
@@ -126,6 +153,7 @@ serve(async (req) => {
       .insert([{
         id: newCondoId,
         name: condoName,
+        slug: slug,
         plan_type: dbPlanType,
         staff_limit: limits.staff,
         unit_limit: limits.units,
@@ -219,6 +247,7 @@ serve(async (req) => {
       JSON.stringify({
         success: true,
         condoId: newCondoId,
+        slug: slug,
         username: adminEmail.toLowerCase().trim(),
         trialEndDate,
         condoName

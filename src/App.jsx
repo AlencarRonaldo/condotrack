@@ -5,7 +5,7 @@ import {
   FileText, Download, Printer, Filter, FileSpreadsheet, FileJson, Settings, Building2, Save,
   Users, CreditCard, TrendingUp, Calendar, ArrowUpRight, ArrowDownRight, BarChart3,
   Mail, ShoppingBag, UtensilsCrossed, HelpCircle,
-  Camera, Loader2, UserPlus, ArrowLeft
+  Camera, Loader2, UserPlus, ArrowLeft, Link2, Copy
 } from 'lucide-react';
 
 // ==================================================================================
@@ -281,11 +281,25 @@ const mockSupabase = (() => {
     write('condos', [{
       id: DEMO_CONDO_ID,
       name: 'Condomínio Demo',
+      slug: 'condominio-demo',
       plan_type: 'basic', // 'basic' | 'professional' | 'premium'
       staff_limit: 2, // Limite de porteiros no plano básico
       created_at: now,
       updated_at: now,
     }]);
+  } else {
+    // Patch: adiciona slug a condos existentes que não têm
+    try {
+      const condos = JSON.parse(localStorage.getItem(keyFor('condos')) || '[]');
+      let patched = false;
+      condos.forEach(c => {
+        if (!c.slug && c.name) {
+          c.slug = c.name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9\s-]/g, '').trim().replace(/\s+/g, '-').substring(0, 50) || 'condo';
+          patched = true;
+        }
+      });
+      if (patched) write('condos', condos);
+    } catch {}
   }
 
   // Seed staff com admin padrão se vazio (com condo_id)
@@ -728,6 +742,13 @@ export default function CondoTrackApp() {
   const [loading, setLoading] = useState(true);
   const [notification, setNotification] = useState(null);
   const [showInactivityModal, setShowInactivityModal] = useState(false);
+  // Slug do condomínio via URL (acesso direto do morador)
+  const [urlSlug] = useState(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      return params.get('condo') || null;
+    } catch { return null; }
+  });
   const pendingCount = packages.filter(p => p.status === 'pending').length;
   const residentsIndex = useMemo(() => {
     const idx = {};
@@ -736,6 +757,14 @@ export default function CondoTrackApp() {
     });
     return idx;
   }, [residents]);
+
+  // Auto-entrar no modo morador quando há slug na URL
+  useEffect(() => {
+    if (urlSlug) {
+      setAccessMode('resident');
+      setViewMode('resident');
+    }
+  }, [urlSlug]);
 
   // Multi-Tenant: Carregar dados apenas quando condoId estiver disponível
   useEffect(() => {
@@ -1581,7 +1610,15 @@ export default function CondoTrackApp() {
           )
         ) : (
           <ResidentView
-            onBack={() => setAccessMode(null)}
+            initialSlug={urlSlug}
+            onBack={() => {
+              setAccessMode(null);
+              if (urlSlug) {
+                const url = new URL(window.location);
+                url.searchParams.delete('condo');
+                window.history.replaceState({}, '', url);
+              }
+            }}
           />
         )}
       </main>
@@ -3461,7 +3498,7 @@ function ConciergeView({ onAdd, packages, onDelete, onCollect, residents, reside
       )}
 
       {tab === 'settings' && currentUser?.role === 'admin' && (
-        <CondoSettingsManager condoSettings={condoSettings} onUpdateSettings={onUpdateSettings} />
+        <CondoSettingsManager condoSettings={condoSettings} onUpdateSettings={onUpdateSettings} condoInfo={condoInfo} />
       )}
 
       {/* ABA PLANO/BILLING - Informações do plano (apenas admin) */}
@@ -3473,13 +3510,14 @@ function ConciergeView({ onAdd, packages, onDelete, onCollect, residents, reside
 }
 
 // ---------- Componente de Configurações do Condomínio ----------
-function CondoSettingsManager({ condoSettings, onUpdateSettings }) {
+function CondoSettingsManager({ condoSettings, onUpdateSettings, condoInfo }) {
   const [form, setForm] = useState({
     condo_name: condoSettings?.condo_name || '',
     condo_address: condoSettings?.condo_address || '',
     condo_phone: condoSettings?.condo_phone || ''
   });
   const [saved, setSaved] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -3556,6 +3594,37 @@ function CondoSettingsManager({ condoSettings, onUpdateSettings }) {
           </div>
         </form>
       </div>
+
+      {/* Link compartilhável para moradores */}
+      {condoInfo?.slug && (
+        <div className="mt-4 border-t border-gray-200 dark:border-gray-700 pt-4 px-6 pb-6">
+          <div className="flex items-center gap-2 mb-2">
+            <Link2 size={16} className="text-emerald-600 dark:text-emerald-400" />
+            <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">Link para Moradores</h3>
+          </div>
+          <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">Compartilhe este link com os moradores para acesso direto às encomendas</p>
+          <div className="flex items-center gap-2">
+            <input
+              type="text"
+              readOnly
+              value={`${window.location.origin}/app.html?condo=${condoInfo.slug}`}
+              className="flex-1 px-3 py-2 text-sm border dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-700 dark:text-white select-all"
+              onClick={e => e.target.select()}
+            />
+            <button
+              type="button"
+              onClick={() => {
+                navigator.clipboard.writeText(`${window.location.origin}/app.html?condo=${condoInfo.slug}`);
+                setCopied(true);
+                setTimeout(() => setCopied(false), 2000);
+              }}
+              className="px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium transition-colors flex items-center gap-1"
+            >
+              {copied ? <><CheckCircle size={14} /> Copiado!</> : <><Copy size={14} /> Copiar</>}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -4064,7 +4133,7 @@ function ResidentsManager({ residents, onAddResident, onDeleteResident, onUpdate
   );
 }
 
-function ResidentView({ onBack }) {
+function ResidentView({ onBack, initialSlug }) {
   // Passo 1: Identificar o condomínio
   const [condoIdInput, setCondoIdInput] = useState('');
   const [condoData, setCondoData] = useState(null); // { id, name }
@@ -4074,6 +4143,38 @@ function ResidentView({ onBack }) {
   // Passo 2: Dados do condomínio carregados
   const [localResidents, setLocalResidents] = useState([]);
   const [localPackages, setLocalPackages] = useState([]);
+
+  // Auto-carregar condomínio quando há slug na URL
+  useEffect(() => {
+    if (!initialSlug) return;
+    const loadBySlug = async () => {
+      setCondoLoading(true);
+      setCondoError('');
+      try {
+        const { data, error } = await supabase
+          .from('condos')
+          .select('id, name')
+          .eq('slug', initialSlug)
+          .single();
+        if (error || !data) {
+          setCondoError('Condomínio não encontrado. Verifique o link.');
+          return;
+        }
+        setCondoData(data);
+        const [resResult, pkgResult] = await Promise.all([
+          supabase.from('residents').select('*').eq('condo_id', data.id).order('unit', { ascending: true }),
+          supabase.from('packages').select('*').eq('condo_id', data.id).order('created_at', { ascending: false }),
+        ]);
+        setLocalResidents(resResult.data || []);
+        setLocalPackages(pkgResult.data || []);
+      } catch {
+        setCondoError('Erro ao conectar. Tente novamente.');
+      } finally {
+        setCondoLoading(false);
+      }
+    };
+    loadBySlug();
+  }, [initialSlug]);
 
   // Passo 3: Autenticação por unidade + PIN
   const [unitInput, setUnitInput] = useState('');
@@ -4097,20 +4198,20 @@ function ResidentView({ onBack }) {
 
   const condoName = condoData?.name || 'CondoTrack';
 
-  // Buscar condomínio pelo ID
+  // Buscar condomínio pelo ID ou slug
   const handleCondoSubmit = async (e) => {
     e.preventDefault();
-    if (!condoIdInput.trim()) { setCondoError('Informe o ID do condomínio.'); return; }
+    const input = condoIdInput.trim();
+    if (!input) { setCondoError('Informe o código do condomínio.'); return; }
     setCondoError('');
     setCondoLoading(true);
     try {
-      const { data, error } = await supabase
-        .from('condos')
-        .select('id, name')
-        .eq('id', condoIdInput.trim())
-        .single();
+      // Detecta se é UUID ou slug
+      const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(input);
+      const query = supabase.from('condos').select('id, name');
+      const { data, error } = await (isUUID ? query.eq('id', input) : query.eq('slug', input.toLowerCase())).single();
       if (error || !data) {
-        setCondoError('Condomínio não encontrado. Verifique o ID informado.');
+        setCondoError('Condomínio não encontrado. Verifique o código informado.');
         setCondoLoading(false);
         return;
       }
@@ -4191,11 +4292,50 @@ function ResidentView({ onBack }) {
       {!condoData && (
         <div className="min-h-[50vh] flex items-center justify-center py-4">
           <div className="w-full max-w-md">
-            {onBack && (
+            {onBack && !initialSlug && (
               <button onClick={onBack} className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 mb-4 transition-colors">
                 <ArrowLeft size={16} /> Voltar
               </button>
             )}
+            {/* Loading automático quando vindo de link compartilhado */}
+            {initialSlug && condoLoading && (
+              <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
+                <div className="bg-gradient-to-r from-emerald-600 to-emerald-500 px-5 py-5 text-center">
+                  <div className="inline-flex items-center justify-center w-12 h-12 bg-white/20 backdrop-blur-sm rounded-xl mb-3">
+                    <User className="text-white" size={24} />
+                  </div>
+                  <h1 className="text-xl sm:text-2xl font-bold text-white mb-0.5">Área do Morador</h1>
+                  <p className="text-emerald-100 text-xs">Consulte suas encomendas</p>
+                </div>
+                <div className="p-8 text-center">
+                  <div className="animate-spin rounded-full h-8 w-8 border-3 border-emerald-500 border-t-transparent mx-auto mb-3"></div>
+                  <p className="text-gray-600 dark:text-gray-300 font-medium">Carregando condomínio...</p>
+                </div>
+              </div>
+            )}
+            {/* Erro quando slug inválido */}
+            {initialSlug && !condoLoading && condoError && (
+              <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
+                <div className="bg-gradient-to-r from-emerald-600 to-emerald-500 px-5 py-5 text-center">
+                  <div className="inline-flex items-center justify-center w-12 h-12 bg-white/20 backdrop-blur-sm rounded-xl mb-3">
+                    <User className="text-white" size={24} />
+                  </div>
+                  <h1 className="text-xl sm:text-2xl font-bold text-white mb-0.5">Área do Morador</h1>
+                  <p className="text-emerald-100 text-xs">Consulte suas encomendas</p>
+                </div>
+                <div className="p-6 text-center space-y-3">
+                  <div className="flex items-center justify-center gap-2 text-red-500 bg-red-50 dark:bg-red-900/20 py-2.5 px-3 rounded-lg">
+                    <AlertTriangle size={16} />
+                    <span className="text-sm font-medium">{condoError}</span>
+                  </div>
+                  <button onClick={onBack} className="text-sm text-emerald-600 hover:text-emerald-700 dark:text-emerald-400 font-medium">
+                    Voltar ao início
+                  </button>
+                </div>
+              </div>
+            )}
+            {/* Formulário manual (sem slug na URL) */}
+            {!initialSlug && (
             <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
               <div className="bg-gradient-to-r from-emerald-600 to-emerald-500 px-5 py-5 text-center">
                 <div className="inline-flex items-center justify-center w-12 h-12 bg-white/20 backdrop-blur-sm rounded-xl mb-3">
@@ -4207,13 +4347,13 @@ function ResidentView({ onBack }) {
               <div className="p-5 sm:p-6">
                 <div className="text-center mb-4">
                   <h2 className="text-lg font-bold text-gray-800 dark:text-white mb-1">Identificar Condomínio</h2>
-                  <p className="text-gray-500 dark:text-gray-400 text-sm">Informe o ID do seu condomínio para acessar</p>
+                  <p className="text-gray-500 dark:text-gray-400 text-sm">Informe o código do seu condomínio para acessar</p>
                 </div>
                 <form onSubmit={handleCondoSubmit} className="space-y-3">
                   <div className="relative">
                     <input
                       type="text"
-                      placeholder="ID do Condomínio"
+                      placeholder="Código do Condomínio"
                       className="w-full pl-11 pr-4 py-3 text-base border-2 border-gray-200 dark:border-gray-600 rounded-xl focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/20 outline-none transition-all bg-gray-50 dark:bg-gray-700 dark:text-white placeholder-gray-400"
                       value={condoIdInput}
                       onChange={e => setCondoIdInput(e.target.value)}
@@ -4242,10 +4382,11 @@ function ResidentView({ onBack }) {
               </div>
               <div className="bg-gray-50 dark:bg-gray-700/50 px-5 py-3 text-center border-t border-gray-100 dark:border-gray-700">
                 <p className="text-xs text-gray-400 dark:text-gray-500">
-                  O ID do condomínio é fornecido pela administração
+                  O código do condomínio é fornecido pela administração
                 </p>
               </div>
             </div>
+            )}
           </div>
         </div>
       )}

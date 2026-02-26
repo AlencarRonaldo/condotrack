@@ -589,6 +589,20 @@
                         <p id="modalAdminEmail" class="text-cyan-400 font-medium"></p>
                     </div>
 
+                    <!-- Link para Moradores -->
+                    <div id="residentLinkSection" class="bg-gray-800 rounded-lg p-3 hidden">
+                        <label class="block text-xs text-gray-500 uppercase tracking-wider mb-1">Link para Moradores</label>
+                        <div class="flex items-center gap-2">
+                            <code id="modalResidentLink" class="flex-1 text-emerald-400 font-mono text-xs break-all select-all"></code>
+                            <button onclick="copyToClipboard('modalResidentLink')" class="text-gray-400 hover:text-white p-1 transition-colors" title="Copiar">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
+                                </svg>
+                            </button>
+                        </div>
+                        <p class="text-xs text-gray-500 mt-1">Compartilhe este link com os moradores do condominio</p>
+                    </div>
+
                     <!-- Aviso -->
                     <div class="flex items-start gap-2 text-amber-400 text-xs mt-3">
                         <svg class="w-4 h-4 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1113,6 +1127,7 @@
             // Retorna os dados de sucesso
             return {
                 condoId: data.condoId,
+                slug: data.slug,
                 username: data.username,
                 trialEndDate: data.trialEndDate,
                 condoName: data.condoName
@@ -1270,7 +1285,7 @@
                 const result = await handleRegistration(formData);
 
                 // Mostra modal de sucesso
-                showSuccessModal(result.condoId, result.username);
+                showSuccessModal(result.condoId, result.username, result.slug);
 
             } catch (error) {
                 showError(error.message || 'Erro ao criar conta. Tente novamente.');
@@ -1293,15 +1308,24 @@
         // Variaveis para armazenar dados do registro
         let registeredCondoId = null;
         let registeredEmail = null;
+        let registeredSlug = null;
 
         // Mostra o modal de sucesso com os dados
-        function showSuccessModal(condoId, email) {
+        function showSuccessModal(condoId, email, slug) {
             registeredCondoId = condoId;
             registeredEmail = email;
+            registeredSlug = slug;
 
             // Preenche os dados no modal
             document.getElementById('modalCondoId').textContent = condoId;
             document.getElementById('modalAdminEmail').textContent = email;
+
+            // Mostra link de moradores se slug disponível
+            if (slug) {
+                const residentLink = `${window.location.origin}/app.html?condo=${slug}`;
+                document.getElementById('modalResidentLink').textContent = residentLink;
+                document.getElementById('residentLinkSection').classList.remove('hidden');
+            }
 
             // Esconde o formulario e mostra o modal
             document.getElementById('registerForm').classList.add('hidden');
