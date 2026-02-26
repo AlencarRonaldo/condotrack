@@ -718,8 +718,10 @@ function isValidPhone11(value) {
 export default function CondoTrackApp() {
   const SESSION_KEY = 'condotrack_session'; // Agora inclui condo_id
   const THEME_KEY = 'condotrack_theme';
-  const [viewMode, setViewMode] = useState('concierge'); // 'concierge' | 'resident'
-  const [accessMode, setAccessMode] = useState(null); // null | 'concierge' | 'resident' — null = tela de seleção
+  // Detecta slug na URL antes do primeiro render
+  const _initSlug = (() => { try { return new URLSearchParams(window.location.search).get('condo') || null; } catch { return null; } })();
+  const [viewMode, setViewMode] = useState(_initSlug ? 'resident' : 'concierge'); // 'concierge' | 'resident'
+  const [accessMode, setAccessMode] = useState(_initSlug ? 'resident' : null); // null | 'concierge' | 'resident' — null = tela de seleção
   const [isConciergeAuthed, setIsConciergeAuthed] = useState(false);
   const [currentUser, setCurrentUser] = useState(null); // {id, name, role, username, condo_id}
   // Multi-Tenant: estado do condomínio atual
@@ -757,14 +759,6 @@ export default function CondoTrackApp() {
     });
     return idx;
   }, [residents]);
-
-  // Auto-entrar no modo morador quando há slug na URL
-  useEffect(() => {
-    if (urlSlug) {
-      setAccessMode('resident');
-      setViewMode('resident');
-    }
-  }, [urlSlug]);
 
   // Multi-Tenant: Carregar dados apenas quando condoId estiver disponível
   useEffect(() => {
