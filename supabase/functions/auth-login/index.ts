@@ -7,6 +7,7 @@
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { compareSync, hashSync } from 'https://deno.land/x/bcrypt@v0.4.1/mod.ts'
 
 // CORS Headers
 const corsHeaders = {
@@ -36,6 +37,7 @@ interface StaffRecord {
 interface CondoRecord {
   id: string
   name: string
+  slug: string | null
   plan_type: string
   staff_limit: number
   unit_limit: number
@@ -138,19 +140,19 @@ serve(async (req: Request) => {
     }
 
     // 4. Validar senha
-    // Primeiro tenta com bcrypt (senhas já hasheadas)
-    // Se falhar, tenta comparação direta (senhas legadas) e migra para hash
+    // Usa bcrypt diretamente (não depende de RPCs do banco)
+    // Suporta: senhas hasheadas ($2...) e senhas legadas em texto plano
     let isPasswordValid = false
     let needsMigration = false
 
-    // Verificar se a senha está em formato bcrypt (começa com $2)
     if (staff.password.startsWith('$2')) {
-      // Senha já está hasheada - usar verify_password do banco
-      const { data: verifyResult } = await supabaseAdmin.rpc('verify_password', {
-        password: password,
-        password_hash: staff.password
-      })
-      isPasswordValid = verifyResult === true
+      // Senha já está hasheada - verificar com bcrypt
+      try {
+        isPasswordValid = compareSync(password, staff.password)
+      } catch (bcryptError) {
+        console.error('[auth-login] Erro ao verificar bcrypt:', bcryptError)
+        isPasswordValid = false
+      }
     } else {
       // Senha legada em texto plano
       isPasswordValid = staff.password === password
@@ -170,17 +172,16 @@ serve(async (req: Request) => {
     // 5. Migrar senha legada para bcrypt
     if (needsMigration) {
       try {
-        const { data: hashResult } = await supabaseAdmin.rpc('hash_password', {
-          password: password
-        })
-        
-        if (hashResult) {
-          await supabaseAdmin
-            .from('staff')
-            .update({ password: hashResult })
-            .eq('id', staff.id)
-          
+        const hashResult = hashSync(password)
+        const { error: updateError } = await supabaseAdmin
+          .from('staff')
+          .update({ password: hashResult })
+          .eq('id', staff.id)
+
+        if (!updateError) {
           console.log(`[auth-login] Senha migrada para bcrypt: ${username}`)
+        } else {
+          console.error('[auth-login] Erro ao salvar hash:', updateError)
         }
       } catch (migrationError) {
         console.error('[auth-login] Erro na migração de senha:', migrationError)
@@ -225,6 +226,7 @@ serve(async (req: Request) => {
         condo: {
           id: condo.id,
           name: condo.name,
+          slug: condo.slug || null,
           plan_type: condo.plan_type,
           staff_limit: condo.staff_limit,
           unit_limit: condo.unit_limit,

@@ -873,6 +873,12 @@ export default function CondoTrackApp() {
 
   // Restaura sessão ao carregar (Multi-Tenant: inclui condo_id)
   useEffect(() => {
+    // Aplica classe dark no HTML ao carregar (tema já foi lido na inicialização do state)
+    const root = document.documentElement;
+    const savedTheme = localStorage.getItem(THEME_KEY);
+    if (savedTheme === 'dark') root.classList.add('dark'); else root.classList.remove('dark');
+    // Se veio via link de morador (?condo=), não restaura sessão de porteiro
+    if (_initSlug) return;
     const restoreSession = async () => {
       try {
         const raw = localStorage.getItem(SESSION_KEY);
@@ -918,10 +924,6 @@ export default function CondoTrackApp() {
       } catch {}
     };
     restoreSession();
-    // Aplica classe dark no HTML ao carregar (tema já foi lido na inicialização do state)
-    const root = document.documentElement;
-    const savedTheme = localStorage.getItem(THEME_KEY);
-    if (savedTheme === 'dark') root.classList.add('dark'); else root.classList.remove('dark');
   }, []);
 
   // Resetar showBillingWhenExpired quando o status muda para expired/inactive
@@ -1582,18 +1584,32 @@ export default function CondoTrackApp() {
               onUpdateSettings={handleUpdateSettings}
             />
           ) : (
-            <ConciergeLogin onBack={() => setAccessMode(null)} onSuccess={(user, condoData, backendCondoStatus) => {
+            <ConciergeLogin onBack={() => setAccessMode(null)} onSuccess={async (user, condoData, backendCondoStatus) => {
               // Em produção, usa status do backend; em demo, calcula localmente
               const status = backendCondoStatus || checkCondoStatus(condoData);
               setCondoStatus(status);
               setIsConciergeAuthed(true);
               setCurrentUser(user);
               setCondoId(user.condo_id);
-              setCondoInfo(condoData);
+              // Se condoData não tem slug, busca do banco
+              let finalCondoData = condoData;
+              if (condoData && !condoData.slug && user.condo_id) {
+                try {
+                  const { data: fullCondo } = await supabase
+                    .from('condos')
+                    .select('slug')
+                    .eq('id', user.condo_id)
+                    .single();
+                  if (fullCondo?.slug) {
+                    finalCondoData = { ...condoData, slug: fullCondo.slug };
+                  }
+                } catch {}
+              }
+              setCondoInfo(finalCondoData);
               setCondoSettings({
-                condo_name: condoData?.name || 'CondoTrack',
-                condo_address: condoData?.address || '',
-                condo_phone: condoData?.phone || ''
+                condo_name: finalCondoData?.name || 'CondoTrack',
+                condo_address: finalCondoData?.address || '',
+                condo_phone: finalCondoData?.phone || ''
               });
               // Resetar showBillingWhenExpired quando status é expired/inactive
               if (status === 'expired' || status === 'inactive') {
@@ -2582,6 +2598,42 @@ function ConciergeView({ onAdd, packages, onDelete, onCollect, residents, reside
   const [ocrPendingResident, setOcrPendingResident] = useState(null);
   const [unitNotFound, setUnitNotFound] = useState(false);
   const [recipientNotFound, setRecipientNotFound] = useState(false);
+  const [shareSlug, setShareSlug] = useState(condoInfo?.slug || null);
+  const [shareCopied, setShareCopied] = useState(false);
+
+  // Auto-gerar slug se não existir no condomínio
+  useEffect(() => {
+    if (shareSlug || !condoInfo?.id || !condoInfo?.name) return;
+    const ensureSlug = async () => {
+      // Primeiro tenta buscar slug existente do banco
+      try {
+        const { data } = await supabase
+          .from('condos')
+          .select('slug')
+          .eq('id', condoInfo.id)
+          .single();
+        if (data?.slug) {
+          setShareSlug(data.slug);
+          condoInfo.slug = data.slug;
+          return;
+        }
+      } catch {}
+      // Gera e salva novo slug
+      const base = condoInfo.name
+        .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase().replace(/[^a-z0-9\s-]/g, '').trim()
+        .replace(/\s+/g, '-').replace(/-+/g, '-').substring(0, 50) || 'condo';
+      const slug = base + '-' + condoInfo.id.substring(0, 4);
+      try {
+        const { error } = await supabase.from('condos').update({ slug }).eq('id', condoInfo.id);
+        if (!error) {
+          setShareSlug(slug);
+          condoInfo.slug = slug;
+        }
+      } catch {}
+    };
+    ensureSlug();
+  }, [condoInfo?.id, condoInfo?.name, shareSlug]);
 
   // Autocomplete: busca moradores por nome (ilike/similarity)
   const searchResidentsByName = (query) => {
@@ -3106,6 +3158,49 @@ function ConciergeView({ onAdd, packages, onDelete, onCollect, residents, reside
             </div>
           </div>
 
+          {/* Card: Link para Moradores */}
+          {shareSlug && (
+            <div className="bg-gradient-to-r from-emerald-50 to-teal-50 dark:from-emerald-900/20 dark:to-teal-900/20 rounded-xl shadow-sm border border-emerald-200 dark:border-emerald-800/50 p-4 sm:p-5">
+              <div className="flex items-center gap-2 mb-2">
+                <div className="p-2 bg-emerald-500 rounded-lg">
+                  <Link2 size={16} className="text-white" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-semibold text-emerald-800 dark:text-emerald-300">Link para Moradores</h3>
+                  <p className="text-xs text-emerald-600 dark:text-emerald-400">Compartilhe para acesso direto às encomendas</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 mt-3">
+                <input
+                  type="text"
+                  readOnly
+                  value={`${window.location.origin}/app.html?condo=${shareSlug}`}
+                  className="flex-1 min-w-0 px-3 py-2 text-sm border border-emerald-200 dark:border-emerald-700 rounded-lg bg-white dark:bg-gray-800 dark:text-white select-all truncate"
+                  onClick={e => e.target.select()}
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    navigator.clipboard.writeText(`${window.location.origin}/app.html?condo=${shareSlug}`);
+                    setShareCopied(true);
+                    setTimeout(() => setShareCopied(false), 2000);
+                  }}
+                  className="px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium transition-colors flex items-center gap-1 flex-shrink-0"
+                >
+                  {shareCopied ? <><CheckCircle size={14} /> Copiado!</> : <><Copy size={14} /> Copiar</>}
+                </button>
+                <a
+                  href={`https://wa.me/?text=${encodeURIComponent(`Acesse suas encomendas pelo CondoTrack:\n${window.location.origin}/app.html?condo=${shareSlug}`)}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="px-3 py-2 rounded-lg bg-green-500 hover:bg-green-600 text-white text-sm font-medium transition-colors flex items-center gap-1 flex-shrink-0"
+                >
+                  <MessageCircle size={14} /> <span className="hidden sm:inline">WhatsApp</span>
+                </a>
+              </div>
+            </div>
+          )}
+
           {/* Encomendas Pendentes */}
           <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
             <div className="px-5 sm:px-6 py-4 flex items-center justify-between bg-blue-500 dark:bg-blue-600">
@@ -3512,6 +3607,30 @@ function CondoSettingsManager({ condoSettings, onUpdateSettings, condoInfo }) {
   });
   const [saved, setSaved] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [localSlug, setLocalSlug] = useState(condoInfo?.slug || null);
+
+  // Auto-gerar slug se não existir
+  useEffect(() => {
+    if (localSlug || !condoInfo?.id || !condoInfo?.name) return;
+    const generateAndSaveSlug = async () => {
+      const base = condoInfo.name
+        .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase().replace(/[^a-z0-9\s-]/g, '').trim()
+        .replace(/\s+/g, '-').replace(/-+/g, '-').substring(0, 50) || 'condo';
+      const slug = base + '-' + condoInfo.id.substring(0, 4);
+      try {
+        const { error } = await supabase
+          .from('condos')
+          .update({ slug })
+          .eq('id', condoInfo.id);
+        if (!error) {
+          setLocalSlug(slug);
+          condoInfo.slug = slug;
+        }
+      } catch {}
+    };
+    generateAndSaveSlug();
+  }, [condoInfo?.id, condoInfo?.name, localSlug]);
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -3590,7 +3709,7 @@ function CondoSettingsManager({ condoSettings, onUpdateSettings, condoInfo }) {
       </div>
 
       {/* Link compartilhável para moradores */}
-      {condoInfo?.slug && (
+      {localSlug && (
         <div className="mt-4 border-t border-gray-200 dark:border-gray-700 pt-4 px-6 pb-6">
           <div className="flex items-center gap-2 mb-2">
             <Link2 size={16} className="text-emerald-600 dark:text-emerald-400" />
@@ -3601,14 +3720,14 @@ function CondoSettingsManager({ condoSettings, onUpdateSettings, condoInfo }) {
             <input
               type="text"
               readOnly
-              value={`${window.location.origin}/app.html?condo=${condoInfo.slug}`}
+              value={`${window.location.origin}/app.html?condo=${localSlug}`}
               className="flex-1 px-3 py-2 text-sm border dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-700 dark:text-white select-all"
               onClick={e => e.target.select()}
             />
             <button
               type="button"
               onClick={() => {
-                navigator.clipboard.writeText(`${window.location.origin}/app.html?condo=${condoInfo.slug}`);
+                navigator.clipboard.writeText(`${window.location.origin}/app.html?condo=${localSlug}`);
                 setCopied(true);
                 setTimeout(() => setCopied(false), 2000);
               }}
@@ -3617,7 +3736,7 @@ function CondoSettingsManager({ condoSettings, onUpdateSettings, condoInfo }) {
               {copied ? <><CheckCircle size={14} /> Copiado!</> : <><Copy size={14} /> Copiar</>}
             </button>
             <a
-              href={`https://wa.me/?text=${encodeURIComponent(`Acesse suas encomendas pelo CondoTrack:\n${window.location.origin}/app.html?condo=${condoInfo.slug}`)}`}
+              href={`https://wa.me/?text=${encodeURIComponent(`Acesse suas encomendas pelo CondoTrack:\n${window.location.origin}/app.html?condo=${localSlug}`)}`}
               target="_blank"
               rel="noopener noreferrer"
               className="px-3 py-2 rounded-lg bg-green-500 hover:bg-green-600 text-white text-sm font-medium transition-colors flex items-center gap-1"
