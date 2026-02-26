@@ -3616,6 +3616,14 @@ function CondoSettingsManager({ condoSettings, onUpdateSettings, condoInfo }) {
             >
               {copied ? <><CheckCircle size={14} /> Copiado!</> : <><Copy size={14} /> Copiar</>}
             </button>
+            <a
+              href={`https://wa.me/?text=${encodeURIComponent(`Acesse suas encomendas pelo CondoTrack:\n${window.location.origin}/app.html?condo=${condoInfo.slug}`)}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="px-3 py-2 rounded-lg bg-green-500 hover:bg-green-600 text-white text-sm font-medium transition-colors flex items-center gap-1"
+            >
+              <MessageCircle size={14} /> WhatsApp
+            </a>
           </div>
         </div>
       )}
