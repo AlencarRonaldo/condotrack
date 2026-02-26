@@ -1581,10 +1581,6 @@ export default function CondoTrackApp() {
           )
         ) : (
           <ResidentView
-            packages={packages}
-            onCollect={handleCollectPackage}
-            residentsIndex={residentsIndex}
-            condoName={condoSettings.condo_name}
             onBack={() => setAccessMode(null)}
           />
         )}
@@ -4068,7 +4064,18 @@ function ResidentsManager({ residents, onAddResident, onDeleteResident, onUpdate
   );
 }
 
-function ResidentView({ packages, onCollect, residentsIndex, condoName, onBack }) {
+function ResidentView({ onBack }) {
+  // Passo 1: Identificar o condomínio
+  const [condoIdInput, setCondoIdInput] = useState('');
+  const [condoData, setCondoData] = useState(null); // { id, name }
+  const [condoError, setCondoError] = useState('');
+  const [condoLoading, setCondoLoading] = useState(false);
+
+  // Passo 2: Dados do condomínio carregados
+  const [localResidents, setLocalResidents] = useState([]);
+  const [localPackages, setLocalPackages] = useState([]);
+
+  // Passo 3: Autenticação por unidade + PIN
   const [unitInput, setUnitInput] = useState('');
   const [authorizedUnit, setAuthorizedUnit] = useState(null);
   const [pinModalUnit, setPinModalUnit] = useState(null);
@@ -4079,9 +4086,52 @@ function ResidentView({ packages, onCollect, residentsIndex, condoName, onBack }
   const [collectorDoc, setCollectorDoc] = useState('');
   const [notFound, setNotFound] = useState(false);
 
+  // Index local de moradores por unidade
+  const localResidentsIndex = useMemo(() => {
+    const idx = {};
+    (localResidents || []).forEach(r => {
+      if (r && r.unit) idx[String(r.unit).toLowerCase()] = r;
+    });
+    return idx;
+  }, [localResidents]);
+
+  const condoName = condoData?.name || 'CondoTrack';
+
+  // Buscar condomínio pelo ID
+  const handleCondoSubmit = async (e) => {
+    e.preventDefault();
+    if (!condoIdInput.trim()) { setCondoError('Informe o ID do condomínio.'); return; }
+    setCondoError('');
+    setCondoLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('condos')
+        .select('id, name')
+        .eq('id', condoIdInput.trim())
+        .single();
+      if (error || !data) {
+        setCondoError('Condomínio não encontrado. Verifique o ID informado.');
+        setCondoLoading(false);
+        return;
+      }
+      setCondoData(data);
+      // Carregar moradores e encomendas deste condomínio
+      const [resResult, pkgResult] = await Promise.all([
+        supabase.from('residents').select('*').eq('condo_id', data.id).order('unit', { ascending: true }),
+        supabase.from('packages').select('*').eq('condo_id', data.id).order('created_at', { ascending: false }),
+      ]);
+      setLocalResidents(resResult.data || []);
+      setLocalPackages(pkgResult.data || []);
+    } catch {
+      setCondoError('Erro ao conectar. Tente novamente.');
+    } finally {
+      setCondoLoading(false);
+    }
+  };
+
   const startSearch = () => {
     const key = String(unitInput || '').toLowerCase();
-    const res = residentsIndex[key];
+    const res = localResidentsIndex[key];
     if (res) {
       setPinModalUnit(key);
       setPinInput('');
@@ -4093,7 +4143,7 @@ function ResidentView({ packages, onCollect, residentsIndex, condoName, onBack }
   };
   const submitPin = () => {
     const key = pinModalUnit;
-    const res = residentsIndex[key];
+    const res = localResidentsIndex[key];
     const expected = String(res?.access_code || res?.pin || '0000');
     if (extractDigits(pinInput).padStart(4,'0') === extractDigits(expected).padStart(4,'0')) {
       setAuthorizedUnit(key);
@@ -4110,11 +4160,26 @@ function ResidentView({ packages, onCollect, residentsIndex, condoName, onBack }
     setNotFound(false);
   };
 
-  const myPackages = packages.filter(p => authorizedUnit && String(p.unit).toLowerCase().includes(String(authorizedUnit)));
+  const myPackages = localPackages.filter(p => authorizedUnit && String(p.unit).toLowerCase().includes(String(authorizedUnit)));
 
-  const confirm = (pkgId) => {
+  const confirm = async (pkgId) => {
     if (!collectorName || !collectorDoc) return;
-    onCollect(pkgId, collectorName, collectorDoc);
+    try {
+      const { error } = await supabase
+        .from('packages')
+        .update({
+          status: 'collected',
+          collected_at: new Date().toISOString(),
+          collected_by: collectorName,
+          receiver_doc: collectorDoc
+        })
+        .eq('id', pkgId);
+      if (error) throw error;
+      // Atualizar lista local
+      setLocalPackages(prev => prev.map(p => p.id === pkgId ? { ...p, status: 'collected', collected_at: new Date().toISOString(), collected_by: collectorName, receiver_doc: collectorDoc } : p));
+    } catch (err) {
+      console.error(err);
+    }
     setShowModalFor(null);
     setCollectorName('');
     setCollectorDoc('');
@@ -4122,7 +4187,8 @@ function ResidentView({ packages, onCollect, residentsIndex, condoName, onBack }
 
   return (
     <div className="space-y-6">
-      {!authorizedUnit && (
+      {/* Passo 1: Identificar o condomínio */}
+      {!condoData && (
         <div className="min-h-[50vh] flex items-center justify-center py-4">
           <div className="w-full max-w-md">
             {onBack && (
@@ -4130,25 +4196,82 @@ function ResidentView({ packages, onCollect, residentsIndex, condoName, onBack }
                 <ArrowLeft size={16} /> Voltar
               </button>
             )}
-            {/* Card Principal */}
             <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
-              {/* Header com gradiente */}
+              <div className="bg-gradient-to-r from-emerald-600 to-emerald-500 px-5 py-5 text-center">
+                <div className="inline-flex items-center justify-center w-12 h-12 bg-white/20 backdrop-blur-sm rounded-xl mb-3">
+                  <User className="text-white" size={24} />
+                </div>
+                <h1 className="text-xl sm:text-2xl font-bold text-white mb-0.5">Área do Morador</h1>
+                <p className="text-emerald-100 text-xs">Consulte suas encomendas</p>
+              </div>
+              <div className="p-5 sm:p-6">
+                <div className="text-center mb-4">
+                  <h2 className="text-lg font-bold text-gray-800 dark:text-white mb-1">Identificar Condomínio</h2>
+                  <p className="text-gray-500 dark:text-gray-400 text-sm">Informe o ID do seu condomínio para acessar</p>
+                </div>
+                <form onSubmit={handleCondoSubmit} className="space-y-3">
+                  <div className="relative">
+                    <input
+                      type="text"
+                      placeholder="ID do Condomínio"
+                      className="w-full pl-11 pr-4 py-3 text-base border-2 border-gray-200 dark:border-gray-600 rounded-xl focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/20 outline-none transition-all bg-gray-50 dark:bg-gray-700 dark:text-white placeholder-gray-400"
+                      value={condoIdInput}
+                      onChange={e => setCondoIdInput(e.target.value)}
+                      disabled={condoLoading}
+                    />
+                    <Building2 className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
+                  </div>
+                  {condoError && (
+                    <div className="flex items-center gap-2 text-red-500 bg-red-50 dark:bg-red-900/20 py-2.5 px-3 rounded-lg">
+                      <AlertTriangle size={16} />
+                      <span className="text-sm font-medium">{condoError}</span>
+                    </div>
+                  )}
+                  <button
+                    type="submit"
+                    disabled={condoLoading}
+                    className="w-full py-3 rounded-xl bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-700 hover:to-emerald-600 disabled:opacity-50 text-white font-semibold shadow-lg shadow-emerald-500/30 transition-all flex items-center justify-center gap-2"
+                  >
+                    {condoLoading ? (
+                      <><div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div> Buscando...</>
+                    ) : (
+                      <><Search size={18} /> Acessar</>
+                    )}
+                  </button>
+                </form>
+              </div>
+              <div className="bg-gray-50 dark:bg-gray-700/50 px-5 py-3 text-center border-t border-gray-100 dark:border-gray-700">
+                <p className="text-xs text-gray-400 dark:text-gray-500">
+                  O ID do condomínio é fornecido pela administração
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Passo 2: Digitar unidade */}
+      {condoData && !authorizedUnit && (
+        <div className="min-h-[50vh] flex items-center justify-center py-4">
+          <div className="w-full max-w-md">
+            <button onClick={() => { setCondoData(null); setCondoIdInput(''); setCondoError(''); }} className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 mb-4 transition-colors">
+              <ArrowLeft size={16} /> Trocar condomínio
+            </button>
+            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
               <div className="bg-gradient-to-r from-emerald-600 to-emerald-500 px-5 py-5 text-center">
                 <div className="inline-flex items-center justify-center w-12 h-12 bg-white/20 backdrop-blur-sm rounded-xl mb-3">
                   <Package className="text-white" size={24} />
                 </div>
-                <h1 className="text-xl sm:text-2xl font-bold text-white mb-0.5">{condoName || 'CondoTrack'}</h1>
+                <h1 className="text-xl sm:text-2xl font-bold text-white mb-0.5">{condoName}</h1>
                 <p className="text-emerald-100 text-xs">Sistema de Gestão de Encomendas</p>
               </div>
 
-              {/* Conteúdo */}
               <div className="p-5 sm:p-6">
                 <div className="text-center mb-4">
                   <h2 className="text-lg sm:text-xl font-bold text-gray-800 dark:text-white mb-1">Área do Morador</h2>
                   <p className="text-gray-500 dark:text-gray-400 text-sm">Digite sua unidade para consultar encomendas</p>
                 </div>
 
-                {/* Campo de busca */}
                 <div className="space-y-3">
                   <div className="relative">
                     <input
@@ -4179,7 +4302,6 @@ function ResidentView({ packages, onCollect, residentsIndex, condoName, onBack }
                 </div>
               </div>
 
-              {/* Footer do card */}
               <div className="bg-gray-50 dark:bg-gray-700/50 px-5 py-3 text-center border-t border-gray-100 dark:border-gray-700">
                 <p className="text-xs text-gray-400 dark:text-gray-500">
                   Acesso seguro com PIN de 4 dígitos
