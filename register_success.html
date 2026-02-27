@@ -35,16 +35,13 @@
 
             <div class="bg-gray-700 p-5 rounded-lg text-left space-y-3">
                 <h2 class="text-xl font-bold text-green-400">Instrucoes para o Primeiro Login</h2>
-                <p class="text-gray-300">Seu painel esta pronto. Por favor, utilize as seguintes credenciais e o <strong>ID do Condominio</strong>:</p>
+                <p class="text-gray-300">Seu painel esta pronto. Utilize seu <strong>e-mail e senha</strong> para fazer login:</p>
 
                 <div class="space-y-2 font-mono text-sm">
                     <p class="text-white bg-gray-600 p-2 rounded-md flex justify-between items-center">
                         <span class="text-gray-400 font-semibold mr-2">Login (E-mail):</span> <span id="adminEmailDisplay" class="font-bold text-cyan-400"></span>
                     </p>
-                    <p class="text-white bg-gray-600 p-2 rounded-md flex justify-between items-center">
-                        <span class="text-gray-400 font-semibold mr-2">Chave Unica do Condominio (ID):</span> <span id="condoIdDisplay" class="font-bold text-green-400 break-all text-xs md:text-sm"></span>
-                    </p>
-                    <p class="text-yellow-400 text-xs mt-1">Guarde este ID com seguranca. Todos os porteiros precisarao dele.</p>
+                    <p class="text-cyan-400 text-xs mt-1">O sistema identifica seu condominio automaticamente pelo e-mail.</p>
                 </div>
             </div>
 
@@ -66,17 +63,15 @@
 
         // Preenche os dados na tela
         document.addEventListener('DOMContentLoaded', function() {
-            const condoId = getUrlParameter('condoId');
             const adminEmail = getUrlParameter('email');
             const condoName = getUrlParameter('condoName');
 
-            if (condoId && adminEmail) {
-                document.getElementById('condoIdDisplay').textContent = condoId;
+            if (adminEmail) {
                 document.getElementById('adminEmailDisplay').textContent = adminEmail;
-                document.getElementById('condoNameDisplay').textContent = condoName;
+                document.getElementById('condoNameDisplay').textContent = condoName || 'Seu Novo Condominio';
             } else {
                  document.getElementById('condoNameDisplay').textContent = 'Seu Novo Condominio';
-                 document.getElementById('condoIdDisplay').textContent = 'ID nao encontrado. Verifique seu email.';
+                 document.getElementById('adminEmailDisplay').textContent = 'E-mail nao encontrado.';
             }
         });
     </script>

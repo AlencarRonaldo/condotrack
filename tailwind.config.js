@@ -14,25 +14,25 @@ module.exports = {
         sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif'],
       },
       colors: {
-        // Nova paleta de cores - Design System CondoTrack
+        // Design System CondoTrack - SaaS Clean
         brand: {
           50: '#EFF6FF',
           100: '#DBEAFE',
           200: '#BFDBFE',
           300: '#93C5FD',
           400: '#60A5FA',
-          500: '#3B82F6',  // Azul Royal - CTAs primários
+          500: '#3B82F6',
           600: '#2563EB',
           700: '#1D4ED8',
-          800: '#1E3A8A',  // Azul Marinho - Header/Marca
-          900: '#0F172A',  // Azul Profundo - Header escuro
+          800: '#1E3A8A',
+          900: '#0F172A',
           950: '#020617',
         },
-        // Cores de ação
         primary: {
-          DEFAULT: '#3B82F6',
-          light: '#60A5FA',
-          dark: '#2563EB',
+          DEFAULT: '#2563EB',
+          light: '#3B82F6',
+          dark: '#1D4ED8',
+          hover: '#1D4ED8',
           50: '#EFF6FF',
           100: '#DBEAFE',
           500: '#3B82F6',
@@ -40,7 +40,7 @@ module.exports = {
           700: '#1D4ED8',
         },
         accent: {
-          DEFAULT: '#10B981',  // Verde Esmeralda
+          DEFAULT: '#10B981',
           light: '#34D399',
           dark: '#059669',
           50: '#ECFDF5',
@@ -48,28 +48,28 @@ module.exports = {
           500: '#10B981',
           600: '#059669',
         },
-        // Superfícies e fundos
         surface: {
           DEFAULT: '#FFFFFF',
-          muted: '#F8FAFC',    // Fundo principal
-          subtle: '#F1F5F9',   // Fundo secundário
-          border: '#E2E8F0',   // Bordas sutis
+          muted: '#F8FAFC',
+          subtle: '#F1F5F9',
+          border: '#E2E8F0',
+          'dark-bg': '#0F172A',
+          'dark-card': '#1E293B',
+          'dark-border': '#334155',
         },
-        // Texto
         content: {
-          DEFAULT: '#334155',  // Texto principal
-          muted: '#64748B',    // Texto secundário
-          subtle: '#94A3B8',   // Texto terciário
-          inverse: '#FFFFFF',  // Texto em fundos escuros
+          DEFAULT: '#0F172A',
+          muted: '#64748B',
+          subtle: '#94A3B8',
+          inverse: '#FFFFFF',
         },
-        // Status
         success: {
-          DEFAULT: '#10B981',
-          light: '#D1FAE5',
-          dark: '#059669',
-          50: '#ECFDF5',
-          500: '#10B981',
-          600: '#059669',
+          DEFAULT: '#16A34A',
+          light: '#DCFCE7',
+          dark: '#15803D',
+          50: '#F0FDF4',
+          500: '#16A34A',
+          600: '#15803D',
         },
         warning: {
           DEFAULT: '#F59E0B',
@@ -80,19 +80,19 @@ module.exports = {
           600: '#D97706',
         },
         danger: {
-          DEFAULT: '#EF4444',
+          DEFAULT: '#DC2626',
           light: '#FEE2E2',
-          dark: '#DC2626',
+          dark: '#B91C1C',
           50: '#FEF2F2',
-          500: '#EF4444',
-          600: '#DC2626',
+          500: '#DC2626',
+          600: '#B91C1C',
         },
         info: {
-          DEFAULT: '#3B82F6',
+          DEFAULT: '#2563EB',
           light: '#DBEAFE',
-          dark: '#2563EB',
+          dark: '#1D4ED8',
           50: '#EFF6FF',
-          500: '#3B82F6',
+          500: '#2563EB',
         },
       },
       borderRadius: {
@@ -109,9 +109,11 @@ module.exports = {
         'medium': '0 4px 12px rgba(15, 23, 42, 0.12)',
         'elevated': '0 8px 24px rgba(15, 23, 42, 0.12)',
         'inner-soft': 'inset 0 2px 4px 0 rgba(0, 0, 0, 0.05)',
+        'sidebar': '2px 0 8px rgba(15, 23, 42, 0.05)',
       },
       spacing: {
         '18': '4.5rem',
+        '72': '18rem',
         '88': '22rem',
         '128': '32rem',
       },

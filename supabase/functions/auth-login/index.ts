@@ -1,8 +1,9 @@
 // ==================================================================================
-// 🔐 EDGE FUNCTION: auth-login
+// EDGE FUNCTION: auth-login
 // ==================================================================================
 // Endpoint: POST /functions/v1/auth-login
-// Autenticação segura de staff com validação de senha (bcrypt) no backend
+// Autenticacao segura de staff com validacao de senha (bcrypt) no backend
+// Login por email + senha (sem necessidade de informar ID do condominio)
 // ==================================================================================
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
@@ -18,9 +19,10 @@ const corsHeaders = {
 
 // Tipos
 interface LoginRequest {
-  username: string
+  email?: string
+  username?: string  // backward compat
   password: string
-  condoId: string
+  condoId?: string   // ignorado - mantido para backward compat
 }
 
 interface StaffRecord {
@@ -63,12 +65,16 @@ serve(async (req: Request) => {
   }
 
   try {
-    const { username, password, condoId }: LoginRequest = await req.json()
+    const body: LoginRequest = await req.json()
+
+    // Aceitar email ou username (backward compat)
+    const loginEmail = (body.email || body.username || '').trim().toLowerCase()
+    const password = body.password
 
     // Validação
-    if (!username || !password || !condoId) {
+    if (!loginEmail || !password) {
       return new Response(
-        JSON.stringify({ error: 'Campos obrigatórios: username, password, condoId' }),
+        JSON.stringify({ error: 'Campos obrigatórios: email, password', code: 'MISSING_FIELDS' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
@@ -80,11 +86,44 @@ serve(async (req: Request) => {
       { auth: { autoRefreshToken: false, persistSession: false } }
     )
 
-    // 1. Buscar condomínio
+    // 1. Buscar staff por email (sem filtrar por condo_id)
+    const { data: staffList, error: staffError } = await supabaseAdmin
+      .from('staff')
+      .select('id, condo_id, name, username, password, role, is_active, created_at')
+      .eq('username', loginEmail)
+
+    if (staffError || !staffList || staffList.length === 0) {
+      console.log(`[auth-login] Usuário não encontrado: ${loginEmail}`)
+      return new Response(
+        JSON.stringify({ error: 'E-mail não encontrado.', code: 'USER_NOT_FOUND' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+
+    // Se múltiplas contas com mesmo email (não deveria acontecer com UNIQUE constraint)
+    if (staffList.length > 1) {
+      console.log(`[auth-login] Múltiplas contas para: ${loginEmail}`)
+      return new Response(
+        JSON.stringify({ error: 'Múltiplas contas encontradas. Contate o suporte.', code: 'MULTIPLE_ACCOUNTS' }),
+        { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+
+    const staff = staffList[0] as StaffRecord
+
+    // Verificar se staff está ativo
+    if (staff.is_active === false) {
+      return new Response(
+        JSON.stringify({ error: 'Usuário desativado. Contate o administrador.', code: 'USER_INACTIVE' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+
+    // 2. Buscar condomínio pelo condo_id do staff
     const { data: condoData, error: condoError } = await supabaseAdmin
       .from('condos')
       .select('*')
-      .eq('id', condoId.trim())
+      .eq('id', staff.condo_id)
       .single()
 
     if (condoError || !condoData) {
@@ -96,10 +135,10 @@ serve(async (req: Request) => {
 
     const condo = condoData as CondoRecord
 
-    // 2. Verificar status do condomínio
+    // 3. Verificar status do condomínio
     const now = new Date()
     let condoStatus: 'active' | 'expired' | 'inactive' | 'past_due' = 'active'
-    
+
     if (condo.is_active === false) {
       condoStatus = 'inactive'
     } else if (condo.subscription_status === 'past_due') {
@@ -107,46 +146,16 @@ serve(async (req: Request) => {
     } else if (condo.subscription_status === 'canceled') {
       condoStatus = 'inactive'
     } else if (condo.trial_end_date && now > new Date(condo.trial_end_date)) {
-      // Trial expirado e não tem assinatura ativa
       if (condo.subscription_status !== 'active') {
         condoStatus = 'expired'
       }
     }
 
-    // 3. Buscar staff
-    const { data: staffData, error: staffError } = await supabaseAdmin
-      .from('staff')
-      .select('id, condo_id, name, username, password, role, is_active, created_at')
-      .eq('username', username.trim().toLowerCase())
-      .eq('condo_id', condoId.trim())
-      .single()
-
-    if (staffError || !staffData) {
-      console.log(`[auth-login] Usuário não encontrado: ${username} no condo ${condoId}`)
-      return new Response(
-        JSON.stringify({ error: 'Usuário não encontrado neste condomínio.', code: 'USER_NOT_FOUND' }),
-        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
-    }
-
-    const staff = staffData as StaffRecord
-
-    // Verificar se staff está ativo
-    if (staff.is_active === false) {
-      return new Response(
-        JSON.stringify({ error: 'Usuário desativado. Contate o administrador.', code: 'USER_INACTIVE' }),
-        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
-    }
-
-    // 4. Validar senha
-    // Usa bcrypt diretamente (não depende de RPCs do banco)
-    // Suporta: senhas hasheadas ($2...) e senhas legadas em texto plano
+    // 4. Validar senha (bcrypt ou texto plano legado)
     let isPasswordValid = false
     let needsMigration = false
 
     if (staff.password.startsWith('$2')) {
-      // Senha já está hasheada - verificar com bcrypt
       try {
         isPasswordValid = compareSync(password, staff.password)
       } catch (bcryptError) {
@@ -154,7 +163,6 @@ serve(async (req: Request) => {
         isPasswordValid = false
       }
     } else {
-      // Senha legada em texto plano
       isPasswordValid = staff.password === password
       if (isPasswordValid) {
         needsMigration = true
@@ -162,7 +170,7 @@ serve(async (req: Request) => {
     }
 
     if (!isPasswordValid) {
-      console.log(`[auth-login] Senha incorreta para: ${username}`)
+      console.log(`[auth-login] Senha incorreta para: ${loginEmail}`)
       return new Response(
         JSON.stringify({ error: 'Senha incorreta.', code: 'INVALID_PASSWORD' }),
         { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -179,13 +187,12 @@ serve(async (req: Request) => {
           .eq('id', staff.id)
 
         if (!updateError) {
-          console.log(`[auth-login] Senha migrada para bcrypt: ${username}`)
+          console.log(`[auth-login] Senha migrada para bcrypt: ${loginEmail}`)
         } else {
           console.error('[auth-login] Erro ao salvar hash:', updateError)
         }
       } catch (migrationError) {
         console.error('[auth-login] Erro na migração de senha:', migrationError)
-        // Não bloqueia login se migração falhar
       }
     }
 
@@ -217,7 +224,7 @@ serve(async (req: Request) => {
       created_at: staff.created_at
     }
 
-    console.log(`[auth-login] Login OK: ${username} (${staff.role}) - condo: ${condoId} - status: ${condoStatus}`)
+    console.log(`[auth-login] Login OK: ${loginEmail} (${staff.role}) - condo: ${staff.condo_id} - status: ${condoStatus}`)
 
     return new Response(
       JSON.stringify({

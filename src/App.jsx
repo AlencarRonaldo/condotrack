@@ -5,7 +5,7 @@ import {
   FileText, Download, Printer, Filter, FileSpreadsheet, FileJson, Settings, Building2, Save,
   Users, CreditCard, TrendingUp, Calendar, ArrowUpRight, ArrowDownRight, BarChart3,
   Mail, ShoppingBag, UtensilsCrossed, HelpCircle,
-  Camera, Loader2, UserPlus, ArrowLeft, Link2, Copy
+  Camera, Loader2, UserPlus, ArrowLeft, Link2, Copy, Menu, ChevronDown, MoreHorizontal
 } from 'lucide-react';
 
 // ==================================================================================
@@ -140,7 +140,7 @@ if (import.meta.env.DEV) {
 // 🔐 FUNÇÃO DE AUTENTICAÇÃO VIA EDGE FUNCTION (PRODUÇÃO)
 // ==================================================================================
 // Esta função faz a requisição segura para o backend validar a senha
-async function authenticateViaEdgeFunction(username, password, condoId) {
+async function authenticateViaEdgeFunction(email, password) {
   if (!AUTH_EDGE_FUNCTION_URL) {
     const error = new Error('Edge Function não configurada');
     error.code = 'NOT_CONFIGURED';
@@ -156,9 +156,9 @@ async function authenticateViaEdgeFunction(username, password, condoId) {
         'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
       },
       body: JSON.stringify({
-        username: username.trim().toLowerCase(),
-        password: password,
-        condoId: condoId.trim()
+        email: email.trim().toLowerCase(),
+        username: email.trim().toLowerCase(),
+        password: password
       })
     });
 
@@ -309,11 +309,24 @@ const mockSupabase = (() => {
       id: Date.now(),
       condo_id: DEMO_CONDO_ID,
       name: 'Administrador',
-      username: 'admin',
+      username: 'admin@demo.condotrack.com',
       password: '123',
       role: 'admin',
       created_at: now,
     }]);
+  } else {
+    // Patch: migrar username legado 'admin' para formato email
+    try {
+      const staffList = JSON.parse(localStorage.getItem(keyFor('staff')) || '[]');
+      let patched = false;
+      staffList.forEach(s => {
+        if (s.condo_id === DEMO_CONDO_ID && s.username === 'admin') {
+          s.username = 'admin@demo.condotrack.com';
+          patched = true;
+        }
+      });
+      if (patched) write('staff', staffList);
+    } catch {}
   }
 
   // Seed settings com nome do condomínio padrão se vazio (com condo_id)
@@ -744,6 +757,10 @@ export default function CondoTrackApp() {
   const [loading, setLoading] = useState(true);
   const [notification, setNotification] = useState(null);
   const [showInactivityModal, setShowInactivityModal] = useState(false);
+  // Sidebar & Navigation
+  const [activeTab, setActiveTab] = useState('home');
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+  const [mobileMoreOpen, setMobileMoreOpen] = useState(false);
   // Slug do condomínio via URL (acesso direto do morador)
   const [urlSlug] = useState(() => {
     try {
@@ -1250,12 +1267,22 @@ export default function CondoTrackApp() {
 
   // ---------- UI ----------
   const isConcierge = viewMode === 'concierge';
-  // Nova paleta: Azul Marinho Profundo para header
-  const headerBg = isConcierge ? 'bg-brand-900' : 'bg-accent-dark';
-  const toggleBg = isConcierge ? 'bg-brand-800/50' : 'bg-accent/30';
-  const activeBtn = isConcierge ? 'bg-blue-500' : 'bg-accent';
-  const activeShadow = 'shadow-md text-white';
-  const inactiveText = isConcierge ? 'text-blue-200 hover:text-white' : 'text-emerald-200 hover:text-white';
+
+  // Tab title mapping
+  const tabTitles = { home: 'Dashboard', packages: 'Encomendas', residents: 'Moradores', reports: 'Historico', team: 'Equipe', settings: 'Configuracoes', billing: 'Plano' };
+
+  // Sidebar nav items
+  const navItems = [
+    { id: 'home', icon: Package, label: 'Inicio', badge: pendingCount > 0 ? pendingCount : null },
+    { id: 'packages', icon: Box, label: 'Encomendas' },
+    { id: 'residents', icon: Users, label: 'Moradores' },
+    { id: 'reports', icon: FileText, label: 'Historico' },
+  ];
+  const adminNavItems = [
+    { id: 'team', icon: Briefcase, label: 'Equipe' },
+    { id: 'settings', icon: Settings, label: 'Configuracoes' },
+    { id: 'billing', icon: CreditCard, label: 'Plano' },
+  ];
 
   if (loading) {
     return (
@@ -1277,12 +1304,12 @@ export default function CondoTrackApp() {
       {/* Modal de Sessão Encerrada por Inatividade */}
       {showInactivityModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm px-4">
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-8 max-w-sm w-full animate-scale-in text-center border border-gray-200 dark:border-gray-700">
+          <div className="bg-white dark:bg-slate-800 rounded-xl shadow-lg p-8 max-w-sm w-full animate-scale-in text-center border border-slate-200 dark:border-slate-700">
             <div className="inline-flex items-center justify-center w-16 h-16 bg-amber-100 dark:bg-amber-800 rounded-2xl mb-5">
               <Clock size={32} className="text-amber-600 dark:text-amber-200" />
             </div>
             <h3 className="text-xl font-bold text-slate-800 dark:text-white mb-2">Sessão Encerrada</h3>
-            <p className="text-slate-600 dark:text-gray-300 mb-6">Sua sessão foi encerrada por inatividade. Por favor, faça login novamente.</p>
+            <p className="text-slate-600 dark:text-slate-300 mb-6">Sua sessão foi encerrada por inatividade. Por favor, faça login novamente.</p>
             <button
               onClick={() => setShowInactivityModal(false)}
               className="w-full px-4 py-3.5 rounded-lg bg-blue-500 hover:bg-blue-600 text-white font-semibold shadow-sm transition-all"
@@ -1295,145 +1322,190 @@ export default function CondoTrackApp() {
 
       {/* Tela de Seleção: Portaria ou Morador */}
       {accessMode === null && !isConciergeAuthed ? (
-        <div className="min-h-screen flex flex-col items-center justify-center px-4 py-8">
-          <div className="w-full max-w-sm text-center">
-            <img
-              src={LOGO_PATH}
-              alt="CondoTrack Logo"
-              className="h-20 sm:h-24 w-auto mx-auto mb-6"
-              onError={(e) => { e.target.style.display = 'none'; }}
-            />
-            <h1 className="text-2xl sm:text-3xl font-bold text-slate-800 dark:text-white mb-2">CondoTrack</h1>
-            <p className="text-sm text-slate-500 dark:text-slate-400 mb-10">Gestão de Encomendas para Condomínios</p>
+        <div className="min-h-screen flex flex-col items-center justify-center px-4 py-10 bg-slate-50 dark:bg-slate-950">
+          <div className="w-full max-w-sm">
+            <div className="relative text-center bg-white/90 dark:bg-slate-900/70 backdrop-blur rounded-2xl border border-slate-200/70 dark:border-slate-800 shadow-xl px-6 py-8">
+              <img src={LOGO_PATH} alt="CondoTrack Logo" className="h-20 sm:h-24 w-auto mx-auto mb-5" onError={(e) => { e.target.style.display = 'none'; }} />
+              <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white mb-2">CondoTrack</h1>
+              <p className="text-sm text-slate-500 dark:text-slate-400 mb-8">Gestão de Encomendas para Condomínios</p>
 
-            <p className="text-base font-medium text-slate-700 dark:text-slate-300 mb-6">Como deseja acessar?</p>
+              <p className="text-base font-medium text-slate-700 dark:text-slate-300 mb-5">Como deseja acessar?</p>
 
-            <div className="space-y-4">
-              <button
-                onClick={() => { setAccessMode('concierge'); setViewMode('concierge'); }}
-                className="w-full flex items-center gap-4 p-5 bg-white dark:bg-gray-800 border-2 border-gray-200 dark:border-gray-700 rounded-2xl shadow-sm hover:border-blue-500 hover:shadow-md transition-all group"
-              >
-                <div className="flex-shrink-0 w-14 h-14 bg-blue-100 dark:bg-blue-900/50 rounded-xl flex items-center justify-center group-hover:bg-blue-500 transition-colors">
-                  <Shield size={28} className="text-blue-600 dark:text-blue-400 group-hover:text-white transition-colors" />
-                </div>
-                <div className="text-left">
-                  <p className="text-lg font-bold text-slate-800 dark:text-white">Portaria</p>
-                  <p className="text-sm text-slate-500 dark:text-slate-400">Acesso para porteiros e administradores</p>
-                </div>
-              </button>
+              <div className="space-y-4">
+                <button onClick={() => { setAccessMode('concierge'); setViewMode('concierge'); }} className="w-full flex items-center gap-4 p-5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-sm hover:border-blue-500 hover:shadow-md transition-all duration-150 group">
+                  <div className="flex-shrink-0 w-14 h-14 bg-blue-50 dark:bg-blue-900/30 rounded-xl flex items-center justify-center group-hover:bg-blue-600 transition-colors duration-150">
+                    <Shield size={28} className="text-blue-600 dark:text-blue-400 group-hover:text-white transition-colors duration-150" />
+                  </div>
+                  <div className="text-left">
+                    <p className="text-lg font-bold text-slate-900 dark:text-white">Portaria</p>
+                    <p className="text-sm text-slate-500 dark:text-slate-400">Acesso para porteiros e administradores</p>
+                  </div>
+                </button>
 
-              <button
-                onClick={() => { setAccessMode('resident'); setViewMode('resident'); }}
-                className="w-full flex items-center gap-4 p-5 bg-white dark:bg-gray-800 border-2 border-gray-200 dark:border-gray-700 rounded-2xl shadow-sm hover:border-emerald-500 hover:shadow-md transition-all group"
-              >
-                <div className="flex-shrink-0 w-14 h-14 bg-emerald-100 dark:bg-emerald-900/50 rounded-xl flex items-center justify-center group-hover:bg-emerald-500 transition-colors">
-                  <User size={28} className="text-emerald-600 dark:text-emerald-400 group-hover:text-white transition-colors" />
-                </div>
-                <div className="text-left">
-                  <p className="text-lg font-bold text-slate-800 dark:text-white">Sou Morador</p>
-                  <p className="text-sm text-slate-500 dark:text-slate-400">Consultar minhas encomendas</p>
-                </div>
+                <button onClick={() => { setAccessMode('resident'); setViewMode('resident'); }} className="w-full flex items-center gap-4 p-5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-sm hover:border-emerald-500 hover:shadow-md transition-all duration-150 group">
+                  <div className="flex-shrink-0 w-14 h-14 bg-emerald-50 dark:bg-emerald-900/30 rounded-xl flex items-center justify-center group-hover:bg-emerald-600 transition-colors duration-150">
+                    <User size={28} className="text-emerald-600 dark:text-emerald-400 group-hover:text-white transition-colors duration-150" />
+                  </div>
+                  <div className="text-left">
+                    <p className="text-lg font-bold text-slate-900 dark:text-white">Sou Morador</p>
+                    <p className="text-sm text-slate-500 dark:text-slate-400">Consultar minhas encomendas</p>
+                  </div>
+                </button>
+              </div>
+
+              {/* Toggle de tema dentro do card (local indicado) */}
+              <button onClick={() => setTheme(prev => prev === 'dark' ? 'light' : 'dark')} className="mt-7 w-full inline-flex items-center justify-center gap-2 text-sm font-medium text-slate-600 dark:text-slate-300 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 rounded-xl py-3 transition-colors duration-150">
+                {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
+                {theme === 'dark' ? 'Modo Claro' : 'Modo Escuro'}
               </button>
             </div>
-
-            {/* Toggle tema */}
-            <button
-              onClick={() => setTheme(prev => prev === 'dark' ? 'light' : 'dark')}
-              className="mt-8 inline-flex items-center gap-2 text-sm text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
-            >
-              {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
-              {theme === 'dark' ? 'Modo Claro' : 'Modo Escuro'}
-            </button>
           </div>
         </div>
       ) : (
-      <>
-      <header className={`${headerBg} text-white shadow-md sticky top-0 z-40`}>
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 py-3">
-          {/* Layout: Logo + Nav Toggle + User */}
-          <div className="flex justify-between items-center gap-3">
-            {/* Logo e Brand */}
-            <div className="flex items-center gap-3 min-w-0">
-              <a href="/" className="flex-shrink-0 group">
-                <img
-                  src={LOGO_PATH}
-                  alt="CondoTrack Logo"
-                  className="h-12 sm:h-14 w-auto cursor-pointer group-hover:scale-105 transition-transform"
-                  onError={(e) => { e.target.style.display = 'none'; }}
-                />
-              </a>
-              <div className="min-w-0 hidden xs:block">
-                <a href="/" className="hover:opacity-90 transition-opacity">
-                  <h1 className="text-lg sm:text-xl font-bold tracking-tight">CondoTrack</h1>
-                  <p className="text-[10px] sm:text-xs text-white/60 font-medium -mt-0.5">Gestão de Encomendas</p>
-                </a>
+      <div className="flex h-screen overflow-hidden">
+        {/* ===== SIDEBAR (Desktop) ===== */}
+        {isConcierge && isConciergeAuthed && (
+          <aside className="hidden md:flex md:w-72 md:flex-col md:fixed md:inset-y-0 bg-white dark:bg-slate-800 border-r border-slate-200 dark:border-slate-700 shadow-sidebar z-30">
+            {/* Logo */}
+            <div className="h-16 flex items-center gap-3 px-6 border-b border-slate-100 dark:border-slate-700 flex-shrink-0">
+              <img src={LOGO_PATH} className="h-8 w-auto" alt="Logo" onError={(e) => { e.target.style.display = 'none'; }} />
+              <div>
+                <h1 className="text-sm font-bold text-slate-900 dark:text-white">CondoTrack</h1>
+                <p className="text-xs text-slate-400">Gestao de Encomendas</p>
               </div>
-              {isConcierge && pendingCount > 0 && (
-                <span className="inline-flex items-center justify-center min-w-[22px] h-[22px] text-[11px] font-bold bg-amber-500 text-white px-1.5 rounded-full shadow-sm animate-pulse-soft">
-                  {pendingCount}
-                </span>
-              )}
             </div>
-
-            {/* Ações do Header */}
-            <div className="flex items-center gap-2 sm:gap-3">
-              {/* Toggle Tema */}
-              <button
-                onClick={() => setTheme(prev => prev === 'dark' ? 'light' : 'dark')}
-                className="inline-flex items-center justify-center w-9 h-9 rounded-lg bg-white/10 hover:bg-white/20 text-white transition-colors"
-                title="Alternar tema"
-                aria-label="Alternar tema"
-              >
-                {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
-              </button>
-
-              {/* Toggle Portaria/Morador */}
-              <div className={`flex ${toggleBg} rounded-xl p-1 backdrop-blur-sm`}>
-                <button
-                  onClick={() => setViewMode('concierge')}
-                  className={`flex items-center gap-1.5 px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-semibold transition-all ${isConcierge ? `${activeBtn} ${activeShadow}` : inactiveText}`}
-                >
-                  <Shield size={15} />
-                  <span className="hidden xs:inline">Portaria</span>
-                </button>
-                <button
-                  onClick={() => setViewMode('resident')}
-                  className={`flex items-center gap-1.5 px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-semibold transition-all ${!isConcierge ? `${activeBtn} ${activeShadow}` : inactiveText}`}
-                >
-                  <User size={15} />
-                  <span className="hidden xs:inline">Morador</span>
-                </button>
+            {/* Condo name */}
+            <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-700 flex-shrink-0">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg bg-blue-50 dark:bg-blue-900/30 flex items-center justify-center flex-shrink-0">
+                  <Building2 size={16} className="text-blue-600 dark:text-blue-400" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-slate-900 dark:text-white truncate">{condoSettings?.condo_name || 'Condominio'}</p>
+                  <p className="text-xs text-slate-400">Condominio</p>
+                </div>
               </div>
-
-              {/* Usuário logado */}
-              {isConcierge && isConciergeAuthed && currentUser && (
-                <div className="hidden sm:flex items-center gap-2 bg-white/10 backdrop-blur-sm border border-white/10 rounded-xl px-3 py-2">
-                  <div className={`p-1.5 rounded-lg ${currentUser.role === 'admin' ? 'bg-amber-500/20' : 'bg-white/10'}`}>
-                    {currentUser.role === 'admin' ? (
-                      <Briefcase size={14} className="text-warning" />
-                    ) : (
-                      <User size={14} className="text-white/90" />
-                    )}
+            </div>
+            {/* Nav items */}
+            <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-1">
+              {navItems.map(item => (
+                <button key={item.id} onClick={() => setActiveTab(item.id)}
+                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 ${activeTab === item.id ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700/50 hover:text-slate-900 dark:hover:text-white'}`}>
+                  <item.icon size={18} />
+                  <span>{item.label}</span>
+                  {item.badge && <span className="ml-auto text-xs bg-amber-100 dark:bg-amber-900/50 text-amber-700 dark:text-amber-400 px-2 py-0.5 rounded-full font-semibold">{item.badge}</span>}
+                </button>
+              ))}
+              {currentUser?.role === 'admin' && (
+                <>
+                  <div className="pt-4 pb-2 px-3">
+                    <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Administracao</p>
                   </div>
-                  <div className="text-left">
-                    <p className="text-sm font-medium leading-tight truncate max-w-[100px]">{currentUser.name}</p>
-                    <p className="text-[10px] text-white/60">{currentUser.role === 'admin' ? 'Administrador' : 'Porteiro'}</p>
+                  {adminNavItems.map(item => (
+                    <button key={item.id} onClick={() => setActiveTab(item.id)}
+                      className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 ${activeTab === item.id ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700/50 hover:text-slate-900 dark:hover:text-white'}`}>
+                      <item.icon size={18} />
+                      <span>{item.label}</span>
+                    </button>
+                  ))}
+                </>
+              )}
+            </nav>
+            {/* User info bottom */}
+            {currentUser && (
+              <div className="border-t border-slate-200 dark:border-slate-700 p-4 flex-shrink-0">
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-full bg-blue-50 dark:bg-blue-900/30 flex items-center justify-center flex-shrink-0">
+                    <User size={16} className="text-blue-600 dark:text-blue-400" />
                   </div>
-                  <button
-                    title="Sair"
-                    onClick={handleLogout}
-                    className="ml-1 p-1.5 rounded-lg hover:bg-white/10 text-white/70 hover:text-white transition-colors"
-                  >
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium text-slate-900 dark:text-white truncate">{currentUser.name}</p>
+                    <p className="text-xs text-slate-400">{currentUser.role === 'admin' ? 'Administrador' : 'Porteiro'}</p>
+                  </div>
+                  <button onClick={handleLogout} className="p-2 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors duration-150" title="Sair">
                     <LogOut size={16} />
                   </button>
                 </div>
+              </div>
+            )}
+          </aside>
+        )}
+
+        {/* ===== Mobile Sidebar Overlay ===== */}
+        {isConcierge && isConciergeAuthed && mobileSidebarOpen && (
+          <div className="md:hidden fixed inset-0 z-50">
+            <div className="absolute inset-0 bg-black/50" onClick={() => setMobileSidebarOpen(false)} />
+            <aside className="relative w-72 h-full bg-white dark:bg-slate-800 shadow-elevated flex flex-col">
+              <div className="h-16 flex items-center justify-between px-6 border-b border-slate-100 dark:border-slate-700">
+                <div className="flex items-center gap-3">
+                  <img src={LOGO_PATH} className="h-8 w-auto" alt="Logo" onError={(e) => { e.target.style.display = 'none'; }} />
+                  <span className="text-sm font-bold text-slate-900 dark:text-white">CondoTrack</span>
+                </div>
+                <button onClick={() => setMobileSidebarOpen(false)} className="p-2 rounded-lg text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700"><X size={18} /></button>
+              </div>
+              <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-1">
+                {navItems.map(item => (
+                  <button key={item.id} onClick={() => { setActiveTab(item.id); setMobileSidebarOpen(false); }}
+                    className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 ${activeTab === item.id ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700/50'}`}>
+                    <item.icon size={18} /><span>{item.label}</span>
+                    {item.badge && <span className="ml-auto text-xs bg-amber-100 dark:bg-amber-900/50 text-amber-700 dark:text-amber-400 px-2 py-0.5 rounded-full font-semibold">{item.badge}</span>}
+                  </button>
+                ))}
+                {currentUser?.role === 'admin' && (
+                  <>
+                    <div className="pt-4 pb-2 px-3"><p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Administracao</p></div>
+                    {adminNavItems.map(item => (
+                      <button key={item.id} onClick={() => { setActiveTab(item.id); setMobileSidebarOpen(false); }}
+                        className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 ${activeTab === item.id ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700/50'}`}>
+                        <item.icon size={18} /><span>{item.label}</span>
+                      </button>
+                    ))}
+                  </>
+                )}
+              </nav>
+            </aside>
+          </div>
+        )}
+
+        {/* ===== MAIN CONTENT AREA ===== */}
+        <div className={`flex-1 ${isConcierge && isConciergeAuthed ? 'md:pl-72' : ''} flex flex-col min-h-screen`}>
+          {/* Top bar */}
+          <header className="sticky top-0 z-20 bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 px-4 sm:px-6 h-16 flex items-center justify-between flex-shrink-0">
+            <div className="flex items-center gap-3">
+              {isConcierge && isConciergeAuthed && (
+                <button className="md:hidden p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors duration-150" onClick={() => setMobileSidebarOpen(true)}>
+                  <Menu size={20} className="text-slate-600 dark:text-slate-300" />
+                </button>
+              )}
+              <h2 className="text-xl font-semibold text-slate-900 dark:text-white">
+                {isConcierge && isConciergeAuthed ? (tabTitles[activeTab] || 'Dashboard') : isConcierge ? 'Portaria' : 'Area do Morador'}
+              </h2>
+            </div>
+            <div className="flex items-center gap-2">
+              <button onClick={() => setTheme(prev => prev === 'dark' ? 'light' : 'dark')} className="p-2 rounded-lg text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors duration-150" title="Alternar tema">
+                {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
+              </button>
+              {isConciergeAuthed && (
+                <div className="flex bg-slate-100 dark:bg-slate-700 rounded-lg p-1">
+                  <button onClick={() => setViewMode('concierge')} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition-all duration-150 ${isConcierge ? 'bg-white dark:bg-slate-600 text-blue-600 dark:text-blue-400 shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700'}`}>
+                    <Shield size={14} /><span className="hidden sm:inline">Portaria</span>
+                  </button>
+                  <button onClick={() => setViewMode('resident')} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition-all duration-150 ${!isConcierge ? 'bg-white dark:bg-slate-600 text-emerald-600 dark:text-emerald-400 shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700'}`}>
+                    <User size={14} /><span className="hidden sm:inline">Morador</span>
+                  </button>
+                </div>
+              )}
+              {/* Mobile user menu */}
+              {isConcierge && isConciergeAuthed && currentUser && (
+                <button onClick={handleLogout} className="md:hidden p-2 rounded-lg text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors duration-150" title="Sair">
+                  <LogOut size={18} />
+                </button>
               )}
             </div>
-          </div>
-        </div>
-      </header>
+          </header>
 
-      <main className="max-w-5xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
+          {/* Page content */}
+          <main className="flex-1 overflow-y-auto p-4 sm:p-6 pb-24 md:pb-6">
         {/* Verifica se conta está expirada/inativa - mostra Checkout de Billing (padrão) OU Perfil */}
         {isConciergeAuthed && (condoStatus === 'expired' || condoStatus === 'inactive') ? (
           <>
@@ -1442,7 +1514,7 @@ export default function CondoTrackApp() {
               <div className="mb-4 flex justify-end">
                 <button
                   onClick={() => setShowBillingWhenExpired(false)}
-                  className="px-3 py-2 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 flex items-center gap-2 transition-colors"
+                  className="px-3 py-2 text-sm text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 flex items-center gap-2 transition-colors"
                 >
                   <Settings size={16} />
                   Acessar Perfil
@@ -1471,7 +1543,7 @@ export default function CondoTrackApp() {
                       </button>
                       <button
                         onClick={() => setShowBillingWhenExpired(true)}
-                        className="px-4 py-2 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 rounded-lg font-medium text-sm transition-colors"
+                        className="px-4 py-2 bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 rounded-lg font-medium text-sm transition-colors"
                       >
                         Voltar para Assinatura
                       </button>
@@ -1490,6 +1562,8 @@ export default function CondoTrackApp() {
               />
             ) : (
               <ConciergeView
+                activeTab={activeTab}
+                setActiveTab={setActiveTab}
                 onAdd={handleAddPackage}
                 packages={packages}
                 onDelete={handleDeletePackage}
@@ -1539,6 +1613,8 @@ export default function CondoTrackApp() {
         ) : isConcierge ? (
           isConciergeAuthed ? (
             <ConciergeView
+              activeTab={activeTab}
+              setActiveTab={setActiveTab}
               onAdd={handleAddPackage}
               packages={packages}
               onDelete={handleDeletePackage}
@@ -1633,31 +1709,54 @@ export default function CondoTrackApp() {
         )}
       </main>
 
-      <footer className="mt-12 mb-6">
-        <div className="max-w-5xl mx-auto px-4 sm:px-6">
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 py-6 px-6 text-center">
-            <div className="flex items-center justify-center gap-2 mb-2">
-              <Package className="text-blue-500" size={18} />
-              <span className="font-semibold text-slate-800 dark:text-white">CondoTrack</span>
-            </div>
-            <p className="text-slate-500 text-sm">Gestão de Encomendas para Condomínios</p>
-            <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
-              <p className="text-xs text-slate-500">
-                Desenvolvido por{' '}
-                <a
-                  href="https://playcodeagency.xyz"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-blue-500 hover:text-blue-600 font-medium transition-colors"
-                >
-                  PlayCodeAgency
-                </a>
-              </p>
-            </div>
-          </div>
+          {/* Footer minimal */}
+          <footer className="border-t border-slate-200 dark:border-slate-700 py-4 px-6 text-center flex-shrink-0">
+            <p className="text-xs text-slate-400">
+              CondoTrack &middot; Desenvolvido por{' '}
+              <a href="https://playcodeagency.xyz" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-700 font-medium transition-colors duration-150">PlayCodeAgency</a>
+            </p>
+          </footer>
         </div>
-      </footer>
-      </>
+
+        {/* ===== MOBILE BOTTOM NAV ===== */}
+        {isConcierge && isConciergeAuthed && (
+          <nav className="md:hidden fixed bottom-0 inset-x-0 bg-white dark:bg-slate-800 border-t border-slate-200 dark:border-slate-700 z-30 px-2 pb-[env(safe-area-inset-bottom)]">
+            <div className="flex justify-around py-2">
+              {[
+                { id: 'home', icon: Package, label: 'Inicio' },
+                { id: 'packages', icon: Box, label: 'Encomendas' },
+                { id: 'residents', icon: Users, label: 'Moradores' },
+                { id: 'reports', icon: FileText, label: 'Historico' },
+              ].map(item => (
+                <button key={item.id} onClick={() => setActiveTab(item.id)}
+                  className={`flex flex-col items-center gap-1 px-3 py-1.5 rounded-lg text-xs transition-colors duration-150 ${activeTab === item.id ? 'text-blue-600 dark:text-blue-400' : 'text-slate-400 hover:text-slate-600'}`}>
+                  <item.icon size={20} />
+                  <span>{item.label}</span>
+                </button>
+              ))}
+              {currentUser?.role === 'admin' && (
+                <div className="relative">
+                  <button onClick={() => setMobileMoreOpen(!mobileMoreOpen)}
+                    className={`flex flex-col items-center gap-1 px-3 py-1.5 rounded-lg text-xs transition-colors duration-150 ${['team','settings','billing'].includes(activeTab) ? 'text-blue-600 dark:text-blue-400' : 'text-slate-400 hover:text-slate-600'}`}>
+                    <MoreHorizontal size={20} />
+                    <span>Mais</span>
+                  </button>
+                  {mobileMoreOpen && (
+                    <div className="absolute bottom-full right-0 mb-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-elevated py-2 min-w-[160px]">
+                      {adminNavItems.map(item => (
+                        <button key={item.id} onClick={() => { setActiveTab(item.id); setMobileMoreOpen(false); }}
+                          className={`w-full flex items-center gap-3 px-4 py-2.5 text-sm transition-colors duration-150 ${activeTab === item.id ? 'text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700/50'}`}>
+                          <item.icon size={16} /><span>{item.label}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </nav>
+        )}
+      </div>
       )}
     </div>
   );
@@ -1816,8 +1915,8 @@ function BillingCheckout({ condoInfo, onPaymentSuccess, onLogout, isAdmin = fals
 
     return (
       <div className="min-h-[80vh] flex items-center justify-center p-4">
-        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-8 max-w-md w-full text-center border border-gray-200 dark:border-gray-700">
-           <h2 className="text-2xl font-bold text-gray-800 dark:text-white mb-4">Pague com PIX</h2>
+        <div className="bg-white dark:bg-slate-800 rounded-xl shadow-lg p-8 max-w-md w-full text-center border border-slate-200 dark:border-slate-700">
+           <h2 className="text-2xl font-bold text-slate-800 dark:text-white mb-4">Pague com PIX</h2>
            
            {/* QR Code Image (se disponível) */}
            {pixImage ? (
@@ -1829,9 +1928,9 @@ function BillingCheckout({ condoInfo, onPaymentSuccess, onLogout, isAdmin = fals
                />
              </div>
            ) : (
-             <div className="bg-gray-100 dark:bg-gray-700 p-4 rounded-lg mb-4">
-               <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">Código PIX (Copia e Cola):</p>
-               <pre className="text-xs break-all text-left text-gray-600 dark:text-gray-300">{pixPayload}</pre>
+             <div className="bg-slate-100 dark:bg-slate-700 p-4 rounded-lg mb-4">
+               <p className="text-xs text-slate-500 dark:text-slate-400 mb-2">Código PIX (Copia e Cola):</p>
+               <pre className="text-xs break-all text-left text-slate-600 dark:text-slate-300">{pixPayload}</pre>
              </div>
            )}
 
@@ -1863,13 +1962,13 @@ function BillingCheckout({ condoInfo, onPaymentSuccess, onLogout, isAdmin = fals
              </p>
            )}
 
-           <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+           <p className="text-sm text-slate-500 dark:text-slate-400 mb-4">
              Após o pagamento, o sistema será atualizado automaticamente em alguns instantes.
            </p>
            
            <button 
              onClick={() => setPixData(null)} 
-             className="text-sm text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 hover:underline"
+             className="text-sm text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 hover:underline"
            >
              ← Voltar
            </button>
@@ -1882,10 +1981,10 @@ function BillingCheckout({ condoInfo, onPaymentSuccess, onLogout, isAdmin = fals
   if (isRedirecting) {
     return (
       <div className="min-h-[80vh] flex items-center justify-center p-4">
-        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-8 max-w-md w-full text-center border border-gray-200 dark:border-gray-700">
+        <div className="bg-white dark:bg-slate-800 rounded-xl shadow-lg p-8 max-w-md w-full text-center border border-slate-200 dark:border-slate-700">
           <div className="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-6" />
-          <h2 className="text-xl font-bold text-gray-800 dark:text-white mb-2">Redirecionando para pagamento...</h2>
-          <p className="text-gray-600 dark:text-gray-400">
+          <h2 className="text-xl font-bold text-slate-800 dark:text-white mb-2">Redirecionando para pagamento...</h2>
+          <p className="text-slate-600 dark:text-slate-400">
             Você será redirecionado para a página segura do Asaas.
           </p>
         </div>
@@ -1898,21 +1997,21 @@ function BillingCheckout({ condoInfo, onPaymentSuccess, onLogout, isAdmin = fals
     const plan = PLANS_CONFIG[selectedPlan];
     return (
       <div className="min-h-[80vh] flex items-center justify-center p-4">
-        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-8 max-w-md w-full text-center border border-gray-200 dark:border-gray-700">
+        <div className="bg-white dark:bg-slate-800 rounded-xl shadow-lg p-8 max-w-md w-full text-center border border-slate-200 dark:border-slate-700">
           <div className="bg-emerald-100 dark:bg-emerald-900/30 p-4 rounded-full w-20 h-20 mx-auto mb-6 flex items-center justify-center">
             <CheckCircle size={40} className="text-emerald-500" />
           </div>
-          <h2 className="text-2xl font-bold text-gray-800 dark:text-white mb-2">Pagamento Confirmado!</h2>
-          <p className="text-gray-600 dark:text-gray-400 mb-4">
+          <h2 className="text-2xl font-bold text-slate-800 dark:text-white mb-2">Pagamento Confirmado!</h2>
+          <p className="text-slate-600 dark:text-slate-400 mb-4">
             Seu plano <span className="font-semibold text-emerald-500">{plan?.name}</span> foi ativado com sucesso.
           </p>
-          <div className="bg-gray-100 dark:bg-gray-700 rounded-lg p-4 mb-6">
-            <p className="text-sm text-gray-500 dark:text-gray-400">Próximo vencimento</p>
-            <p className="text-lg font-semibold text-gray-800 dark:text-white">
+          <div className="bg-slate-100 dark:bg-slate-700 rounded-lg p-4 mb-6">
+            <p className="text-sm text-slate-500 dark:text-slate-400">Próximo vencimento</p>
+            <p className="text-lg font-semibold text-slate-800 dark:text-white">
               {new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toLocaleDateString('pt-BR')}
             </p>
           </div>
-          <div className="animate-pulse text-gray-500 dark:text-gray-400 text-sm">
+          <div className="animate-pulse text-slate-500 dark:text-slate-400 text-sm">
             Redirecionando para o sistema...
           </div>
         </div>
@@ -1933,18 +2032,18 @@ function BillingCheckout({ condoInfo, onPaymentSuccess, onLogout, isAdmin = fals
               <h1 className="text-xl font-bold text-amber-800 dark:text-amber-300 mb-2">
                 {condoInfo?.is_active === false ? 'Conta Suspensa' : 'Período de Teste Expirado'}
               </h1>
-              <p className="text-gray-700 dark:text-gray-300 mb-3">
+              <p className="text-slate-700 dark:text-slate-300 mb-3">
                 {condoInfo?.is_active === false
                   ? 'Sua conta foi suspensa. Escolha um plano para reativar o acesso.'
                   : 'O período de teste gratuito de 15 dias chegou ao fim. Escolha um plano para continuar.'}
               </p>
               <div className="flex flex-wrap gap-4 items-center">
-                <div className="bg-white dark:bg-gray-800 rounded-lg px-4 py-2 border border-gray-200 dark:border-gray-600">
-                  <p className="text-xs text-gray-500 dark:text-gray-400">Condomínio</p>
-                  <p className="font-semibold text-gray-800 dark:text-white">{condoInfo?.name || 'Não identificado'}</p>
+                <div className="bg-white dark:bg-slate-800 rounded-lg px-4 py-2 border border-slate-200 dark:border-slate-600">
+                  <p className="text-xs text-slate-500 dark:text-slate-400">Condomínio</p>
+                  <p className="font-semibold text-slate-800 dark:text-white">{condoInfo?.name || 'Não identificado'}</p>
                 </div>
-                <div className="bg-white dark:bg-gray-800 rounded-lg px-4 py-2 border border-gray-200 dark:border-gray-600">
-                  <p className="text-xs text-gray-500 dark:text-gray-400">Status</p>
+                <div className="bg-white dark:bg-slate-800 rounded-lg px-4 py-2 border border-slate-200 dark:border-slate-600">
+                  <p className="text-xs text-slate-500 dark:text-slate-400">Status</p>
                   <p className={`font-semibold ${daysInfo.expired ? 'text-red-500' : 'text-amber-500'}`}>
                     {daysInfo.text}
                   </p>
@@ -1956,18 +2055,18 @@ function BillingCheckout({ condoInfo, onPaymentSuccess, onLogout, isAdmin = fals
 
         {/* Título */}
         <div className="text-center mb-6">
-          <h2 className="text-2xl font-bold text-gray-800 dark:text-white mb-2">Escolha seu Plano</h2>
-          <p className="text-gray-600 dark:text-gray-400">Selecione o plano ideal e continue gerenciando seu condomínio</p>
+          <h2 className="text-2xl font-bold text-slate-800 dark:text-white mb-2">Escolha seu Plano</h2>
+          <p className="text-slate-600 dark:text-slate-400">Selecione o plano ideal e continue gerenciando seu condomínio</p>
         </div>
 
         {/* Método de Pagamento - SEMPRE VISÍVEL */}
         <div className="mb-8" style={{ display: 'block' }}>
           <div className="text-center mb-4">
-            <h3 className="text-lg font-semibold text-gray-700 dark:text-gray-300 mb-2">Forma de Pagamento</h3>
-            <p className="text-sm text-gray-500 dark:text-gray-400">Escolha como deseja pagar</p>
+            <h3 className="text-lg font-semibold text-slate-700 dark:text-slate-300 mb-2">Forma de Pagamento</h3>
+            <p className="text-sm text-slate-500 dark:text-slate-400">Escolha como deseja pagar</p>
           </div>
           <div className="flex justify-center">
-            <div className="bg-white dark:bg-gray-800 border-2 border-emerald-500 dark:border-emerald-600 rounded-xl p-2 inline-flex gap-2 shadow-lg" style={{ display: 'flex' }}>
+            <div className="bg-white dark:bg-slate-800 border-2 border-emerald-500 dark:border-emerald-600 rounded-xl p-2 inline-flex gap-2 shadow-lg" style={{ display: 'flex' }}>
               <button
                 type="button"
                 onClick={() => {
@@ -1977,7 +2076,7 @@ function BillingCheckout({ condoInfo, onPaymentSuccess, onLogout, isAdmin = fals
                 className={`px-8 py-3 rounded-lg text-base font-bold transition-all min-w-[120px] ${
                   paymentMethod === 'PIX'
                     ? 'bg-emerald-600 text-white shadow-lg scale-105'
-                    : 'bg-transparent text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700'
+                    : 'bg-transparent text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700'
                 }`}
                 style={{ display: 'block' }}
               >
@@ -1992,7 +2091,7 @@ function BillingCheckout({ condoInfo, onPaymentSuccess, onLogout, isAdmin = fals
                 className={`px-8 py-3 rounded-lg text-base font-bold transition-all min-w-[120px] ${
                   paymentMethod === 'CREDIT_CARD'
                     ? 'bg-emerald-600 text-white shadow-lg scale-105'
-                    : 'bg-transparent text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700'
+                    : 'bg-transparent text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700'
                 }`}
                 style={{ display: 'block' }}
               >
@@ -2007,10 +2106,10 @@ function BillingCheckout({ condoInfo, onPaymentSuccess, onLogout, isAdmin = fals
           {Object.entries(PLANS_CONFIG).map(([key, plan]) => (
             <div
               key={key}
-              className={`relative bg-white dark:bg-gray-800 rounded-xl border-2 p-6 transition-all hover:shadow-md ${
+              className={`relative bg-white dark:bg-slate-800 rounded-xl border-2 p-6 transition-all hover:shadow-md ${
                 plan.popular
                   ? 'border-cyan-500 shadow-lg shadow-cyan-500/20 scale-105'
-                  : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600'
+                  : 'border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'
               }`}
             >
               {plan.popular && (
@@ -2021,17 +2120,17 @@ function BillingCheckout({ condoInfo, onPaymentSuccess, onLogout, isAdmin = fals
                 </div>
               )}
               <div className="mb-4 mt-2">
-                <h3 className={`text-lg font-bold ${plan.popular ? 'text-cyan-500' : 'text-gray-800 dark:text-white'}`}>
+                <h3 className={`text-lg font-bold ${plan.popular ? 'text-cyan-500' : 'text-slate-800 dark:text-white'}`}>
                   {plan.name}
                 </h3>
               </div>
               <div className="mb-4">
-                <span className="text-4xl font-extrabold text-gray-800 dark:text-white">{plan.priceFormatted}</span>
-                <span className="text-gray-500 dark:text-gray-400">/mês</span>
+                <span className="text-4xl font-extrabold text-slate-800 dark:text-white">{plan.priceFormatted}</span>
+                <span className="text-slate-500 dark:text-slate-400">/mês</span>
               </div>
               <ul className="space-y-2 mb-6">
                 {plan.features.map((feature, idx) => (
-                  <li key={idx} className="flex items-center text-sm text-gray-600 dark:text-gray-300">
+                  <li key={idx} className="flex items-center text-sm text-slate-600 dark:text-slate-300">
                     <CheckCircle size={16} className={`mr-2 flex-shrink-0 ${plan.popular ? 'text-cyan-500' : 'text-emerald-500'}`} />
                     {feature}
                   </li>
@@ -2042,10 +2141,10 @@ function BillingCheckout({ condoInfo, onPaymentSuccess, onLogout, isAdmin = fals
                 disabled={isProcessing}
                 className={`w-full py-3 rounded-xl font-bold transition-all ${
                   isProcessing
-                    ? 'bg-gray-300 dark:bg-gray-600 cursor-not-allowed'
+                    ? 'bg-slate-300 dark:bg-slate-600 cursor-not-allowed'
                     : plan.popular
                       ? 'bg-cyan-500 hover:bg-cyan-600 text-white'
-                      : 'bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-800 dark:text-white'
+                      : 'bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-800 dark:text-white'
                 }`}
               >
                 {isProcessing && selectedPlan === key ? (
@@ -2090,9 +2189,9 @@ function BillingCheckout({ condoInfo, onPaymentSuccess, onLogout, isAdmin = fals
             </button>
 
             {showTestPanel && (
-              <div className="mt-4 bg-white dark:bg-gray-800 border border-purple-200 dark:border-purple-800 rounded-xl p-6">
-                <h4 className="font-bold text-gray-800 dark:text-white mb-4">Simular Pagamento (Webhook)</h4>
-                <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+              <div className="mt-4 bg-white dark:bg-slate-800 border border-purple-200 dark:border-purple-800 rounded-xl p-6">
+                <h4 className="font-bold text-slate-800 dark:text-white mb-4">Simular Pagamento (Webhook)</h4>
+                <p className="text-sm text-slate-600 dark:text-slate-400 mb-4">
                   Este botão simula a confirmação de pagamento que seria enviada pelo webhook do Asaas após um pagamento bem-sucedido.
                   A conta será desbloqueada instantaneamente.
                 </p>
@@ -2105,11 +2204,11 @@ function BillingCheckout({ condoInfo, onPaymentSuccess, onLogout, isAdmin = fals
                       className={`p-3 rounded-lg border-2 transition-all ${
                         selectedPlan === key
                           ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/30'
-                          : 'border-gray-200 dark:border-gray-700 hover:border-purple-300'
+                          : 'border-slate-200 dark:border-slate-700 hover:border-purple-300'
                       }`}
                     >
-                      <p className="font-semibold text-gray-800 dark:text-white">{plan.name}</p>
-                      <p className="text-sm text-gray-500 dark:text-gray-400">{plan.priceFormatted}</p>
+                      <p className="font-semibold text-slate-800 dark:text-white">{plan.name}</p>
+                      <p className="text-sm text-slate-500 dark:text-slate-400">{plan.priceFormatted}</p>
                     </button>
                   ))}
                 </div>
@@ -2119,7 +2218,7 @@ function BillingCheckout({ condoInfo, onPaymentSuccess, onLogout, isAdmin = fals
                   disabled={isProcessing}
                   className={`w-full py-3 rounded-xl font-bold transition-all flex items-center justify-center gap-2 ${
                     isProcessing
-                      ? 'bg-gray-400 cursor-not-allowed text-white'
+                      ? 'bg-slate-400 cursor-not-allowed text-white'
                       : 'bg-purple-600 hover:bg-purple-700 text-white'
                   }`}
                 >
@@ -2136,7 +2235,7 @@ function BillingCheckout({ condoInfo, onPaymentSuccess, onLogout, isAdmin = fals
                   )}
                 </button>
 
-                <p className="text-xs text-gray-500 dark:text-gray-400 mt-3 text-center">
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-3 text-center">
                   Isso chama simulateWebhookSuccess() e ativa a conta imediatamente
                 </p>
               </div>
@@ -2148,7 +2247,7 @@ function BillingCheckout({ condoInfo, onPaymentSuccess, onLogout, isAdmin = fals
         <div className="text-center">
           <button
             onClick={onLogout}
-            className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 text-sm underline"
+            className="text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 text-sm underline"
           >
             Sair e usar outra conta
           </button>
@@ -2158,12 +2257,12 @@ function BillingCheckout({ condoInfo, onPaymentSuccess, onLogout, isAdmin = fals
       {/* Modal de Pagamento (APENAS MODO DEMO - Desabilitado em produção) */}
       {showPaymentModal && !IS_PRODUCTION && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6 max-w-md w-full border border-gray-200 dark:border-gray-700">
+          <div className="bg-white dark:bg-slate-800 rounded-xl shadow-lg p-6 max-w-md w-full border border-slate-200 dark:border-slate-700">
             <div className="flex justify-between items-center mb-6">
-              <h3 className="text-xl font-bold text-gray-800 dark:text-white">Finalizar Pagamento</h3>
+              <h3 className="text-xl font-bold text-slate-800 dark:text-white">Finalizar Pagamento</h3>
               <button
                 onClick={() => setShowPaymentModal(false)}
-                className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
+                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
               >
                 <X size={24} />
               </button>
@@ -2178,7 +2277,7 @@ function BillingCheckout({ condoInfo, onPaymentSuccess, onLogout, isAdmin = fals
 
             {/* Seleção de Método de Pagamento no Modal */}
             <div className="mb-6">
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-3">
                 Escolha a forma de pagamento:
               </label>
               <div className="flex gap-2 mb-4">
@@ -2188,7 +2287,7 @@ function BillingCheckout({ condoInfo, onPaymentSuccess, onLogout, isAdmin = fals
                   className={`flex-1 px-4 py-3 rounded-lg text-sm font-bold transition-all ${
                     paymentMethod === 'PIX'
                       ? 'bg-emerald-600 text-white shadow-lg'
-                      : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+                      : 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600'
                   }`}
                 >
                   💚 Pix
@@ -2199,7 +2298,7 @@ function BillingCheckout({ condoInfo, onPaymentSuccess, onLogout, isAdmin = fals
                   className={`flex-1 px-4 py-3 rounded-lg text-sm font-bold transition-all ${
                     paymentMethod === 'CREDIT_CARD'
                       ? 'bg-emerald-600 text-white shadow-lg'
-                      : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+                      : 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600'
                   }`}
                 >
                   💳 Cartão
@@ -2208,9 +2307,9 @@ function BillingCheckout({ condoInfo, onPaymentSuccess, onLogout, isAdmin = fals
             </div>
 
             <div className="text-center mb-6">
-              <p className="text-gray-600 dark:text-gray-400">Plano selecionado</p>
+              <p className="text-slate-600 dark:text-slate-400">Plano selecionado</p>
               <p className="text-2xl font-bold text-cyan-500">{PLANS_CONFIG[selectedPlan]?.name}</p>
-              <p className="text-3xl font-extrabold text-gray-800 dark:text-white mt-2">
+              <p className="text-3xl font-extrabold text-slate-800 dark:text-white mt-2">
                 {PLANS_CONFIG[selectedPlan]?.priceFormatted}/mês
               </p>
             </div>
@@ -2219,37 +2318,37 @@ function BillingCheckout({ condoInfo, onPaymentSuccess, onLogout, isAdmin = fals
             {paymentMethod === 'CREDIT_CARD' && (
               <div className="space-y-4 mb-6">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
                     Número do Cartão
                   </label>
                   <input
                     type="text"
                     placeholder="4242 4242 4242 4242"
                     maxLength={19}
-                    className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-xl text-gray-800 dark:text-white placeholder-gray-400 focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20 outline-none"
+                    className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-xl text-slate-800 dark:text-white placeholder-slate-400 focus:border-blue-600 focus:ring-2 focus:ring-blue-600/20 outline-none"
                   />
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
                       Validade
                     </label>
                     <input
                       type="text"
                       placeholder="12/25"
                       maxLength={5}
-                      className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-xl text-gray-800 dark:text-white placeholder-gray-400 focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20 outline-none"
+                      className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-xl text-slate-800 dark:text-white placeholder-slate-400 focus:border-blue-600 focus:ring-2 focus:ring-blue-600/20 outline-none"
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
                       CVV
                     </label>
                     <input
                       type="text"
                       placeholder="123"
                       maxLength={4}
-                      className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-xl text-gray-800 dark:text-white placeholder-gray-400 focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20 outline-none"
+                      className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-xl text-slate-800 dark:text-white placeholder-slate-400 focus:border-blue-600 focus:ring-2 focus:ring-blue-600/20 outline-none"
                     />
                   </div>
                 </div>
@@ -2276,7 +2375,7 @@ function BillingCheckout({ condoInfo, onPaymentSuccess, onLogout, isAdmin = fals
               disabled={isProcessing}
               className={`w-full py-4 rounded-xl font-bold text-white transition-all flex items-center justify-center gap-2 ${
                 isProcessing
-                  ? 'bg-gray-400 cursor-not-allowed'
+                  ? 'bg-slate-400 cursor-not-allowed'
                   : 'bg-emerald-500 hover:bg-emerald-600'
               }`}
             >
@@ -2293,7 +2392,7 @@ function BillingCheckout({ condoInfo, onPaymentSuccess, onLogout, isAdmin = fals
               )}
             </button>
 
-            <p className="text-center text-gray-500 dark:text-gray-400 text-xs mt-4 flex items-center justify-center gap-1">
+            <p className="text-center text-slate-500 dark:text-slate-400 text-xs mt-4 flex items-center justify-center gap-1">
               <Shield size={14} />
               Pagamento 100% seguro e criptografado
             </p>
@@ -2305,8 +2404,7 @@ function BillingCheckout({ condoInfo, onPaymentSuccess, onLogout, isAdmin = fals
 }
 
 function ConciergeLogin({ onSuccess, onBack }) {
-  const [condoIdInput, setCondoIdInput] = useState('');
-  const [username, setUsername] = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -2323,11 +2421,10 @@ function ConciergeLogin({ onSuccess, onBack }) {
         // Verifica se os dados nao sao muito antigos (5 minutos)
         const isRecent = data.timestamp && (Date.now() - data.timestamp) < 5 * 60 * 1000;
 
-        if (isRecent && data.condoId && data.username) {
+        if (isRecent && (data.email || data.username)) {
           console.log('[Login] Pre-preenchendo dados do cadastro:', data);
 
-          setCondoIdInput(data.condoId);
-          setUsername(data.username);
+          setEmail(data.email || data.username || '');
 
           // Limpa os dados temporarios
           localStorage.removeItem('temp_login_info');
@@ -2347,12 +2444,8 @@ function ConciergeLogin({ onSuccess, onBack }) {
     setError('');
 
     // Validação dos campos
-    if (!condoIdInput.trim()) {
-      setError('Informe o ID do Condomínio.');
-      return;
-    }
-    if (!username.trim()) {
-      setError('Informe o usuário.');
+    if (!email.trim()) {
+      setError('Informe o e-mail.');
       return;
     }
     if (!password.trim()) {
@@ -2362,13 +2455,6 @@ function ConciergeLogin({ onSuccess, onBack }) {
 
     setIsLoading(true);
     try {
-      // ========================================================================
-      // 🔐 AUTENTICAÇÃO SEGURA
-      // ========================================================================
-      // Em PRODUÇÃO: usa Edge Function (senha validada no backend)
-      // Em DEMO: usa mock local (para desenvolvimento/demonstração)
-      // ========================================================================
-
       // =====================================================================
       // ESTRATÉGIA DE AUTENTICAÇÃO:
       // 1. Tenta Edge Function se IS_PRODUCTION = true
@@ -2378,18 +2464,10 @@ function ConciergeLogin({ onSuccess, onBack }) {
       let useLocalAuth = !IS_PRODUCTION;
 
       if (IS_PRODUCTION) {
-        // =====================================================================
-        // MODO PRODUÇÃO: Tenta Autenticação via Edge Function
-        // =====================================================================
         try {
-          const authResult = await authenticateViaEdgeFunction(
-            username,
-            password,
-            condoIdInput
-          );
+          const authResult = await authenticateViaEdgeFunction(email, password);
 
           if (authResult.success) {
-            // Login bem-sucedido via Edge Function
             onSuccess(
               {
                 id: authResult.user.id,
@@ -2399,17 +2477,15 @@ function ConciergeLogin({ onSuccess, onBack }) {
                 condo_id: authResult.user.condo_id
               },
               authResult.condo,
-              authResult.condoStatus // Passa status para o App gerenciar BillingCheckout
+              authResult.condoStatus
             );
-            return; // Sucesso, não precisa continuar
+            return;
           }
         } catch (authError) {
-          // Se for erro de rede/CORS/404 (função não deployada), usa fallback local
           if (authError.isNetworkError || authError.status === 404) {
             console.warn('[Login] Edge Function indisponível, usando autenticação local (localStorage)');
             useLocalAuth = true;
           } else {
-            // Outros erros (credenciais inválidas, etc) - mostra ao usuário
             console.error('[Login] Erro Edge Function:', authError);
             setError(authError.message || 'Erro ao autenticar.');
             setIsLoading(false);
@@ -2422,43 +2498,42 @@ function ConciergeLogin({ onSuccess, onBack }) {
         // =====================================================================
         // MODO DEMO: Autenticação via Mock Local (Desenvolvimento)
         // =====================================================================
-        // 1. Verifica se o condomínio existe
+        // 1. Busca staff por email (sem filtrar condo_id)
+        const { data: staffData, error: staffErr } = await supabase
+          .from('staff')
+          .select('id, name, role, username, password, condo_id')
+          .eq('username', email.trim().toLowerCase())
+          .single();
+
+        if (staffErr || !staffData) {
+          setError('E-mail não encontrado.');
+          setIsLoading(false);
+          return;
+        }
+
+        // 2. Valida senha localmente (APENAS modo demo)
+        if (String(staffData.password) !== String(password)) {
+          setError('Senha incorreta.');
+          setIsLoading(false);
+          return;
+        }
+
+        // 3. Busca condomínio pelo condo_id do staff
         const { data: condoData, error: condoErr } = await supabase
           .from('condos')
           .select('*')
-          .eq('id', condoIdInput.trim())
+          .eq('id', staffData.condo_id)
           .single();
 
         if (condoErr || !condoData) {
-          setError('Condomínio não encontrado. Verifique o ID.');
-          setIsLoading(false);
-          return;
-        }
-
-        // 2. Busca usuário pelo username E condo_id (Multi-Tenant)
-        const { data, error: err } = await supabase
-          .from('staff')
-          .select('id, name, role, username, password, condo_id')
-          .eq('username', username.trim())
-          .eq('condo_id', condoIdInput.trim())
-          .single();
-
-        if (err || !data) {
-          setError('Usuário não encontrado neste condomínio.');
-          setIsLoading(false);
-          return;
-        }
-
-        // 3. Valida senha localmente (APENAS modo demo - em produção usa Edge Function)
-        if (String(data.password) !== String(password)) {
-          setError('Senha incorreta.');
+          setError('Condomínio não encontrado.');
           setIsLoading(false);
           return;
         }
 
         // 4. Sucesso: passa user + condo info
         onSuccess(
-          { id: data.id, name: data.name, role: data.role, username: data.username, condo_id: data.condo_id },
+          { id: staffData.id, name: staffData.name, role: staffData.role, username: staffData.username, condo_id: staffData.condo_id },
           condoData
         );
       }
@@ -2478,9 +2553,9 @@ function ConciergeLogin({ onSuccess, onBack }) {
             <ArrowLeft size={16} /> Voltar
           </button>
         )}
-        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-lg overflow-hidden">
-          {/* Header com gradiente */}
-          <div className="bg-gradient-to-r from-slate-800 to-slate-700 px-6 py-8 text-center">
+        <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-lg overflow-hidden">
+          {/* Header */}
+          <div className="border-b border-slate-100 dark:border-slate-700 px-6 py-8 text-center">
             <img
               src={LOGO_PATH}
               alt="CondoTrack Logo"
@@ -2489,44 +2564,30 @@ function ConciergeLogin({ onSuccess, onBack }) {
                 e.target.style.display = 'none';
               }}
             />
-            <h2 className="text-2xl font-bold text-white">Acesso da Portaria</h2>
-            <p className="text-sm text-blue-200 mt-1">Entre com suas credenciais</p>
+            <h2 className="text-2xl font-bold text-slate-900 dark:text-white">Acesso da Portaria</h2>
+            <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Entre com suas credenciais</p>
           </div>
 
           {/* Formulário */}
           <div className="p-6 sm:p-8">
             <form onSubmit={onSubmit} className="space-y-5">
               <div>
-                <label className="block text-sm font-semibold text-slate-800 dark:text-gray-300 mb-2">
-                  <Building2 size={14} className="inline mr-1.5 text-blue-500" />
-                  ID do Condomínio
+                <label className="block text-sm font-semibold text-slate-800 dark:text-slate-300 mb-2">
+                  <Mail size={14} className="inline mr-1.5 text-blue-500" />
+                  E-mail
                 </label>
                 <input
-                  type="text"
-                  value={condoIdInput}
-                  onChange={(e) => setCondoIdInput(e.target.value)}
-                  className="w-full px-4 py-3 border-2 border-gray-200 dark:border-gray-600 rounded-xl focus:border-primary focus:ring-4 focus:ring-primary/10 outline-none bg-slate-50 dark:bg-gray-700 dark:text-white transition-all placeholder:text-slate-800-subtle"
-                  placeholder="Ex: demo-condo-001"
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="w-full px-4 py-3 border-2 border-slate-200 dark:border-slate-600 rounded-xl focus:border-primary focus:ring-4 focus:ring-primary/10 outline-none bg-slate-50 dark:bg-slate-700 dark:text-white transition-all placeholder:text-slate-800-subtle"
+                  placeholder="Digite seu e-mail"
                   disabled={isLoading}
-                />
-                <p className="text-xs text-slate-800-subtle mt-1.5">Fornecido pelo administrador do sistema</p>
-              </div>
-              <div>
-                <label className="block text-sm font-semibold text-slate-800 dark:text-gray-300 mb-2">
-                  <User size={14} className="inline mr-1.5 text-blue-500" />
-                  Usuário
-                </label>
-                <input
-                  type="text"
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
-                  className="w-full px-4 py-3 border-2 border-gray-200 dark:border-gray-600 rounded-xl focus:border-primary focus:ring-4 focus:ring-primary/10 outline-none bg-slate-50 dark:bg-gray-700 dark:text-white transition-all placeholder:text-slate-800-subtle"
-                  placeholder="Digite seu usuário"
-                  disabled={isLoading}
+                  autoComplete="email"
                 />
               </div>
               <div>
-                <label className="block text-sm font-semibold text-slate-800 dark:text-gray-300 mb-2">
+                <label className="block text-sm font-semibold text-slate-800 dark:text-slate-300 mb-2">
                   <Shield size={14} className="inline mr-1.5 text-blue-500" />
                   Senha
                 </label>
@@ -2534,7 +2595,7 @@ function ConciergeLogin({ onSuccess, onBack }) {
                   type="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="w-full px-4 py-3 border-2 border-gray-200 dark:border-gray-600 rounded-xl focus:border-primary focus:ring-4 focus:ring-primary/10 outline-none bg-slate-50 dark:bg-gray-700 dark:text-white transition-all placeholder:text-slate-800-subtle"
+                  className="w-full px-4 py-3 border-2 border-slate-200 dark:border-slate-600 rounded-xl focus:border-primary focus:ring-4 focus:ring-primary/10 outline-none bg-slate-50 dark:bg-slate-700 dark:text-white transition-all placeholder:text-slate-800-subtle"
                   placeholder="Digite sua senha"
                   disabled={isLoading}
                 />
@@ -2548,7 +2609,7 @@ function ConciergeLogin({ onSuccess, onBack }) {
               <button
                 type="submit"
                 disabled={isLoading}
-                className="w-full bg-blue-500 hover:bg-blue-600 disabled:bg-gray-400 text-white font-semibold py-3.5 rounded-lg shadow-sm hover:shadow-md transition-all flex items-center justify-center gap-2"
+                className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-slate-400 text-white font-semibold py-3.5 rounded-lg shadow-sm hover:shadow-md transition-all active:scale-[0.98] flex items-center justify-center gap-2"
               >
                 {isLoading ? (
                   <>
@@ -2565,20 +2626,15 @@ function ConciergeLogin({ onSuccess, onBack }) {
             </form>
           </div>
 
-          {/* Footer com info de demo */}
-          <div className="px-6 sm:px-8 py-4 bg-slate-50 dark:bg-gray-700/50 border-t border-gray-200 dark:border-gray-700 text-center">
-            <p className="text-xs text-slate-800-subtle">
-              <span className="font-medium">Demo:</span> ID <code className="bg-white dark:bg-gray-700 px-1.5 py-0.5 rounded text-blue-500 font-mono">demo-condo-001</code> | Usuário <code className="bg-white dark:bg-gray-700 px-1.5 py-0.5 rounded text-blue-500 font-mono">admin</code> | Senha <code className="bg-white dark:bg-gray-700 px-1.5 py-0.5 rounded text-blue-500 font-mono">123</code>
-            </p>
-          </div>
         </div>
       </div>
     </div>
   );
 }
 
-function ConciergeView({ onAdd, packages, onDelete, onCollect, residents, residentsIndex, onAddResident, onDeleteResident, onUpdateResident, currentUser, staff, condoInfo, onAddStaff, onDeleteStaff, condoSettings, onUpdateSettings }) {
-  const [tab, setTab] = useState('home'); // 'home' | 'packages' | 'residents' | 'team' | 'settings' | 'reports' | 'billing'
+function ConciergeView({ onAdd, packages, onDelete, onCollect, residents, residentsIndex, onAddResident, onDeleteResident, onUpdateResident, currentUser, staff, condoInfo, onAddStaff, onDeleteStaff, condoSettings, onUpdateSettings, activeTab, setActiveTab }) {
+  const tab = activeTab;
+  const setTab = setActiveTab;
   const [form, setForm] = useState({ unit: '', recipient: '', phone: '', type: 'Caixa', description: '' });
   const [filterType, setFilterType] = useState('Todos');
   const [deleteTarget, setDeleteTarget] = useState(null);
@@ -2877,7 +2933,7 @@ function ConciergeView({ onAdd, packages, onDelete, onCollect, residents, reside
       {/* Modal de Exclusão com confirmação de senha */}
       {deleteTarget && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm px-4">
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6 max-w-sm w-full animate-scale-in border border-gray-200 dark:border-gray-700">
+          <div className="bg-white dark:bg-slate-800 rounded-xl shadow-lg p-6 max-w-sm w-full animate-scale-in border border-slate-200 dark:border-slate-700">
             <div className="flex items-center gap-3 mb-5">
               <div className="p-3 bg-red-100 dark:bg-red-800 rounded-lg">
                 <AlertTriangle size={24} className="text-red-600 dark:text-red-200" />
@@ -2887,12 +2943,12 @@ function ConciergeView({ onAdd, packages, onDelete, onCollect, residents, reside
                 <p className="text-xs text-slate-500">Esta ação é irreversível</p>
               </div>
             </div>
-            <p className="text-slate-600 dark:text-gray-300 mb-5 text-sm">Deseja realmente apagar este registro? Todos os dados serão perdidos permanentemente.</p>
+            <p className="text-slate-600 dark:text-slate-300 mb-5 text-sm">Deseja realmente apagar este registro? Todos os dados serão perdidos permanentemente.</p>
             <div className="mb-5">
-              <label className="block text-sm font-semibold text-slate-700 dark:text-gray-300 mb-2">Digite sua senha para confirmar</label>
+              <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">Digite sua senha para confirmar</label>
               <input
                 type="password"
-                className="w-full px-4 py-3 border-2 border-gray-200 dark:border-gray-600 rounded-lg bg-slate-50 dark:bg-gray-700 dark:text-white focus:border-red-500 focus:ring-4 focus:ring-red-500/10 outline-none transition-all placeholder:text-slate-400"
+                className="w-full px-4 py-3 border-2 border-slate-200 dark:border-slate-600 rounded-lg bg-slate-50 dark:bg-slate-700 dark:text-white focus:border-red-500 focus:ring-4 focus:ring-red-500/10 outline-none transition-all placeholder:text-slate-400"
                 value={deleteConfirmPassword}
                 onChange={(e) => { setDeleteConfirmPassword(e.target.value); setDeletePasswordError(''); }}
                 placeholder="Digite sua senha"
@@ -2900,7 +2956,7 @@ function ConciergeView({ onAdd, packages, onDelete, onCollect, residents, reside
               {deletePasswordError && <p className="text-red-500 text-sm mt-2 flex items-center gap-1"><AlertTriangle size={14} />{deletePasswordError}</p>}
             </div>
             <div className="flex gap-3">
-              <button onClick={() => { setDeleteTarget(null); setDeleteConfirmPassword(''); setDeletePasswordError(''); }} className="flex-1 px-4 py-3 rounded-lg text-slate-600 hover:bg-slate-100 dark:hover:bg-gray-700 font-medium transition-colors">Cancelar</button>
+              <button onClick={() => { setDeleteTarget(null); setDeleteConfirmPassword(''); setDeletePasswordError(''); }} className="flex-1 px-4 py-3 rounded-lg text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-700 font-medium transition-colors">Cancelar</button>
               <button onClick={confirmDelete} disabled={!deleteConfirmPassword} className="flex-1 px-4 py-3 rounded-lg bg-red-500 text-white hover:bg-red-600 font-semibold shadow-sm disabled:opacity-50 transition-all">Sim, excluir</button>
             </div>
           </div>
@@ -2910,7 +2966,7 @@ function ConciergeView({ onAdd, packages, onDelete, onCollect, residents, reside
       {/* Modal de Confirmação de Retirada */}
       {collectTarget && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm px-4">
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6 w-full max-w-sm animate-scale-in border border-gray-200 dark:border-gray-700">
+          <div className="bg-white dark:bg-slate-800 rounded-xl shadow-lg p-6 w-full max-w-sm animate-scale-in border border-slate-200 dark:border-slate-700">
             <div className="flex items-center justify-between mb-5">
               <div className="flex items-center gap-3">
                 <div className="p-2.5 bg-emerald-100 dark:bg-emerald-800 rounded-lg">
@@ -2931,21 +2987,21 @@ function ConciergeView({ onAdd, packages, onDelete, onCollect, residents, reside
             </div>
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-semibold text-slate-700 dark:text-gray-300 mb-2">Nome de quem retira</label>
+                <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">Nome de quem retira</label>
                 <input
                   autoFocus
                   type="text"
-                  className="w-full px-4 py-3 border-2 border-gray-200 dark:border-gray-600 rounded-lg bg-slate-50 dark:bg-gray-700 dark:text-white focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 outline-none transition-all placeholder:text-slate-400"
+                  className="w-full px-4 py-3 border-2 border-slate-200 dark:border-slate-600 rounded-lg bg-slate-50 dark:bg-slate-700 dark:text-white focus:border-blue-600 focus:ring-2 focus:ring-blue-600/20 outline-none transition-all placeholder:text-slate-400"
                   value={collectName}
                   onChange={e => setCollectName(e.target.value)}
                   placeholder="Nome completo"
                 />
               </div>
               <div>
-                <label className="block text-sm font-semibold text-slate-700 dark:text-gray-300 mb-2">Documento (RG/CPF)</label>
+                <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">Documento (RG/CPF)</label>
                 <input
                   type="text"
-                  className="w-full px-4 py-3 border-2 border-gray-200 dark:border-gray-600 rounded-lg bg-slate-50 dark:bg-gray-700 dark:text-white focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 outline-none transition-all placeholder:text-slate-400"
+                  className="w-full px-4 py-3 border-2 border-slate-200 dark:border-slate-600 rounded-lg bg-slate-50 dark:bg-slate-700 dark:text-white focus:border-blue-600 focus:ring-2 focus:ring-blue-600/20 outline-none transition-all placeholder:text-slate-400"
                   value={collectDoc}
                   onChange={e => setCollectDoc(e.target.value)}
                   placeholder="Número do documento"
@@ -2953,7 +3009,7 @@ function ConciergeView({ onAdd, packages, onDelete, onCollect, residents, reside
               </div>
             </div>
             <div className="flex gap-3 mt-5">
-              <button onClick={() => { setCollectTarget(null); setCollectName(''); setCollectDoc(''); }} className="flex-1 px-4 py-3 rounded-lg text-slate-600 hover:bg-slate-100 dark:hover:bg-gray-700 font-medium transition-colors">Cancelar</button>
+              <button onClick={() => { setCollectTarget(null); setCollectName(''); setCollectDoc(''); }} className="flex-1 px-4 py-3 rounded-lg text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-700 font-medium transition-colors">Cancelar</button>
               <button
                 onClick={() => { if (collectName && collectDoc) { onCollect(collectTarget, collectName, collectDoc); setCollectTarget(null); setCollectName(''); setCollectDoc(''); } }}
                 disabled={!collectName || !collectDoc}
@@ -2970,7 +3026,7 @@ function ConciergeView({ onAdd, packages, onDelete, onCollect, residents, reside
       {/* Modal de Lembretes - Encomendas pendentes há mais de 24h */}
       {showRemindersModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm px-4">
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6 w-full max-w-md max-h-[85vh] overflow-hidden flex flex-col animate-scale-in border border-gray-200 dark:border-gray-700">
+          <div className="bg-white dark:bg-slate-800 rounded-xl shadow-lg p-6 w-full max-w-md max-h-[85vh] overflow-hidden flex flex-col animate-scale-in border border-slate-200 dark:border-slate-700">
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-3">
                 <div className="p-2.5 bg-amber-100 dark:bg-amber-800 rounded-lg">
@@ -2981,7 +3037,7 @@ function ConciergeView({ onAdd, packages, onDelete, onCollect, residents, reside
                   <p className="text-xs text-slate-500">Encomendas pendentes há mais de 24h</p>
                 </div>
               </div>
-              <button onClick={() => setShowRemindersModal(false)} className="p-2 text-slate-500 hover:bg-slate-100 dark:hover:bg-gray-700 rounded-lg transition-colors">
+              <button onClick={() => setShowRemindersModal(false)} className="p-2 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors">
                 <X size={20} />
               </button>
             </div>
@@ -2992,7 +3048,7 @@ function ConciergeView({ onAdd, packages, onDelete, onCollect, residents, reside
                 const waUrl = phone ? `https://wa.me/55${phone}?text=${text}` : null;
                 const hoursAgo = pkg.created_at ? Math.round((Date.now() - new Date(pkg.created_at).getTime()) / 3600000) : 0;
                 return (
-                  <div key={pkg.id} className="flex items-center justify-between gap-3 p-3 bg-slate-50 dark:bg-gray-700 rounded-lg">
+                  <div key={pkg.id} className="flex items-center justify-between gap-3 p-3 bg-slate-50 dark:bg-slate-700 rounded-lg">
                     <div className="min-w-0 flex-1">
                       <p className="font-medium text-slate-800 dark:text-white truncate">{pkg.recipient}</p>
                       <p className="text-sm text-slate-500 dark:text-slate-400">{pkg.unit} • {pkg.type} • há {hoursAgo}h</p>
@@ -3008,174 +3064,91 @@ function ConciergeView({ onAdd, packages, onDelete, onCollect, residents, reside
                 );
               })}
             </div>
-            <button onClick={() => setShowRemindersModal(false)} className="w-full py-3 rounded-xl bg-slate-200 dark:bg-gray-700 text-slate-700 dark:text-slate-300 font-medium hover:bg-slate-300 dark:hover:bg-gray-600 transition-colors">
+            <button onClick={() => setShowRemindersModal(false)} className="w-full py-3 rounded-xl bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 font-medium hover:bg-slate-300 dark:hover:bg-slate-600 transition-colors">
               Fechar
             </button>
           </div>
         </div>
       )}
 
-      {/* Navigation Tabs - Design profissional monocromático */}
-      <nav className="bg-slate-100 dark:bg-slate-800 rounded-xl p-1 mb-6">
-        <div className="flex gap-1 overflow-x-auto scrollbar-hide">
-          <button
-            onClick={() => setTab('home')}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium whitespace-nowrap transition-all ${tab === 'home' ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-sm' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'}`}
-          >
-            <Package size={16} className={tab === 'home' ? 'text-blue-600 dark:text-blue-400' : 'text-slate-400'} />
-            <span>Início</span>
-          </button>
-          <button
-            onClick={() => setTab('packages')}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium whitespace-nowrap transition-all ${tab === 'packages' ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-sm' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'}`}
-          >
-            <Box size={16} className={tab === 'packages' ? 'text-blue-600 dark:text-blue-400' : 'text-slate-400'} />
-            <span>Encomendas</span>
-          </button>
-          <button
-            onClick={() => setTab('residents')}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium whitespace-nowrap transition-all ${tab === 'residents' ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-sm' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'}`}
-          >
-            <Users size={16} className={tab === 'residents' ? 'text-blue-600 dark:text-blue-400' : 'text-slate-400'} />
-            <span>Moradores</span>
-          </button>
-          <button
-            onClick={() => setTab('reports')}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium whitespace-nowrap transition-all ${tab === 'reports' ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-sm' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'}`}
-          >
-            <FileText size={16} className={tab === 'reports' ? 'text-blue-600 dark:text-blue-400' : 'text-slate-400'} />
-            <span>Histórico</span>
-          </button>
-          {currentUser?.role === 'admin' && (
-            <button
-              onClick={() => setTab('team')}
-              className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium whitespace-nowrap transition-all ${tab === 'team' ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-sm' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'}`}
-            >
-              <Briefcase size={16} className={tab === 'team' ? 'text-blue-600 dark:text-blue-400' : 'text-slate-400'} />
-              <span>Equipe</span>
-            </button>
-          )}
-          {currentUser?.role === 'admin' && (
-            <button
-              onClick={() => setTab('settings')}
-              className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium whitespace-nowrap transition-all ${tab === 'settings' ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-sm' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'}`}
-            >
-              <Settings size={16} className={tab === 'settings' ? 'text-blue-600 dark:text-blue-400' : 'text-slate-400'} />
-              <span>Config</span>
-            </button>
-          )}
-          {currentUser?.role === 'admin' && (
-            <button
-              onClick={() => setTab('billing')}
-              className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium whitespace-nowrap transition-all ${tab === 'billing' ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-sm' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'}`}
-            >
-              <CreditCard size={16} className={tab === 'billing' ? 'text-blue-600 dark:text-blue-400' : 'text-slate-400'} />
-              <span>Plano</span>
-            </button>
-          )}
-        </div>
-      </nav>
+      {/* Navigation is now handled by the sidebar/bottom nav in the parent layout */}
 
-      {/* Nome do Condomínio - Card azul */}
-      <div className="bg-blue-500 dark:bg-blue-600 rounded-xl shadow-sm py-3 px-4 mb-6">
-        <div className="flex items-center justify-center gap-2">
-          <Building2 className="text-white flex-shrink-0" size={18} />
-          <span className="text-base sm:text-lg font-semibold text-white truncate">{condoSettings?.condo_name || 'Condomínio'}</span>
-        </div>
-      </div>
-
-      {/* ABA INÍCIO - Dashboard com widgets de estatísticas */}
+      {/* ABA INÍCIO - Dashboard */}
       {tab === 'home' && (
         <div className="space-y-6 animate-fade-in">
-          {/* Widgets de Estatísticas */}
+          {/* Widgets de Estatísticas - Cards brancos com ícones coloridos suaves */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            {/* Widget - Pendentes */}
-            <div className="bg-gradient-to-br from-amber-50 to-orange-50 dark:from-amber-900/30 dark:to-orange-900/20 rounded-xl shadow-sm border border-amber-200 dark:border-amber-800/50 p-5 hover:shadow-md transition-shadow">
+            <div className="bg-white dark:bg-slate-800 rounded-xl shadow-card border border-slate-200 dark:border-slate-700 p-6 hover:shadow-card-hover hover:border-slate-300 dark:hover:border-slate-600 transition-all duration-150">
               <div className="flex items-start justify-between">
                 <div>
-                  <p className="text-amber-700 dark:text-amber-300 text-sm font-medium">Pendentes</p>
-                  <p className="text-3xl font-bold text-amber-600 dark:text-amber-400 mt-1">{pendingPackages.length}</p>
+                  <p className="text-sm text-slate-500 dark:text-slate-400 font-medium">Pendentes</p>
+                  <p className="text-3xl font-bold text-slate-900 dark:text-white mt-1">{pendingPackages.length}</p>
                 </div>
-                <div className="p-3 bg-amber-500 dark:bg-amber-600 rounded-xl shadow-sm">
-                  <Clock size={22} className="text-white" />
+                <div className="p-3 bg-amber-50 dark:bg-amber-900/20 rounded-xl">
+                  <Clock size={22} className="text-amber-500 dark:text-amber-400" />
                 </div>
               </div>
-              <div className="flex items-center gap-1 mt-3 text-xs text-amber-600 dark:text-amber-400 font-medium">
-                <Package size={12} />
-                <span>Aguardando retirada</span>
-              </div>
+              <p className="text-xs text-slate-400 dark:text-slate-500 mt-3">Aguardando retirada</p>
             </div>
 
-            {/* Widget - Entregues Hoje */}
-            <div className="bg-gradient-to-br from-emerald-50 to-green-50 dark:from-emerald-900/30 dark:to-green-900/20 rounded-xl shadow-sm border border-emerald-200 dark:border-emerald-800/50 p-5 hover:shadow-md transition-shadow">
+            <div className="bg-white dark:bg-slate-800 rounded-xl shadow-card border border-slate-200 dark:border-slate-700 p-6 hover:shadow-card-hover hover:border-slate-300 dark:hover:border-slate-600 transition-all duration-150">
               <div className="flex items-start justify-between">
                 <div>
-                  <p className="text-emerald-700 dark:text-emerald-300 text-sm font-medium">Entregues Hoje</p>
-                  <p className="text-3xl font-bold text-emerald-600 dark:text-emerald-400 mt-1">{todayDeliveries.length}</p>
+                  <p className="text-sm text-slate-500 dark:text-slate-400 font-medium">Entregues Hoje</p>
+                  <p className="text-3xl font-bold text-slate-900 dark:text-white mt-1">{todayDeliveries.length}</p>
                 </div>
-                <div className="p-3 bg-emerald-500 dark:bg-emerald-600 rounded-xl shadow-sm">
-                  <CheckCircle size={22} className="text-white" />
+                <div className="p-3 bg-emerald-50 dark:bg-emerald-900/20 rounded-xl">
+                  <CheckCircle size={22} className="text-emerald-500 dark:text-emerald-400" />
                 </div>
               </div>
-              <div className="flex items-center gap-1 mt-3 text-xs text-emerald-600 dark:text-emerald-400 font-medium">
-                <ArrowUpRight size={12} />
-                <span>Retiradas concluídas</span>
-              </div>
+              <p className="text-xs text-slate-400 dark:text-slate-500 mt-3">Retiradas concluídas</p>
             </div>
 
-            {/* Widget - Moradores */}
-            <div className="bg-gradient-to-br from-blue-50 to-sky-50 dark:from-blue-900/30 dark:to-sky-900/20 rounded-xl shadow-sm border border-blue-200 dark:border-blue-800/50 p-5 hover:shadow-md transition-shadow">
+            <div className="bg-white dark:bg-slate-800 rounded-xl shadow-card border border-slate-200 dark:border-slate-700 p-6 hover:shadow-card-hover hover:border-slate-300 dark:hover:border-slate-600 transition-all duration-150">
               <div className="flex items-start justify-between">
                 <div>
-                  <p className="text-blue-700 dark:text-blue-300 text-sm font-medium">Moradores</p>
-                  <p className="text-3xl font-bold text-blue-600 dark:text-blue-400 mt-1">{residents?.length || 0}</p>
+                  <p className="text-sm text-slate-500 dark:text-slate-400 font-medium">Moradores</p>
+                  <p className="text-3xl font-bold text-slate-900 dark:text-white mt-1">{residents?.length || 0}</p>
                 </div>
-                <div className="p-3 bg-blue-500 dark:bg-blue-600 rounded-xl shadow-sm">
-                  <Users size={22} className="text-white" />
+                <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-xl">
+                  <Users size={22} className="text-blue-500 dark:text-blue-400" />
                 </div>
               </div>
-              <div className="flex items-center gap-1 mt-3 text-xs text-blue-600 dark:text-blue-400 font-medium">
-                <Building2 size={12} />
-                <span>Cadastrados</span>
-              </div>
+              <p className="text-xs text-slate-400 dark:text-slate-500 mt-3">Cadastrados</p>
             </div>
 
-            {/* Widget - Total do Mês */}
-            <div className="bg-gradient-to-br from-indigo-50 to-violet-50 dark:from-indigo-900/30 dark:to-violet-900/20 rounded-xl shadow-sm border border-indigo-200 dark:border-indigo-800/50 p-5 hover:shadow-md transition-shadow">
+            <div className="bg-white dark:bg-slate-800 rounded-xl shadow-card border border-slate-200 dark:border-slate-700 p-6 hover:shadow-card-hover hover:border-slate-300 dark:hover:border-slate-600 transition-all duration-150">
               <div className="flex items-start justify-between">
                 <div>
-                  <p className="text-indigo-700 dark:text-indigo-300 text-sm font-medium">Total do Mês</p>
-                  <p className="text-3xl font-bold text-indigo-600 dark:text-indigo-400 mt-1">{historyPackages.length}</p>
+                  <p className="text-sm text-slate-500 dark:text-slate-400 font-medium">Total do Mês</p>
+                  <p className="text-3xl font-bold text-slate-900 dark:text-white mt-1">{historyPackages.length}</p>
                 </div>
-                <div className="p-3 bg-indigo-500 dark:bg-indigo-600 rounded-xl shadow-sm">
-                  <BarChart3 size={22} className="text-white" />
+                <div className="p-3 bg-indigo-50 dark:bg-indigo-900/20 rounded-xl">
+                  <BarChart3 size={22} className="text-indigo-500 dark:text-indigo-400" />
                 </div>
               </div>
-              <div className="flex items-center gap-1 mt-3 text-xs text-indigo-600 dark:text-indigo-400 font-medium">
-                <Calendar size={12} />
-                <span>Encomendas entregues</span>
-              </div>
+              <p className="text-xs text-slate-400 dark:text-slate-500 mt-3">Encomendas entregues</p>
             </div>
           </div>
 
           {/* Card: Link para Moradores */}
           {shareSlug && (
-            <div className="bg-gradient-to-r from-emerald-50 to-teal-50 dark:from-emerald-900/20 dark:to-teal-900/20 rounded-xl shadow-sm border border-emerald-200 dark:border-emerald-800/50 p-4 sm:p-5">
-              <div className="flex items-center gap-2 mb-2">
-                <div className="p-2 bg-emerald-500 rounded-lg">
-                  <Link2 size={16} className="text-white" />
+            <div className="bg-white dark:bg-slate-800 rounded-xl shadow-card border border-slate-200 dark:border-slate-700 p-4 sm:p-5">
+              <div className="flex items-center gap-3 mb-3">
+                <div className="p-2.5 bg-emerald-50 dark:bg-emerald-900/20 rounded-xl">
+                  <Link2 size={18} className="text-emerald-500 dark:text-emerald-400" />
                 </div>
                 <div>
-                  <h3 className="text-sm font-semibold text-emerald-800 dark:text-emerald-300">Link para Moradores</h3>
-                  <p className="text-xs text-emerald-600 dark:text-emerald-400">Compartilhe para acesso direto às encomendas</p>
+                  <h3 className="text-sm font-semibold text-slate-900 dark:text-white">Link para Moradores</h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">Compartilhe para acesso direto às encomendas</p>
                 </div>
               </div>
-              <div className="flex items-center gap-2 mt-3">
+              <div className="flex items-center gap-2">
                 <input
                   type="text"
                   readOnly
                   value={`${window.location.origin}/app.html?condo=${shareSlug}`}
-                  className="flex-1 min-w-0 px-3 py-2 text-sm border border-emerald-200 dark:border-emerald-700 rounded-lg bg-white dark:bg-gray-800 dark:text-white select-all truncate"
+                  className="flex-1 min-w-0 px-3 py-2 text-sm border border-slate-200 dark:border-slate-600 rounded-lg bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-white select-all truncate"
                   onClick={e => e.target.select()}
                 />
                 <button
@@ -3185,7 +3158,7 @@ function ConciergeView({ onAdd, packages, onDelete, onCollect, residents, reside
                     setShareCopied(true);
                     setTimeout(() => setShareCopied(false), 2000);
                   }}
-                  className="px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium transition-colors flex items-center gap-1 flex-shrink-0"
+                  className="px-3 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium transition-colors duration-150 flex items-center gap-1.5 flex-shrink-0"
                 >
                   {shareCopied ? <><CheckCircle size={14} /> Copiado!</> : <><Copy size={14} /> Copiar</>}
                 </button>
@@ -3193,7 +3166,7 @@ function ConciergeView({ onAdd, packages, onDelete, onCollect, residents, reside
                   href={`https://wa.me/?text=${encodeURIComponent(`Acesse suas encomendas pelo CondoTrack:\n${window.location.origin}/app.html?condo=${shareSlug}`)}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="px-3 py-2 rounded-lg bg-green-500 hover:bg-green-600 text-white text-sm font-medium transition-colors flex items-center gap-1 flex-shrink-0"
+                  className="px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium transition-colors duration-150 flex items-center gap-1.5 flex-shrink-0"
                 >
                   <MessageCircle size={14} /> <span className="hidden sm:inline">WhatsApp</span>
                 </a>
@@ -3201,110 +3174,143 @@ function ConciergeView({ onAdd, packages, onDelete, onCollect, residents, reside
             </div>
           )}
 
-          {/* Encomendas Pendentes */}
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
-            <div className="px-5 sm:px-6 py-4 flex items-center justify-between bg-blue-500 dark:bg-blue-600">
+          {/* Encomendas Pendentes - Tabela profissional */}
+          <div className="bg-white dark:bg-slate-800 rounded-xl shadow-card border border-slate-200 dark:border-slate-700 overflow-hidden">
+            <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-700 flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <div className="p-2 bg-white/20 rounded-lg">
-                  <Clock className="text-white" size={20} />
+                <div className="p-2.5 bg-amber-50 dark:bg-amber-900/20 rounded-xl">
+                  <Clock className="text-amber-500 dark:text-amber-400" size={20} />
                 </div>
                 <div>
-                  <h2 className="font-semibold text-white">Encomendas Pendentes</h2>
-                  <p className="text-xs text-blue-100">Clique para registrar retirada</p>
+                  <h2 className="font-semibold text-slate-900 dark:text-white">Encomendas Pendentes</h2>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">Clique para registrar retirada</p>
                 </div>
               </div>
-              <span className="inline-flex items-center justify-center min-w-[28px] h-7 px-2.5 bg-white text-blue-600 text-sm font-bold rounded-full">{pendingPackages.length}</span>
+              <span className="inline-flex items-center justify-center min-w-[28px] h-7 px-2.5 bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400 text-sm font-bold rounded-full">{pendingPackages.length}</span>
             </div>
-            <div className="p-5 sm:p-6">
+            <div>
               {pendingPackages.length === 0 ? (
-                <div className="text-center py-12">
-                  <div className="inline-flex items-center justify-center w-16 h-16 bg-slate-100 dark:bg-gray-700 rounded-xl mb-4">
-                    <Package size={32} className="text-slate-400" />
+                <div className="text-center py-12 px-6">
+                  <div className="inline-flex items-center justify-center w-16 h-16 bg-slate-50 dark:bg-slate-700 rounded-xl mb-4">
+                    <Package size={32} className="text-slate-300 dark:text-slate-500" />
                   </div>
-                  <p className="text-slate-600 dark:text-gray-300 font-medium">Nenhuma encomenda pendente</p>
-                  <p className="text-slate-500 text-sm mt-1">Todas as encomendas foram retiradas</p>
+                  <p className="text-slate-600 dark:text-slate-300 font-medium">Nenhuma encomenda pendente</p>
+                  <p className="text-slate-400 dark:text-slate-500 text-sm mt-1">Todas as encomendas foram retiradas</p>
                 </div>
               ) : (
-                <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
-                  {pendingPackages.map(pkg => (
-                    <div
-                      key={pkg.id}
-                      onClick={() => setCollectTarget(pkg.id)}
-                      className="group bg-slate-50 dark:bg-gray-700/50 rounded-lg p-4 border border-gray-200 dark:border-gray-600 cursor-pointer hover:shadow-md hover:border-amber-400/50 transition-all hover:-translate-y-0.5"
-                    >
-                      <div className="flex justify-between items-start mb-3">
-                        <span className="inline-flex items-center gap-1 font-bold text-slate-800 dark:text-white text-lg">
-                          <Building2 size={14} className="text-blue-500" />
-                          Apt {pkg.unit}
-                        </span>
-                        <span className="text-xs font-medium bg-amber-500/15 text-amber-700 dark:text-amber-400 px-2.5 py-1 rounded-lg">{pkg.type}</span>
+                <>
+                  {/* Tabela desktop */}
+                  <div className="hidden sm:block overflow-x-auto">
+                    <table className="w-full">
+                      <thead>
+                        <tr className="border-b border-slate-100 dark:border-slate-700">
+                          <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Apt</th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Morador</th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Tipo</th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Data</th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Status</th>
+                          <th className="px-6 py-3 text-right text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Ação</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
+                        {pendingPackages.map(pkg => (
+                          <tr key={pkg.id} className="hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors duration-150 cursor-pointer" onClick={() => setCollectTarget(pkg.id)}>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <span className="font-semibold text-slate-900 dark:text-white">{pkg.unit}</span>
+                            </td>
+                            <td className="px-6 py-4">
+                              <span className="text-slate-700 dark:text-slate-300 truncate block max-w-[200px]">{pkg.recipient}</span>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-medium bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300">{pkg.type}</span>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500 dark:text-slate-400">
+                              {new Date(pkg.arrived_at).toLocaleDateString('pt-BR')} {new Date(pkg.arrived_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400">
+                                <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse-soft"></span>
+                                Pendente
+                              </span>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-right">
+                              <button onClick={(e) => { e.stopPropagation(); setCollectTarget(pkg.id); }} className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium rounded-lg transition-colors duration-150 active:scale-[0.98]">
+                                Entregar
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  {/* Cards mobile */}
+                  <div className="sm:hidden divide-y divide-slate-100 dark:divide-slate-700">
+                    {pendingPackages.map(pkg => (
+                      <div key={pkg.id} onClick={() => setCollectTarget(pkg.id)} className="px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-700/50 cursor-pointer transition-colors duration-150">
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="font-semibold text-slate-900 dark:text-white">Apt {pkg.unit}</span>
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400">
+                            <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse-soft"></span>
+                            Pendente
+                          </span>
+                        </div>
+                        <p className="text-sm text-slate-600 dark:text-slate-300 truncate">{pkg.recipient}</p>
+                        <div className="flex items-center justify-between mt-2">
+                          <span className="text-xs text-slate-400 dark:text-slate-500">{pkg.type} • {new Date(pkg.arrived_at).toLocaleDateString('pt-BR')}</span>
+                          <button onClick={(e) => { e.stopPropagation(); setCollectTarget(pkg.id); }} className="px-2.5 py-1 bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium rounded-lg transition-colors duration-150">Entregar</button>
+                        </div>
                       </div>
-                      <p className="text-slate-800 dark:text-gray-200 font-medium truncate">{pkg.recipient}</p>
-                      <div className="flex items-center gap-2 mt-2 text-xs text-slate-800-subtle">
-                        <Clock size={12} />
-                        <span>
-                          {new Date(pkg.arrived_at).toLocaleDateString('pt-BR')} às {new Date(pkg.arrived_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
-                        </span>
-                      </div>
-                      {pkg.description && <p className="text-slate-800-subtle text-xs mt-2 truncate">{pkg.description}</p>}
-                      <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-600 flex items-center justify-between">
-                        <span className="text-xs text-slate-800-subtle">Clique para entregar</span>
-                        <ArrowUpRight size={14} className="text-slate-800-subtle group-hover:text-blue-500 transition-colors" />
-                      </div>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                </>
               )}
             </div>
           </div>
 
           {/* Entregas do Dia */}
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
-            <div className="px-5 sm:px-6 py-4 flex items-center justify-between bg-blue-500 dark:bg-blue-600">
+          <div className="bg-white dark:bg-slate-800 rounded-xl shadow-card border border-slate-200 dark:border-slate-700 overflow-hidden">
+            <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-700 flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <div className="p-2 bg-white/20 rounded-lg">
-                  <CheckCircle className="text-white" size={20} />
+                <div className="p-2.5 bg-emerald-50 dark:bg-emerald-900/20 rounded-xl">
+                  <CheckCircle className="text-emerald-500 dark:text-emerald-400" size={20} />
                 </div>
                 <div>
-                  <h2 className="font-semibold text-white">Entregas de Hoje</h2>
-                  <p className="text-xs text-blue-100">Retiradas realizadas</p>
+                  <h2 className="font-semibold text-slate-900 dark:text-white">Entregas de Hoje</h2>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">Retiradas realizadas</p>
                 </div>
               </div>
-              <span className="inline-flex items-center justify-center min-w-[28px] h-7 px-2.5 bg-white text-blue-600 text-sm font-bold rounded-full">{todayDeliveries.length}</span>
+              <span className="inline-flex items-center justify-center min-w-[28px] h-7 px-2.5 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 text-sm font-bold rounded-full">{todayDeliveries.length}</span>
             </div>
-            <div className="p-5 sm:p-6">
+            <div>
               {todayDeliveries.length === 0 ? (
-                <div className="text-center py-12">
-                  <div className="inline-flex items-center justify-center w-16 h-16 bg-slate-100 dark:bg-gray-700 rounded-xl mb-4">
-                    <CheckCircle size={32} className="text-slate-400" />
+                <div className="text-center py-12 px-6">
+                  <div className="inline-flex items-center justify-center w-16 h-16 bg-slate-50 dark:bg-slate-700 rounded-xl mb-4">
+                    <CheckCircle size={32} className="text-slate-300 dark:text-slate-500" />
                   </div>
-                  <p className="text-slate-600 dark:text-gray-300 font-medium">Nenhuma entrega hoje</p>
-                  <p className="text-slate-500 text-sm mt-1">As entregas aparecerão aqui</p>
+                  <p className="text-slate-600 dark:text-slate-300 font-medium">Nenhuma entrega hoje</p>
+                  <p className="text-slate-400 dark:text-slate-500 text-sm mt-1">As entregas aparecerão aqui</p>
                 </div>
               ) : (
-                <div className="space-y-3">
+                <div className="divide-y divide-slate-100 dark:divide-slate-700">
                   {todayDeliveries.map(pkg => (
-                    <div key={pkg.id} className="bg-emerald-50 dark:bg-emerald-900/20 rounded-lg p-4 border border-emerald-200 dark:border-emerald-800/30">
-                      <div className="flex justify-between items-start">
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <span className="font-bold text-emerald-700 dark:text-emerald-400">Apt {pkg.unit}</span>
-                            <span className="text-slate-800 dark:text-gray-300 truncate">• {pkg.recipient}</span>
+                    <div key={pkg.id} className="px-6 py-4 flex items-center justify-between hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors duration-150">
+                      <div className="flex items-center gap-4 min-w-0 flex-1">
+                        <div className="flex-shrink-0">
+                          <CheckCircle size={18} className="text-emerald-500 dark:text-emerald-400" />
+                        </div>
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="font-semibold text-slate-900 dark:text-white">Apt {pkg.unit}</span>
+                            <span className="text-slate-500 dark:text-slate-400">•</span>
+                            <span className="text-slate-700 dark:text-slate-300 truncate">{pkg.recipient}</span>
+                          </div>
+                          <div className="flex items-center gap-2 mt-0.5 text-xs text-slate-400 dark:text-slate-500">
+                            <span>{new Date(pkg.collected_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span>
+                            {pkg.collected_by && <><span>•</span><span>Retirado por {pkg.collected_by}</span></>}
                           </div>
                         </div>
-                        <span className="text-xs font-medium bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 px-2.5 py-1 rounded-lg ml-2 flex-shrink-0">{pkg.type}</span>
                       </div>
-                      <div className="flex items-center gap-3 mt-3 text-sm">
-                        <div className="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400">
-                          <CheckCircle size={14} />
-                          <span className="font-medium">
-                            {new Date(pkg.collected_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
-                          </span>
-                        </div>
-                        {pkg.collected_by && (
-                          <span className="text-slate-800-subtle text-xs">Retirado por {pkg.collected_by}</span>
-                        )}
-                      </div>
+                      <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-medium bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 flex-shrink-0 ml-3">{pkg.type}</span>
                     </div>
                   ))}
                 </div>
@@ -3316,25 +3322,25 @@ function ConciergeView({ onAdd, packages, onDelete, onCollect, residents, reside
 
       {tab === 'packages' && (
         <>
-          {/* Formulário Encomenda - Design moderno */}
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
-            <div className="px-5 sm:px-6 py-4 flex items-center justify-between gap-3 bg-blue-500 dark:bg-blue-600">
+          {/* Formulário Encomenda */}
+          <div className="bg-white dark:bg-slate-800 rounded-xl shadow-card border border-slate-200 dark:border-slate-700 overflow-hidden">
+            <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-700 flex items-center justify-between gap-3">
               <div className="flex items-center gap-3">
-                <div className="p-2.5 bg-white/20 rounded-lg">
-                  <Package className="text-white" size={20} />
+                <div className="p-2.5 bg-blue-50 dark:bg-blue-900/20 rounded-xl">
+                  <Package className="text-blue-500 dark:text-blue-400" size={20} />
                 </div>
                 <div>
-                  <h2 className="font-bold text-white">Registrar Encomenda</h2>
-                  <p className="text-xs text-blue-100">Preencha os dados ou tire foto da etiqueta</p>
+                  <h2 className="font-semibold text-slate-900 dark:text-white">Registrar Encomenda</h2>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">Preencha os dados ou tire foto da etiqueta</p>
                 </div>
               </div>
               <div className="flex items-center gap-2">
-                <label className={`flex items-center gap-2 px-3 py-1.5 ${ocrLoading ? 'bg-gray-400 cursor-wait' : 'bg-white/20 hover:bg-white/30 cursor-pointer'} text-white rounded-lg text-sm font-semibold shadow-md transition-colors`}>
+                <label className={`flex items-center gap-2 px-3 py-1.5 ${ocrLoading ? 'bg-slate-200 dark:bg-slate-600 cursor-wait text-slate-400' : 'border border-slate-200 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700 cursor-pointer text-slate-600 dark:text-slate-300'} rounded-lg text-sm font-medium transition-colors duration-150`}>
                   {ocrLoading ? (<><Loader2 size={16} className="animate-spin" /> Lendo...</>) : (<><Camera size={16} /><span className="hidden sm:inline">Ler Etiqueta</span></>)}
                   <input type="file" accept="image/*" capture="environment" onChange={handleOcrCapture} disabled={ocrLoading} className="hidden" />
                 </label>
                 {packagesNeedingReminder.length > 0 && (
-                  <button type="button" onClick={() => setShowRemindersModal(true)} className="flex items-center gap-2 px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white rounded-lg text-sm font-semibold shadow-md transition-colors">
+                  <button type="button" onClick={() => setShowRemindersModal(true)} className="flex items-center gap-2 px-3 py-1.5 bg-amber-50 dark:bg-amber-900/20 hover:bg-amber-100 dark:hover:bg-amber-900/30 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-700 rounded-lg text-sm font-medium transition-colors duration-150">
                     <Clock size={16} />
                     {packagesNeedingReminder.length} lembrete{packagesNeedingReminder.length !== 1 ? 's' : ''}
                   </button>
@@ -3361,10 +3367,10 @@ function ConciergeView({ onAdd, packages, onDelete, onCollect, residents, reside
               )}
               <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-5">
                 <div className="relative">
-                  <label className="block text-sm font-semibold text-slate-700 dark:text-gray-300 mb-2">Unidade *</label>
-                  <input type="text" placeholder="Ex: 104-B" className="w-full px-4 py-3 border-2 border-slate-200 dark:border-gray-600 rounded-xl focus:border-blue-600 focus:ring-4 focus:ring-blue-500/20 outline-none bg-white dark:bg-gray-700 text-slate-800 dark:text-white transition-all placeholder:text-slate-400" value={form.unit} onChange={handleUnitChange} onBlur={handleUnitBlur} onFocus={() => { const s = searchResidentsByUnit(form.unit); setUnitSuggestions(s); setShowUnitDropdown(form.unit.length >= 1); }} required />
+                  <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">Unidade *</label>
+                  <input type="text" placeholder="Ex: 104-B" className="w-full px-4 py-3 border border-slate-200 dark:border-slate-600 rounded-xl focus:border-blue-600 focus:ring-2 focus:ring-blue-600/20 outline-none bg-white dark:bg-slate-700 text-slate-900 dark:text-white transition-all placeholder:text-slate-400" value={form.unit} onChange={handleUnitChange} onBlur={handleUnitBlur} onFocus={() => { const s = searchResidentsByUnit(form.unit); setUnitSuggestions(s); setShowUnitDropdown(form.unit.length >= 1); }} required />
                   {showUnitDropdown && form.unit.length >= 1 && (
-                    <div className="absolute z-20 mt-1 w-full bg-white dark:bg-gray-800 border-2 border-slate-200 dark:border-gray-600 rounded-xl shadow-lg max-h-48 overflow-y-auto">
+                    <div className="absolute z-20 mt-1 w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-xl shadow-lg max-h-48 overflow-y-auto">
                       {unitSuggestions.length > 0 ? (
                         unitSuggestions.map(r => (
                           <button key={r.id} type="button" className="w-full px-4 py-2.5 text-left hover:bg-blue-50 dark:hover:bg-blue-900/30 flex justify-between items-center" onClick={() => selectResident(r)}>
@@ -3374,7 +3380,7 @@ function ConciergeView({ onAdd, packages, onDelete, onCollect, residents, reside
                         ))
                       ) : (
                         <div className="px-4 py-3 text-center">
-                          <p className="text-sm text-gray-500 dark:text-gray-400">Nenhum morador encontrado para esta unidade</p>
+                          <p className="text-sm text-slate-500 dark:text-slate-400">Nenhum morador encontrado para esta unidade</p>
                           <button type="button" onClick={() => { setOcrPendingResident({ unit: form.unit, name: form.recipient || '', phone: '', source: 'manual' }); setTab('residents'); setShowUnitDropdown(false); }} className="mt-2 text-sm text-blue-600 dark:text-blue-400 hover:underline font-medium flex items-center gap-1 mx-auto">
                             <UserPlus size={14} /> Cadastrar morador
                           </button>
@@ -3392,10 +3398,10 @@ function ConciergeView({ onAdd, packages, onDelete, onCollect, residents, reside
                   )}
                 </div>
                 <div className="relative">
-                  <label className="block text-sm font-semibold text-slate-700 dark:text-gray-300 mb-2">Destinatário *</label>
-                  <input type="text" placeholder="Nome do morador" className="w-full px-4 py-3 border-2 border-slate-200 dark:border-gray-600 rounded-xl focus:border-blue-600 focus:ring-4 focus:ring-blue-500/20 outline-none bg-white dark:bg-gray-700 text-slate-800 dark:text-white transition-all placeholder:text-slate-400" value={form.recipient} onChange={handleRecipientChange} onBlur={handleRecipientBlur} onFocus={() => { const s = searchResidentsByName(form.recipient); setRecipientSuggestions(s); setShowRecipientDropdown(form.recipient.length >= 2); }} required />
+                  <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">Destinatário *</label>
+                  <input type="text" placeholder="Nome do morador" className="w-full px-4 py-3 border border-slate-200 dark:border-slate-600 rounded-xl focus:border-blue-600 focus:ring-2 focus:ring-blue-600/20 outline-none bg-white dark:bg-slate-700 text-slate-900 dark:text-white transition-all placeholder:text-slate-400" value={form.recipient} onChange={handleRecipientChange} onBlur={handleRecipientBlur} onFocus={() => { const s = searchResidentsByName(form.recipient); setRecipientSuggestions(s); setShowRecipientDropdown(form.recipient.length >= 2); }} required />
                   {showRecipientDropdown && form.recipient.length >= 2 && (
-                    <div className="absolute z-20 mt-1 w-full bg-white dark:bg-gray-800 border-2 border-slate-200 dark:border-gray-600 rounded-xl shadow-lg max-h-48 overflow-y-auto">
+                    <div className="absolute z-20 mt-1 w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-xl shadow-lg max-h-48 overflow-y-auto">
                       {recipientSuggestions.length > 0 ? (
                         recipientSuggestions.map(r => (
                           <button key={r.id} type="button" className="w-full px-4 py-2.5 text-left hover:bg-blue-50 dark:hover:bg-blue-900/30 flex justify-between items-center" onClick={() => selectResident(r)}>
@@ -3405,8 +3411,8 @@ function ConciergeView({ onAdd, packages, onDelete, onCollect, residents, reside
                         ))
                       ) : (
                         <div className="px-4 py-3 text-center">
-                          <p className="text-sm text-gray-500 dark:text-gray-400">Nenhum morador encontrado com este nome</p>
-                          <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">Se a encomenda é para um morador cadastrado, preencha a unidade correta</p>
+                          <p className="text-sm text-slate-500 dark:text-slate-400">Nenhum morador encontrado com este nome</p>
+                          <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">Se a encomenda é para um morador cadastrado, preencha a unidade correta</p>
                           <button type="button" onClick={() => { setOcrPendingResident({ unit: form.unit || '', name: form.recipient, phone: '', source: 'manual' }); setTab('residents'); setShowRecipientDropdown(false); }} className="mt-2 text-sm text-blue-600 dark:text-blue-400 hover:underline font-medium flex items-center gap-1 mx-auto">
                             <UserPlus size={14} /> Cadastrar morador
                           </button>
@@ -3427,23 +3433,23 @@ function ConciergeView({ onAdd, packages, onDelete, onCollect, residents, reside
                   )}
                 </div>
                 <div>
-                  <label className="block text-sm font-semibold text-slate-700 dark:text-gray-300 mb-2 flex items-center gap-1.5">
+                  <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2 flex items-center gap-1.5">
                     <Phone size={14} className="text-emerald-500" /> WhatsApp
                   </label>
-                  <input type="tel" placeholder="(11) 9XXXX-XXXX" className="w-full px-4 py-3 border-2 border-slate-200 dark:border-gray-600 rounded-xl focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/20 outline-none bg-white dark:bg-gray-700 text-slate-800 dark:text-white transition-all placeholder:text-slate-400" value={form.phone} onChange={handlePhoneChange} />
+                  <input type="tel" placeholder="(11) 9XXXX-XXXX" className="w-full px-4 py-3 border border-slate-200 dark:border-slate-600 rounded-xl focus:border-blue-600 focus:ring-2 focus:ring-blue-600/20 outline-none bg-white dark:bg-slate-700 text-slate-900 dark:text-white transition-all placeholder:text-slate-400" value={form.phone} onChange={handlePhoneChange} />
                 </div>
                 <div>
-                  <label className="block text-sm font-semibold text-slate-700 dark:text-gray-300 mb-2">Tipo de Encomenda</label>
-                  <select className="w-full px-4 py-3 border-2 border-slate-200 dark:border-gray-600 rounded-xl focus:border-amber-500 focus:ring-4 focus:ring-amber-500/20 outline-none bg-white dark:bg-gray-700 text-slate-800 dark:text-white transition-all cursor-pointer font-medium" value={form.type} onChange={e => setForm({ ...form, type: e.target.value })}>
+                  <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">Tipo de Encomenda</label>
+                  <select className="w-full px-4 py-3 border border-slate-200 dark:border-slate-600 rounded-xl focus:border-blue-600 focus:ring-2 focus:ring-blue-600/20 outline-none bg-white dark:bg-slate-700 text-slate-900 dark:text-white transition-all cursor-pointer font-medium" value={form.type} onChange={e => setForm({ ...form, type: e.target.value })}>
                     <option>Caixa</option><option>Pacote</option><option>Envelope</option><option>Mercado Livre/Shopee</option><option>Delivery / Comida</option><option>Outro</option>
                   </select>
                 </div>
                 <div className="md:col-span-2">
-                  <label className="block text-sm font-semibold text-slate-700 dark:text-gray-300 mb-2">Descrição</label>
-                  <input type="text" placeholder="Informações adicionais (opcional)" className="w-full px-4 py-3 border-2 border-slate-200 dark:border-gray-600 rounded-xl focus:border-violet-500 focus:ring-4 focus:ring-violet-500/20 outline-none bg-white dark:bg-gray-700 text-slate-800 dark:text-white transition-all placeholder:text-slate-400" value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} />
+                  <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">Descrição</label>
+                  <input type="text" placeholder="Informações adicionais (opcional)" className="w-full px-4 py-3 border border-slate-200 dark:border-slate-600 rounded-xl focus:border-blue-600 focus:ring-2 focus:ring-blue-600/20 outline-none bg-white dark:bg-slate-700 text-slate-900 dark:text-white transition-all placeholder:text-slate-400" value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} />
                 </div>
                 <div className="md:col-span-2 pt-2">
-                  <button type="submit" className="w-full bg-blue-500 hover:bg-blue-600 text-white font-bold py-4 rounded-xl shadow-lg hover:shadow-xl transition-all flex justify-center items-center gap-2 text-base">
+                  <button type="submit" className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3.5 rounded-xl shadow-sm transition-all duration-150 active:scale-[0.98] flex justify-center items-center gap-2 text-base">
                     <CheckCircle size={22} /> Registrar Chegada
                   </button>
                 </div>
@@ -3451,95 +3457,78 @@ function ConciergeView({ onAdd, packages, onDelete, onCollect, residents, reside
             </div>
           </div>
 
-          {/* Lista + Filtros - Design moderno */}
+          {/* Lista + Filtros */}
           <div className="mt-6">
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-5 gap-4">
-              <h3 className="text-lg font-bold text-slate-800 dark:text-white flex items-center gap-2">
-                <div className="p-1.5 bg-amber-100 dark:bg-amber-800 rounded-lg">
-                  <Clock size={18} className="text-amber-600 dark:text-amber-200" />
-                </div>
+              <h3 className="text-lg font-semibold text-slate-900 dark:text-white flex items-center gap-2">
                 Pendentes ({pendingPackages.length})
               </h3>
               <div className="flex gap-2 overflow-x-auto pb-2 w-full sm:w-auto scrollbar-hide">
-                {['Todos', 'Caixa', 'Pacote', 'Envelope', 'Mercado Livre/Shopee', 'Delivery / Comida', 'Outro'].map(type => {
-                  const typeConfig = type === 'Todos' ? null : PACKAGE_TYPE_CONFIG[type];
-                  const getFilterButtonClass = () => {
-                    if (filterType === type) {
-                      if (type === 'Todos') return 'bg-slate-700 text-white shadow-md';
-                      return `${typeConfig?.badge || 'bg-slate-500'} text-white shadow-md`;
-                    }
-                    if (type === 'Todos') return 'bg-white dark:bg-gray-800 text-slate-600 dark:text-slate-300 border-2 border-slate-200 dark:border-gray-700 hover:border-slate-400 hover:text-slate-800';
-                    return `bg-white dark:bg-gray-800 border-2 border-slate-200 dark:border-gray-700 hover:border-current ${typeConfig?.textLight || 'text-slate-600'} ${typeConfig?.textDark || 'dark:text-slate-400'}`;
-                  };
-                  return (
-                    <button
-                      key={type}
-                      onClick={() => setFilterType(type)}
-                      className={`px-3.5 py-2 rounded-xl text-xs font-semibold whitespace-nowrap flex items-center gap-1.5 transition-all ${getFilterButtonClass()}`}
-                    >
-                      {type}
-                      {type !== 'Todos' && countByType(type) > 0 &&
-                        <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${filterType === type ? 'bg-white/30 text-white' : `${typeConfig?.bgLight || 'bg-slate-100'} ${typeConfig?.textLight || 'text-slate-600'}`}`}>{countByType(type)}</span>}
-                    </button>
-                  );
-                })}
+                {['Todos', 'Caixa', 'Pacote', 'Envelope', 'Mercado Livre/Shopee', 'Delivery / Comida', 'Outro'].map(type => (
+                  <button
+                    key={type}
+                    onClick={() => setFilterType(type)}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap flex items-center gap-1.5 transition-all duration-150 ${filterType === type ? 'bg-blue-600 text-white shadow-sm' : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-600 hover:border-slate-300 dark:hover:border-slate-500'}`}
+                  >
+                    {type}
+                    {type !== 'Todos' && countByType(type) > 0 &&
+                      <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${filterType === type ? 'bg-white/20' : 'bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400'}`}>{countByType(type)}</span>}
+                  </button>
+                ))}
               </div>
             </div>
 
             {filteredPackages.length === 0 ? (
-              <div className="text-center py-14 bg-white dark:bg-gray-800 rounded-xl border-2 border-dashed border-gray-200 dark:border-gray-600">
-                <div className="inline-flex items-center justify-center w-14 h-14 bg-slate-100 dark:bg-gray-700 rounded-xl mb-4">
-                  <Package size={28} className="text-slate-800-subtle" />
+              <div className="text-center py-14 bg-white dark:bg-slate-800 rounded-xl border border-dashed border-slate-200 dark:border-slate-600">
+                <div className="inline-flex items-center justify-center w-14 h-14 bg-slate-50 dark:bg-slate-700 rounded-xl mb-4">
+                  <Package size={28} className="text-slate-300 dark:text-slate-500" />
                 </div>
-                <p className="text-slate-800-muted font-medium">Sem encomendas pendentes</p>
-                <p className="text-slate-800-subtle text-sm mt-1">Registre uma nova encomenda acima</p>
+                <p className="text-slate-600 dark:text-slate-300 font-medium">Sem encomendas pendentes</p>
+                <p className="text-slate-400 dark:text-slate-500 text-sm mt-1">Registre uma nova encomenda acima</p>
               </div>
             ) : (
-              <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
+              <div className="bg-white dark:bg-slate-800 rounded-xl shadow-card border border-slate-200 dark:border-slate-700 overflow-hidden">
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
-                      <tr className="bg-slate-100 dark:bg-gray-900/50 border-b border-gray-200 dark:border-gray-700">
-                        <th className="px-5 py-4 text-left font-semibold text-slate-800-muted text-xs uppercase tracking-wide">Unidade</th>
-                        <th className="px-5 py-4 text-left font-semibold text-slate-800-muted text-xs uppercase tracking-wide">Destinatário</th>
-                        <th className="px-5 py-4 text-left font-semibold text-slate-800-muted text-xs uppercase tracking-wide">Tipo</th>
-                        <th className="px-5 py-4 text-left font-semibold text-slate-800-muted text-xs uppercase tracking-wide">Status</th>
-                        <th className="px-5 py-4 text-right font-semibold text-slate-800-muted text-xs uppercase tracking-wide">Ações</th>
+                      <tr className="border-b border-slate-100 dark:border-slate-700">
+                        <th className="px-6 py-3 text-left font-medium text-slate-500 dark:text-slate-400 text-xs uppercase tracking-wider">Unidade</th>
+                        <th className="px-6 py-3 text-left font-medium text-slate-500 dark:text-slate-400 text-xs uppercase tracking-wider">Destinatário</th>
+                        <th className="px-6 py-3 text-left font-medium text-slate-500 dark:text-slate-400 text-xs uppercase tracking-wider">Tipo</th>
+                        <th className="px-6 py-3 text-left font-medium text-slate-500 dark:text-slate-400 text-xs uppercase tracking-wider">Status</th>
+                        <th className="px-6 py-3 text-right font-medium text-slate-500 dark:text-slate-400 text-xs uppercase tracking-wider">Ações</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-surface-border dark:divide-gray-700">
-                      {filteredPackages.map((pkg, index) => {
+                    <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
+                      {filteredPackages.map((pkg) => {
                         const phoneDigits = String(pkg.phone || '').replace(/\D/g,'');
                         const box = String.fromCodePoint(0x1F4E6);
                         const waMsg = encodeURIComponent(`Olá ${pkg.recipient}! Chegou uma encomenda (${pkg.type}) para você na portaria. ${box} Disponível para retirada.`);
                         const wa = phoneDigits ? `https://wa.me/55${phoneDigits}?text=${waMsg}` : null;
                         return (
-                          <tr key={pkg.id} className={`${index % 2 === 0 ? 'bg-white dark:bg-gray-800' : 'bg-slate-50/50 dark:bg-gray-800/50'} hover:bg-blue-500-50 dark:hover:bg-blue-500/5 transition-colors`}>
-                            <td className="px-5 py-4">
-                              <span className="inline-flex items-center gap-1.5 font-semibold text-slate-800 dark:text-white">
-                                <Building2 size={14} className="text-blue-500" />
-                                APT {pkg.unit}
-                              </span>
+                          <tr key={pkg.id} className="hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors duration-150">
+                            <td className="px-6 py-4">
+                              <span className="font-semibold text-slate-900 dark:text-white">{pkg.unit}</span>
                             </td>
-                            <td className="px-5 py-4 text-slate-800 dark:text-gray-300">{pkg.recipient}</td>
-                            <td className="px-5 py-4">
-                              <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-medium bg-slate-100 dark:bg-gray-700 text-slate-800-muted">{pkg.type}</span>
+                            <td className="px-6 py-4 text-slate-700 dark:text-slate-300">{pkg.recipient}</td>
+                            <td className="px-6 py-4">
+                              <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-medium bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300">{pkg.type}</span>
                             </td>
-                            <td className="px-5 py-4">
-                              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold bg-amber-100 text-amber-700 dark:bg-amber-800 dark:text-amber-200">
-                                <span className="w-1.5 h-1.5 bg-amber-500 rounded-full animate-pulse"></span>
+                            <td className="px-6 py-4">
+                              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400">
+                                <span className="w-1.5 h-1.5 bg-amber-500 rounded-full animate-pulse-soft"></span>
                                 Pendente
                               </span>
                             </td>
-                            <td className="px-5 py-4">
+                            <td className="px-6 py-4">
                               <div className="flex justify-end gap-2">
                                 {wa && (
-                                  <a href={wa} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-500/10 rounded-lg transition-colors">
+                                  <a href={wa} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 rounded-lg transition-colors duration-150">
                                     <MessageCircle size={14} />
                                     WhatsApp
                                   </a>
                                 )}
-                                <button onClick={() => setCollectTarget(pkg.id)} className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-blue-500 text-white hover:bg-blue-600 rounded-lg shadow-sm transition-all">
+                                <button onClick={() => setCollectTarget(pkg.id)} className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-blue-600 text-white hover:bg-blue-700 rounded-lg transition-colors duration-150 active:scale-[0.98]">
                                   <CheckCircle size={14} />
                                   Entregar
                                 </button>
@@ -3645,49 +3634,51 @@ function CondoSettingsManager({ condoSettings, onUpdateSettings, condoInfo }) {
   };
 
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
-      <div className="bg-blue-500 dark:bg-blue-600 px-6 py-4 flex items-center gap-2">
-        <Building2 className="text-white/80" size={20} />
-        <h2 className="font-semibold text-white">Configurações do Condomínio</h2>
+    <div className="bg-white dark:bg-slate-800 rounded-xl shadow-card border border-slate-200 dark:border-slate-700 overflow-hidden">
+      <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-700 flex items-center gap-3">
+        <div className="p-2.5 bg-blue-50 dark:bg-blue-900/20 rounded-xl">
+          <Building2 className="text-blue-500 dark:text-blue-400" size={20} />
+        </div>
+        <h2 className="font-semibold text-slate-900 dark:text-white">Configurações do Condomínio</h2>
       </div>
       <div className="p-6">
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
               Nome do Condomínio *
             </label>
             <input
               type="text"
               placeholder="Ex: Residencial Solar das Flores"
-              className="w-full px-4 py-2 border dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-slate-500 outline-none bg-white dark:bg-gray-700 dark:text-white"
+              className="w-full px-4 py-2 border dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-slate-500 outline-none bg-white dark:bg-slate-700 dark:text-white"
               value={form.condo_name}
               onChange={(e) => setForm({ ...form, condo_name: e.target.value })}
               required
             />
-            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
               Este nome será exibido no cabeçalho e em todo o sistema.
             </p>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
               Endereço
             </label>
             <input
               type="text"
               placeholder="Ex: Rua das Flores, 123 - Centro"
-              className="w-full px-4 py-2 border dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-slate-500 outline-none bg-white dark:bg-gray-700 dark:text-white"
+              className="w-full px-4 py-2 border dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-slate-500 outline-none bg-white dark:bg-slate-700 dark:text-white"
               value={form.condo_address}
               onChange={(e) => setForm({ ...form, condo_address: e.target.value })}
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
               Telefone da Portaria
             </label>
             <input
               type="tel"
               placeholder="(11) 1234-5678"
-              className="w-full px-4 py-2 border dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-slate-500 outline-none bg-white dark:bg-gray-700 dark:text-white"
+              className="w-full px-4 py-2 border dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-slate-500 outline-none bg-white dark:bg-slate-700 dark:text-white"
               value={form.condo_phone}
               onChange={(e) => setForm({ ...form, condo_phone: e.target.value })}
             />
@@ -3710,18 +3701,18 @@ function CondoSettingsManager({ condoSettings, onUpdateSettings, condoInfo }) {
 
       {/* Link compartilhável para moradores */}
       {localSlug && (
-        <div className="mt-4 border-t border-gray-200 dark:border-gray-700 pt-4 px-6 pb-6">
+        <div className="mt-4 border-t border-slate-200 dark:border-slate-700 pt-4 px-6 pb-6">
           <div className="flex items-center gap-2 mb-2">
             <Link2 size={16} className="text-emerald-600 dark:text-emerald-400" />
-            <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">Link para Moradores</h3>
+            <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300">Link para Moradores</h3>
           </div>
-          <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">Compartilhe este link com os moradores para acesso direto às encomendas</p>
+          <p className="text-xs text-slate-500 dark:text-slate-400 mb-2">Compartilhe este link com os moradores para acesso direto às encomendas</p>
           <div className="flex items-center gap-2">
             <input
               type="text"
               readOnly
               value={`${window.location.origin}/app.html?condo=${localSlug}`}
-              className="flex-1 px-3 py-2 text-sm border dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-700 dark:text-white select-all"
+              className="flex-1 px-3 py-2 text-sm border dark:border-slate-600 rounded-lg bg-slate-50 dark:bg-slate-700 dark:text-white select-all"
               onClick={e => e.target.select()}
             />
             <button
@@ -3844,24 +3835,28 @@ function BillingManager({ condoInfo, staff }) {
   return (
     <div className="space-y-6">
       {/* Header do Plano Atual / Trial */}
-      <div className={`rounded-xl p-6 text-white ${
-        isTrial && !isTrialExpired 
-          ? 'bg-gradient-to-r from-green-500 to-emerald-600 dark:from-green-600 dark:to-emerald-700'
+      <div className={`rounded-xl p-6 border ${
+        isTrial && !isTrialExpired
+          ? 'bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800'
           : isTrialExpired
-          ? 'bg-gradient-to-r from-red-500 to-red-600 dark:from-red-600 dark:to-red-700'
-          : 'bg-blue-500 dark:bg-blue-600'
+          ? 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800'
+          : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 shadow-card'
       }`}>
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div className="flex items-center gap-4">
-            <div className="bg-white/20 p-3 rounded-xl">
-              <CreditCard size={24} />
+            <div className={`p-3 rounded-xl ${
+              isTrial && !isTrialExpired ? 'bg-emerald-100 dark:bg-emerald-900/30' : isTrialExpired ? 'bg-red-100 dark:bg-red-900/30' : 'bg-blue-50 dark:bg-blue-900/20'
+            }`}>
+              <CreditCard size={24} className={
+                isTrial && !isTrialExpired ? 'text-emerald-600 dark:text-emerald-400' : isTrialExpired ? 'text-red-600 dark:text-red-400' : 'text-blue-600 dark:text-blue-400'
+              } />
             </div>
             <div>
-              <p className="text-white/80 text-sm">
+              <p className="text-slate-500 dark:text-slate-400 text-sm">
                 {isTrial && !isTrialExpired ? 'Período de teste' : isTrialExpired ? 'Trial expirado' : 'Seu plano atual'}
               </p>
-              <h2 className="text-2xl font-bold">
-                {isTrial && !isTrialExpired 
+              <h2 className="text-2xl font-bold text-slate-900 dark:text-white">
+                {isTrial && !isTrialExpired
                   ? `Trial - ${trialDaysRemaining} ${trialDaysRemaining === 1 ? 'dia restante' : 'dias restantes'}`
                   : isTrialExpired
                   ? 'Trial Expirado'
@@ -3869,12 +3864,12 @@ function BillingManager({ condoInfo, staff }) {
                 }
               </h2>
               {isTrial && !isTrialExpired && (
-                <p className="text-white/70 text-sm mt-1">
+                <p className="text-slate-500 dark:text-slate-400 text-sm mt-1">
                   Escolha um plano para continuar após o trial
                 </p>
               )}
               {isTrialExpired && (
-                <p className="text-white/70 text-sm mt-1">
+                <p className="text-slate-500 dark:text-slate-400 text-sm mt-1">
                   Escolha um plano para continuar usando o sistema
                 </p>
               )}
@@ -3883,31 +3878,31 @@ function BillingManager({ condoInfo, staff }) {
           <div className="text-left sm:text-right">
             {isTrial && !isTrialExpired ? (
               <div>
-                <p className="text-3xl font-bold">Grátis</p>
-                <p className="text-white/70 text-sm">Por {trialDaysRemaining} {trialDaysRemaining === 1 ? 'dia' : 'dias'}</p>
+                <p className="text-3xl font-bold text-emerald-600 dark:text-emerald-400">Grátis</p>
+                <p className="text-slate-500 dark:text-slate-400 text-sm">Por {trialDaysRemaining} {trialDaysRemaining === 1 ? 'dia' : 'dias'}</p>
               </div>
             ) : isTrialExpired ? (
               <div>
-                <p className="text-2xl font-bold">Bloqueado</p>
-                <p className="text-white/70 text-sm">Escolha um plano</p>
+                <p className="text-2xl font-bold text-red-600 dark:text-red-400">Bloqueado</p>
+                <p className="text-slate-500 dark:text-slate-400 text-sm">Escolha um plano</p>
               </div>
             ) : (
-              <p className="text-3xl font-bold">R$ {currentPlan.price}<span className="text-lg font-normal text-white/80">/mês</span></p>
+              <p className="text-3xl font-bold text-slate-900 dark:text-white">R$ {currentPlan.price}<span className="text-lg font-normal text-slate-500 dark:text-slate-400">/mês</span></p>
             )}
           </div>
         </div>
       </div>
 
       {/* Uso de Porteiros */}
-      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+      <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-6">
         <div className="flex items-center justify-between mb-4">
-          <h3 className="font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+          <h3 className="font-semibold text-slate-900 dark:text-white flex items-center gap-2">
             <Users size={18} className="text-blue-500" />
             Uso de Porteiros
           </h3>
-          <span className="text-sm text-gray-500 dark:text-gray-400">{porteiroCount} / {staffLimit}</span>
+          <span className="text-sm text-slate-500 dark:text-slate-400">{porteiroCount} / {staffLimit}</span>
         </div>
-        <div className="bg-gray-100 dark:bg-gray-700 rounded-full h-3 overflow-hidden mb-3">
+        <div className="bg-slate-100 dark:bg-slate-700 rounded-full h-3 overflow-hidden mb-3">
           <div
             className={`h-full rounded-full transition-all ${porteiroCount >= staffLimit ? 'bg-red-500' : porteiroCount >= staffLimit * 0.8 ? 'bg-amber-500' : 'bg-blue-500'}`}
             style={{ width: `${Math.min((porteiroCount / staffLimit) * 100, 100)}%` }}
@@ -3924,22 +3919,22 @@ function BillingManager({ condoInfo, staff }) {
         <div className="grid grid-cols-2 gap-4 mt-4">
           <div className="bg-blue-50 dark:bg-blue-900/30 p-4 rounded-xl text-center">
             <p className="text-3xl font-bold text-blue-600 dark:text-blue-400">{adminCount}</p>
-            <p className="text-sm text-gray-600 dark:text-gray-400">Administradores</p>
+            <p className="text-sm text-slate-600 dark:text-slate-400">Administradores</p>
           </div>
           <div className="bg-emerald-50 dark:bg-emerald-900/30 p-4 rounded-xl text-center">
             <p className="text-3xl font-bold text-emerald-600 dark:text-emerald-400">{porteiroCount}</p>
-            <p className="text-sm text-gray-600 dark:text-gray-400">Porteiros</p>
+            <p className="text-sm text-slate-600 dark:text-slate-400">Porteiros</p>
           </div>
         </div>
       </div>
 
       {/* Todos os Planos */}
-      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
-        <div className="bg-blue-500 dark:bg-blue-600 px-6 py-4">
-          <h3 className="font-semibold text-white flex items-center gap-2">
-            <TrendingUp size={18} />
-            Planos Disponíveis
-          </h3>
+      <div className="bg-white dark:bg-slate-800 rounded-xl shadow-card border border-slate-200 dark:border-slate-700 overflow-hidden">
+        <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-700 flex items-center gap-3">
+          <div className="p-2.5 bg-blue-50 dark:bg-blue-900/20 rounded-xl">
+            <TrendingUp size={18} className="text-blue-500 dark:text-blue-400" />
+          </div>
+          <h3 className="font-semibold text-slate-900 dark:text-white">Planos Disponíveis</h3>
         </div>
         <div className="p-6">
           <div className="grid md:grid-cols-3 gap-4">
@@ -3955,7 +3950,7 @@ function BillingManager({ condoInfo, staff }) {
                       ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
                       : isPopular
                         ? 'border-blue-300 dark:border-blue-700'
-                        : 'border-gray-200 dark:border-gray-700'
+                        : 'border-slate-200 dark:border-slate-700'
                   }`}
                 >
                   {isPopular && !isCurrent && (
@@ -3974,10 +3969,10 @@ function BillingManager({ condoInfo, staff }) {
                   )}
 
                   <div className="text-center mb-4 mt-2">
-                    <h4 className="font-bold text-gray-900 dark:text-white text-lg">{plan.name}</h4>
+                    <h4 className="font-bold text-slate-900 dark:text-white text-lg">{plan.name}</h4>
                     <div className="mt-2">
-                      <span className="text-3xl font-bold text-gray-900 dark:text-white">R$ {plan.price}</span>
-                      <span className="text-gray-500 dark:text-gray-400">/mês</span>
+                      <span className="text-3xl font-bold text-slate-900 dark:text-white">R$ {plan.price}</span>
+                      <span className="text-slate-500 dark:text-slate-400">/mês</span>
                     </div>
                   </div>
 
@@ -3990,9 +3985,9 @@ function BillingManager({ condoInfo, staff }) {
                             plan.color === 'violet' ? 'text-violet-500' : 'text-emerald-500'
                           }`} />
                         ) : (
-                          <X size={16} className="text-gray-300 dark:text-gray-600 flex-shrink-0" />
+                          <X size={16} className="text-slate-300 dark:text-slate-600 flex-shrink-0" />
                         )}
-                        <span className={feature.included ? 'text-gray-700 dark:text-gray-300' : 'text-gray-400 dark:text-gray-500'}>
+                        <span className={feature.included ? 'text-slate-700 dark:text-slate-300' : 'text-slate-400 dark:text-slate-500'}>
                           {feature.text}
                         </span>
                       </li>
@@ -4000,7 +3995,7 @@ function BillingManager({ condoInfo, staff }) {
                   </ul>
 
                   {(isCurrent && !isTrial) ? (
-                    <button disabled className="w-full bg-gray-200 dark:bg-gray-700 text-gray-500 dark:text-gray-400 py-2.5 rounded-lg font-medium cursor-not-allowed">
+                    <button disabled className="w-full bg-slate-200 dark:bg-slate-700 text-slate-500 dark:text-slate-400 py-2.5 rounded-lg font-medium cursor-not-allowed">
                       Plano Atual
                     </button>
                   ) : (
@@ -4011,7 +4006,7 @@ function BillingManager({ condoInfo, staff }) {
                           ? 'bg-blue-500 hover:bg-blue-600 text-white'
                           : plan.color === 'violet'
                             ? 'bg-violet-500 hover:bg-violet-600 text-white'
-                            : 'bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-800 dark:text-white'
+                            : 'bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-800 dark:text-white'
                       }`}
                     >
                       {plans.indexOf(plan) > plans.indexOf(currentPlan) ? 'Fazer Upgrade' : 'Mudar Plano'}
@@ -4025,33 +4020,33 @@ function BillingManager({ condoInfo, staff }) {
       </div>
 
       {/* Info do Condomínio */}
-      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
-        <div className="bg-blue-500 dark:bg-blue-600 px-6 py-4">
-          <h3 className="font-semibold text-white flex items-center gap-2">
-            <Building2 size={18} />
-            Informações do Condomínio
-          </h3>
+      <div className="bg-white dark:bg-slate-800 rounded-xl shadow-card border border-slate-200 dark:border-slate-700 overflow-hidden">
+        <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-700 flex items-center gap-3">
+          <div className="p-2.5 bg-blue-50 dark:bg-blue-900/20 rounded-xl">
+            <Building2 size={18} className="text-blue-500 dark:text-blue-400" />
+          </div>
+          <h3 className="font-semibold text-slate-900 dark:text-white">Informações do Condomínio</h3>
         </div>
         <div className="p-6">
           <div className="grid sm:grid-cols-2 gap-4">
-            <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4">
-              <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">ID do Condomínio</p>
-              <code className="text-sm font-mono text-gray-900 dark:text-white">{condoInfo?.id || 'N/A'}</code>
+            <div className="bg-slate-50 dark:bg-slate-700/50 rounded-lg p-4">
+              <p className="text-sm text-slate-500 dark:text-slate-400 mb-1">ID do Condomínio</p>
+              <code className="text-sm font-mono text-slate-900 dark:text-white">{condoInfo?.id || 'N/A'}</code>
             </div>
-            <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4">
-              <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">Nome</p>
-              <p className="font-medium text-gray-900 dark:text-white">{condoInfo?.name || 'N/A'}</p>
+            <div className="bg-slate-50 dark:bg-slate-700/50 rounded-lg p-4">
+              <p className="text-sm text-slate-500 dark:text-slate-400 mb-1">Nome</p>
+              <p className="font-medium text-slate-900 dark:text-white">{condoInfo?.name || 'N/A'}</p>
             </div>
-            <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4">
-              <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">Plano</p>
+            <div className="bg-slate-50 dark:bg-slate-700/50 rounded-lg p-4">
+              <p className="text-sm text-slate-500 dark:text-slate-400 mb-1">Plano</p>
               <span className="inline-flex items-center gap-1.5 bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 px-2.5 py-1 rounded-lg text-sm font-medium">
                 <CheckCircle size={14} />
                 {currentPlan.name}
               </span>
             </div>
-            <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4">
-              <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">Limite de Porteiros</p>
-              <p className="font-medium text-gray-900 dark:text-white">{staffLimit} porteiros</p>
+            <div className="bg-slate-50 dark:bg-slate-700/50 rounded-lg p-4">
+              <p className="text-sm text-slate-500 dark:text-slate-400 mb-1">Limite de Porteiros</p>
+              <p className="font-medium text-slate-900 dark:text-white">{staffLimit} porteiros</p>
             </div>
           </div>
         </div>
@@ -4146,10 +4141,12 @@ function ResidentsManager({ residents, onAddResident, onDeleteResident, onUpdate
     cancelEdit();
   };
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
-      <div className="bg-blue-500 dark:bg-blue-600 px-6 py-4 flex items-center gap-2">
-        <Users className="text-white/80" size={20} />
-        <h2 className="font-semibold text-white">Gerir Moradores</h2>
+    <div className="bg-white dark:bg-slate-800 rounded-xl shadow-card border border-slate-200 dark:border-slate-700 overflow-hidden">
+      <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-700 flex items-center gap-3">
+        <div className="p-2.5 bg-blue-50 dark:bg-blue-900/20 rounded-xl">
+          <Users className="text-blue-500 dark:text-blue-400" size={20} />
+        </div>
+        <h2 className="font-semibold text-slate-900 dark:text-white">Gerir Moradores</h2>
       </div>
       <div className="p-6 space-y-6">
         {ocrPendingResident && (
@@ -4167,75 +4164,75 @@ function ResidentsManager({ residents, onAddResident, onDeleteResident, onUpdate
         )}
         <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Unidade *</label>
-            <input type="text" placeholder="Ex: 104" className="w-full px-4 py-2 border dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-slate-500 outline-none bg-white dark:bg-gray-700 dark:text-white" value={form.unit} onChange={e => setForm({ ...form, unit: e.target.value })} required />
+            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Unidade *</label>
+            <input type="text" placeholder="Ex: 104" className="w-full px-4 py-2 border dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-slate-500 outline-none bg-white dark:bg-slate-700 dark:text-white" value={form.unit} onChange={e => setForm({ ...form, unit: e.target.value })} required />
             {errors.unit && <p className="text-red-600 text-xs mt-1">{errors.unit}</p>}
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Nome *</label>
-            <input type="text" placeholder="Nome completo (Nome e Sobrenome)" className="w-full px-4 py-2 border dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-slate-500 outline-none bg-white dark:bg-gray-700 dark:text-white" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} required />
+            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Nome *</label>
+            <input type="text" placeholder="Nome completo (Nome e Sobrenome)" className="w-full px-4 py-2 border dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-slate-500 outline-none bg-white dark:bg-slate-700 dark:text-white" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} required />
             {errors.name && <p className="text-red-600 text-xs mt-1">{errors.name}</p>}
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">WhatsApp</label>
-            <input type="tel" placeholder="(11) 9XXXX-XXXX" className="w-full px-4 py-2 border dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-slate-500 outline-none bg-white dark:bg-gray-700 dark:text-white" value={form.phone} onChange={e => setForm({ ...form, phone: formatPhoneMask(e.target.value) })} />
+            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">WhatsApp</label>
+            <input type="tel" placeholder="(11) 9XXXX-XXXX" className="w-full px-4 py-2 border dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-slate-500 outline-none bg-white dark:bg-slate-700 dark:text-white" value={form.phone} onChange={e => setForm({ ...form, phone: formatPhoneMask(e.target.value) })} />
             {errors.phone && <p className="text-red-600 text-xs mt-1">{errors.phone}</p>}
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Documento (RG/CPF) *</label>
-            <input type="text" placeholder="RG ou CPF" className="w-full px-4 py-2 border dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-slate-500 outline-none bg-white dark:bg-gray-700 dark:text-white" value={form.document} onChange={e => setForm({ ...form, document: e.target.value })} required />
+            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Documento (RG/CPF) *</label>
+            <input type="text" placeholder="RG ou CPF" className="w-full px-4 py-2 border dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-slate-500 outline-none bg-white dark:bg-slate-700 dark:text-white" value={form.document} onChange={e => setForm({ ...form, document: e.target.value })} required />
             {errors.document && <p className="text-red-600 text-xs mt-1">{errors.document}</p>}
           </div>
           <div className="md:col-span-4">
             <button className="w-full bg-slate-700 hover:bg-slate-800 text-white font-semibold py-2.5 rounded-lg shadow-sm">Salvar Morador</button>
           </div>
         </form>
-        <div className="text-xs text-gray-500 dark:text-gray-400">
+        <div className="text-xs text-slate-500 dark:text-slate-400">
           O PIN de acesso do morador será gerado automaticamente (4 últimos dígitos do celular).
         </div>
 
-        <div className="border-t dark:border-gray-700 pt-4">
-          <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Moradores cadastrados ({residents?.length || 0})</h3>
+        <div className="border-t dark:border-slate-700 pt-4">
+          <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-3">Moradores cadastrados ({residents?.length || 0})</h3>
           {(!residents || residents.length === 0) ? (
-            <div className="text-gray-400 dark:text-gray-500 text-sm">Nenhum morador cadastrado.</div>
+            <div className="text-slate-400 dark:text-slate-500 text-sm">Nenhum morador cadastrado.</div>
           ) : (
-            <div className="divide-y dark:divide-gray-700">
+            <div className="divide-y dark:divide-slate-700">
               {residents.map(r => (
                 <div key={r.id} className="py-3">
                   {editId === r.id ? (
                     <form onSubmit={saveEdit} className="grid grid-cols-1 md:grid-cols-4 gap-2 items-center">
                       <div>
-                        <input type="text" className="w-full px-3 py-2 border dark:border-gray-600 rounded bg-white dark:bg-gray-700 dark:text-white" value={editForm.unit} onChange={e => setEditForm({ ...editForm, unit: e.target.value })} />
+                        <input type="text" className="w-full px-3 py-2 border dark:border-slate-600 rounded bg-white dark:bg-slate-700 dark:text-white" value={editForm.unit} onChange={e => setEditForm({ ...editForm, unit: e.target.value })} />
                         {editErrors.unit && <p className="text-red-600 text-xs mt-1">{editErrors.unit}</p>}
                       </div>
                       <div>
-                        <input type="text" className="w-full px-3 py-2 border dark:border-gray-600 rounded bg-white dark:bg-gray-700 dark:text-white" value={editForm.name} onChange={e => setEditForm({ ...editForm, name: e.target.value })} />
+                        <input type="text" className="w-full px-3 py-2 border dark:border-slate-600 rounded bg-white dark:bg-slate-700 dark:text-white" value={editForm.name} onChange={e => setEditForm({ ...editForm, name: e.target.value })} />
                         {editErrors.name && <p className="text-red-600 text-xs mt-1">{editErrors.name}</p>}
                       </div>
                       <div>
-                        <input type="tel" className="w-full px-3 py-2 border dark:border-gray-600 rounded bg-white dark:bg-gray-700 dark:text-white" value={editForm.phone} onChange={e => setEditForm({ ...editForm, phone: formatPhoneMask(e.target.value) })} />
+                        <input type="tel" className="w-full px-3 py-2 border dark:border-slate-600 rounded bg-white dark:bg-slate-700 dark:text-white" value={editForm.phone} onChange={e => setEditForm({ ...editForm, phone: formatPhoneMask(e.target.value) })} />
                         {editErrors.phone && <p className="text-red-600 text-xs mt-1">{editErrors.phone}</p>}
                       </div>
                       <div>
-                        <input type="text" className="w-full px-3 py-2 border dark:border-gray-600 rounded bg-white dark:bg-gray-700 dark:text-white" value={editForm.document} onChange={e => setEditForm({ ...editForm, document: e.target.value })} />
+                        <input type="text" className="w-full px-3 py-2 border dark:border-slate-600 rounded bg-white dark:bg-slate-700 dark:text-white" value={editForm.document} onChange={e => setEditForm({ ...editForm, document: e.target.value })} />
                         {editErrors.document && <p className="text-red-600 text-xs mt-1">{editErrors.document}</p>}
                       </div>
                       <div className="md:col-span-4 flex gap-2 mt-2">
                         <button type="submit" className="px-3 py-2 rounded bg-slate-700 text-white text-sm">Salvar</button>
-                        <button type="button" onClick={cancelEdit} className="px-3 py-2 rounded bg-gray-200 dark:bg-gray-600 text-gray-800 dark:text-gray-200 text-sm">Cancelar</button>
+                        <button type="button" onClick={cancelEdit} className="px-3 py-2 rounded bg-slate-200 dark:bg-slate-600 text-slate-800 dark:text-slate-200 text-sm">Cancelar</button>
                       </div>
                     </form>
                   ) : (
                     <div className="flex items-center justify-between">
                       <div className="text-sm">
-                        <span className="font-medium text-gray-800 dark:text-gray-200">Apt {r.unit}</span>
-                        <span className="mx-2 text-gray-400">•</span>
-                        <span className="text-gray-700 dark:text-gray-300">{r.name}</span>
-                        {r.phone && <span className="mx-2 text-gray-400">•</span>}
-                        {r.phone && <span className="text-gray-600 dark:text-gray-400">{formatPhoneMask(r.phone)}</span>}
+                        <span className="font-medium text-slate-800 dark:text-slate-200">Apt {r.unit}</span>
+                        <span className="mx-2 text-slate-400">•</span>
+                        <span className="text-slate-700 dark:text-slate-300">{r.name}</span>
+                        {r.phone && <span className="mx-2 text-slate-400">•</span>}
+                        {r.phone && <span className="text-slate-600 dark:text-slate-400">{formatPhoneMask(r.phone)}</span>}
                         {r.document && <>
-                          <span className="mx-2 text-gray-400">•</span>
-                          <span className="text-gray-600 dark:text-gray-400">{r.document}</span>
+                          <span className="mx-2 text-slate-400">•</span>
+                          <span className="text-slate-600 dark:text-slate-400">{r.document}</span>
                         </>}
                       </div>
                       <div className="flex gap-2">
@@ -4420,29 +4417,29 @@ function ResidentView({ onBack, initialSlug }) {
             )}
             {/* Loading automático quando vindo de link compartilhado */}
             {initialSlug && condoLoading && (
-              <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
-                <div className="bg-gradient-to-r from-emerald-600 to-emerald-500 px-5 py-5 text-center">
-                  <div className="inline-flex items-center justify-center w-12 h-12 bg-white/20 backdrop-blur-sm rounded-xl mb-3">
-                    <User className="text-white" size={24} />
+              <div className="bg-white dark:bg-slate-800 rounded-xl shadow-lg border border-slate-200 dark:border-slate-700 overflow-hidden">
+                <div className="bg-white dark:bg-slate-800 border-b border-slate-100 dark:border-slate-700 px-5 py-5 text-center">
+                  <div className="inline-flex items-center justify-center w-12 h-12 bg-emerald-50 dark:bg-emerald-900/20 rounded-xl mb-3">
+                    <User className="text-emerald-500 dark:text-emerald-400" size={24} />
                   </div>
-                  <h1 className="text-xl sm:text-2xl font-bold text-white mb-0.5">Área do Morador</h1>
-                  <p className="text-emerald-100 text-xs">Consulte suas encomendas</p>
+                  <h1 className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white mb-0.5">Área do Morador</h1>
+                  <p className="text-slate-500 dark:text-slate-400 text-xs">Consulte suas encomendas</p>
                 </div>
                 <div className="p-8 text-center">
                   <div className="animate-spin rounded-full h-8 w-8 border-3 border-emerald-500 border-t-transparent mx-auto mb-3"></div>
-                  <p className="text-gray-600 dark:text-gray-300 font-medium">Carregando condomínio...</p>
+                  <p className="text-slate-600 dark:text-slate-300 font-medium">Carregando condomínio...</p>
                 </div>
               </div>
             )}
             {/* Erro quando slug inválido */}
             {initialSlug && !condoLoading && condoError && (
-              <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
-                <div className="bg-gradient-to-r from-emerald-600 to-emerald-500 px-5 py-5 text-center">
-                  <div className="inline-flex items-center justify-center w-12 h-12 bg-white/20 backdrop-blur-sm rounded-xl mb-3">
-                    <User className="text-white" size={24} />
+              <div className="bg-white dark:bg-slate-800 rounded-xl shadow-lg border border-slate-200 dark:border-slate-700 overflow-hidden">
+                <div className="bg-white dark:bg-slate-800 border-b border-slate-100 dark:border-slate-700 px-5 py-5 text-center">
+                  <div className="inline-flex items-center justify-center w-12 h-12 bg-emerald-50 dark:bg-emerald-900/20 rounded-xl mb-3">
+                    <User className="text-emerald-500 dark:text-emerald-400" size={24} />
                   </div>
-                  <h1 className="text-xl sm:text-2xl font-bold text-white mb-0.5">Área do Morador</h1>
-                  <p className="text-emerald-100 text-xs">Consulte suas encomendas</p>
+                  <h1 className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white mb-0.5">Área do Morador</h1>
+                  <p className="text-slate-500 dark:text-slate-400 text-xs">Consulte suas encomendas</p>
                 </div>
                 <div className="p-6 text-center space-y-3">
                   <div className="flex items-center justify-center gap-2 text-red-500 bg-red-50 dark:bg-red-900/20 py-2.5 px-3 rounded-lg">
@@ -4457,30 +4454,30 @@ function ResidentView({ onBack, initialSlug }) {
             )}
             {/* Formulário manual (sem slug na URL) */}
             {!initialSlug && (
-            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
-              <div className="bg-gradient-to-r from-emerald-600 to-emerald-500 px-5 py-5 text-center">
-                <div className="inline-flex items-center justify-center w-12 h-12 bg-white/20 backdrop-blur-sm rounded-xl mb-3">
-                  <User className="text-white" size={24} />
+            <div className="bg-white dark:bg-slate-800 rounded-xl shadow-lg border border-slate-200 dark:border-slate-700 overflow-hidden">
+              <div className="bg-white dark:bg-slate-800 border-b border-slate-100 dark:border-slate-700 px-5 py-5 text-center">
+                <div className="inline-flex items-center justify-center w-12 h-12 bg-emerald-50 dark:bg-emerald-900/20 rounded-xl mb-3">
+                  <User className="text-emerald-500 dark:text-emerald-400" size={24} />
                 </div>
-                <h1 className="text-xl sm:text-2xl font-bold text-white mb-0.5">Área do Morador</h1>
-                <p className="text-emerald-100 text-xs">Consulte suas encomendas</p>
+                <h1 className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white mb-0.5">Área do Morador</h1>
+                <p className="text-slate-500 dark:text-slate-400 text-xs">Consulte suas encomendas</p>
               </div>
               <div className="p-5 sm:p-6">
                 <div className="text-center mb-4">
-                  <h2 className="text-lg font-bold text-gray-800 dark:text-white mb-1">Identificar Condomínio</h2>
-                  <p className="text-gray-500 dark:text-gray-400 text-sm">Informe o código do seu condomínio para acessar</p>
+                  <h2 className="text-lg font-bold text-slate-800 dark:text-white mb-1">Identificar Condomínio</h2>
+                  <p className="text-slate-500 dark:text-slate-400 text-sm">Informe o código do seu condomínio para acessar</p>
                 </div>
                 <form onSubmit={handleCondoSubmit} className="space-y-3">
                   <div className="relative">
                     <input
                       type="text"
                       placeholder="Código do Condomínio"
-                      className="w-full pl-11 pr-4 py-3 text-base border-2 border-gray-200 dark:border-gray-600 rounded-xl focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/20 outline-none transition-all bg-gray-50 dark:bg-gray-700 dark:text-white placeholder-gray-400"
+                      className="w-full pl-11 pr-4 py-3 text-base border-2 border-slate-200 dark:border-slate-600 rounded-xl focus:border-blue-600 focus:ring-2 focus:ring-blue-600/20 outline-none transition-all bg-slate-50 dark:bg-slate-700 dark:text-white placeholder-slate-400"
                       value={condoIdInput}
                       onChange={e => setCondoIdInput(e.target.value)}
                       disabled={condoLoading}
                     />
-                    <Building2 className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
+                    <Building2 className="absolute left-4 top-1/2 transform -translate-y-1/2 text-slate-400" size={20} />
                   </div>
                   {condoError && (
                     <div className="flex items-center gap-2 text-red-500 bg-red-50 dark:bg-red-900/20 py-2.5 px-3 rounded-lg">
@@ -4491,7 +4488,7 @@ function ResidentView({ onBack, initialSlug }) {
                   <button
                     type="submit"
                     disabled={condoLoading}
-                    className="w-full py-3 rounded-xl bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-700 hover:to-emerald-600 disabled:opacity-50 text-white font-semibold shadow-lg shadow-emerald-500/30 transition-all flex items-center justify-center gap-2"
+                    className="w-full py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-semibold shadow-sm transition-all flex items-center justify-center gap-2"
                   >
                     {condoLoading ? (
                       <><div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div> Buscando...</>
@@ -4501,8 +4498,8 @@ function ResidentView({ onBack, initialSlug }) {
                   </button>
                 </form>
               </div>
-              <div className="bg-gray-50 dark:bg-gray-700/50 px-5 py-3 text-center border-t border-gray-100 dark:border-gray-700">
-                <p className="text-xs text-gray-400 dark:text-gray-500">
+              <div className="bg-slate-50 dark:bg-slate-700/50 px-5 py-3 text-center border-t border-slate-100 dark:border-slate-700">
+                <p className="text-xs text-slate-400 dark:text-slate-500">
                   O código do condomínio é fornecido pela administração
                 </p>
               </div>
@@ -4519,19 +4516,19 @@ function ResidentView({ onBack, initialSlug }) {
             <button onClick={() => { setCondoData(null); setCondoIdInput(''); setCondoError(''); }} className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 mb-4 transition-colors">
               <ArrowLeft size={16} /> Trocar condomínio
             </button>
-            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
-              <div className="bg-gradient-to-r from-emerald-600 to-emerald-500 px-5 py-5 text-center">
-                <div className="inline-flex items-center justify-center w-12 h-12 bg-white/20 backdrop-blur-sm rounded-xl mb-3">
+            <div className="bg-white dark:bg-slate-800 rounded-xl shadow-lg border border-slate-200 dark:border-slate-700 overflow-hidden">
+              <div className="bg-white dark:bg-slate-800 border-b border-slate-100 dark:border-slate-700 px-5 py-5 text-center">
+                <div className="inline-flex items-center justify-center w-12 h-12 bg-emerald-50 dark:bg-emerald-900/20 rounded-xl mb-3">
                   <Package className="text-white" size={24} />
                 </div>
-                <h1 className="text-xl sm:text-2xl font-bold text-white mb-0.5">{condoName}</h1>
-                <p className="text-emerald-100 text-xs">Sistema de Gestão de Encomendas</p>
+                <h1 className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white mb-0.5">{condoName}</h1>
+                <p className="text-slate-500 dark:text-slate-400 text-xs">Sistema de Gestão de Encomendas</p>
               </div>
 
               <div className="p-5 sm:p-6">
                 <div className="text-center mb-4">
-                  <h2 className="text-lg sm:text-xl font-bold text-gray-800 dark:text-white mb-1">Área do Morador</h2>
-                  <p className="text-gray-500 dark:text-gray-400 text-sm">Digite sua unidade para consultar encomendas</p>
+                  <h2 className="text-lg sm:text-xl font-bold text-slate-800 dark:text-white mb-1">Área do Morador</h2>
+                  <p className="text-slate-500 dark:text-slate-400 text-sm">Digite sua unidade para consultar encomendas</p>
                 </div>
 
                 <div className="space-y-3">
@@ -4539,17 +4536,17 @@ function ResidentView({ onBack, initialSlug }) {
                     <input
                       type="text"
                       placeholder="Ex: 104, 12A"
-                      className="w-full pl-11 pr-4 py-3 text-base border-2 border-gray-200 dark:border-gray-600 rounded-xl focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/20 outline-none transition-all bg-gray-50 dark:bg-gray-700 dark:text-white placeholder-gray-400"
+                      className="w-full pl-11 pr-4 py-3 text-base border-2 border-slate-200 dark:border-slate-600 rounded-xl focus:border-blue-600 focus:ring-2 focus:ring-blue-600/20 outline-none transition-all bg-slate-50 dark:bg-slate-700 dark:text-white placeholder-slate-400"
                       value={unitInput}
                       onChange={e => setUnitInput(e.target.value)}
                       onKeyDown={(e) => e.key === 'Enter' ? startSearch() : null}
                     />
-                    <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
+                    <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-slate-400" size={20} />
                   </div>
 
                   <button
                     onClick={startSearch}
-                    className="w-full py-3 rounded-xl bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-700 hover:to-emerald-600 text-white font-semibold shadow-lg shadow-emerald-500/30 hover:shadow-emerald-500/40 transition-all transform hover:scale-[1.01] active:scale-[0.99] flex items-center justify-center gap-2"
+                    className="w-full py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-semibold shadow-sm transition-all duration-150 active:scale-[0.98] flex items-center justify-center gap-2"
                   >
                     <Search size={18} />
                     Consultar Encomendas
@@ -4564,8 +4561,8 @@ function ResidentView({ onBack, initialSlug }) {
                 </div>
               </div>
 
-              <div className="bg-gray-50 dark:bg-gray-700/50 px-5 py-3 text-center border-t border-gray-100 dark:border-gray-700">
-                <p className="text-xs text-gray-400 dark:text-gray-500">
+              <div className="bg-slate-50 dark:bg-slate-700/50 px-5 py-3 text-center border-t border-slate-100 dark:border-slate-700">
+                <p className="text-xs text-slate-400 dark:text-slate-500">
                   Acesso seguro com PIN de 4 dígitos
                 </p>
               </div>
@@ -4577,20 +4574,20 @@ function ResidentView({ onBack, initialSlug }) {
       {authorizedUnit && (
         <div className="animate-fade-in space-y-4">
           {/* Header do morador logado */}
-          <div className="bg-gradient-to-r from-emerald-600 to-emerald-500 rounded-xl shadow-md p-4 sm:p-5">
+          <div className="bg-white dark:bg-slate-800 rounded-xl shadow-card border border-slate-200 dark:border-slate-700 p-4 sm:p-5">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <div className="bg-white/20 backdrop-blur-sm p-2.5 rounded-xl">
-                  <Package className="text-white" size={24} />
+                <div className="bg-emerald-50 dark:bg-emerald-900/20 p-2.5 rounded-xl">
+                  <Package className="text-emerald-500 dark:text-emerald-400" size={24} />
                 </div>
                 <div>
-                  <h1 className="text-lg sm:text-xl font-bold text-white">{condoName || 'CondoTrack'}</h1>
-                  <p className="text-emerald-100 text-sm">Unidade {authorizedUnit.toUpperCase()}</p>
+                  <h1 className="text-lg sm:text-xl font-bold text-slate-900 dark:text-white">{condoName || 'CondoTrack'}</h1>
+                  <p className="text-slate-500 dark:text-slate-400 text-sm">Unidade {authorizedUnit.toUpperCase()}</p>
                 </div>
               </div>
               <button
                 onClick={logoutUnit}
-                className="flex items-center gap-2 text-sm px-4 py-2 bg-white/20 hover:bg-white/30 text-white rounded-lg transition-colors"
+                className="flex items-center gap-2 text-sm px-4 py-2 border border-slate-200 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-lg transition-colors duration-150"
               >
                 <LogOut size={16} />
                 <span className="hidden sm:inline">Trocar Unidade</span>
@@ -4600,43 +4597,43 @@ function ResidentView({ onBack, initialSlug }) {
 
           {/* Título da seção */}
           <div className="flex items-center justify-between">
-            <h3 className="text-lg font-bold text-gray-800 dark:text-white flex items-center gap-2">
+            <h3 className="text-lg font-bold text-slate-800 dark:text-white flex items-center gap-2">
               <Box size={20} className="text-emerald-600" />
               Suas Encomendas
             </h3>
-            <span className="text-sm text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 px-3 py-1 rounded-full">
+            <span className="text-sm text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-700 px-3 py-1 rounded-full">
               {myPackages.filter(p => p.status === 'pending').length} pendente(s)
             </span>
           </div>
           {myPackages.length === 0 ? (
-            <div className="bg-white dark:bg-gray-800 p-8 sm:p-12 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 text-center">
-              <div className="inline-flex items-center justify-center w-16 h-16 bg-gray-100 dark:bg-gray-700 rounded-full mb-4">
-                <Package className="text-gray-400" size={32} />
+            <div className="bg-white dark:bg-slate-800 p-8 sm:p-12 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 text-center">
+              <div className="inline-flex items-center justify-center w-16 h-16 bg-slate-100 dark:bg-slate-700 rounded-full mb-4">
+                <Package className="text-slate-400" size={32} />
               </div>
-              <h4 className="text-lg font-semibold text-gray-700 dark:text-gray-300 mb-2">Nenhuma encomenda</h4>
-              <p className="text-gray-500 dark:text-gray-400 text-sm">Você não possui encomendas pendentes no momento.</p>
+              <h4 className="text-lg font-semibold text-slate-700 dark:text-slate-300 mb-2">Nenhuma encomenda</h4>
+              <p className="text-slate-500 dark:text-slate-400 text-sm">Você não possui encomendas pendentes no momento.</p>
             </div>
           ) : (
             <div className="grid gap-3">
               {myPackages.map(pkg => (
-                <div key={pkg.id} className={`bg-white dark:bg-gray-800 p-5 rounded-lg shadow-sm border-l-4 ${pkg.status === 'collected' ? 'border-green-500' : 'border-emerald-500'} flex flex-col sm:flex-row justify-between items-center gap-4`}>
+                <div key={pkg.id} className={`bg-white dark:bg-slate-800 p-5 rounded-lg shadow-sm border-l-4 ${pkg.status === 'collected' ? 'border-green-500' : 'border-emerald-500'} flex flex-col sm:flex-row justify-between items-center gap-4`}>
                   <div className="flex-1">
                     <div className="flex items-center gap-2 mb-1">
                       <span className={`text-xs font-bold px-2 py-1 rounded uppercase ${pkg.status === 'collected' ? 'bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-400' : 'bg-emerald-100 dark:bg-emerald-900/50 text-emerald-700 dark:text-emerald-400'}`}>{pkg.status === 'collected' ? 'Entregue' : 'Aguardando'}</span>
-                      <span className="text-xs text-gray-400">{new Date(pkg.created_at).toLocaleDateString('pt-BR')}</span>
+                      <span className="text-xs text-slate-400">{new Date(pkg.created_at).toLocaleDateString('pt-BR')}</span>
                     </div>
-                    <h4 className="text-lg font-bold text-gray-800 dark:text-white">{pkg.type} - {pkg.description || 'Sem descrição'}</h4>
-                    <p className="text-gray-600 dark:text-gray-400">Para: {pkg.recipient}</p>
+                    <h4 className="text-lg font-bold text-slate-800 dark:text-white">{pkg.type} - {pkg.description || 'Sem descrição'}</h4>
+                    <p className="text-slate-600 dark:text-slate-400">Para: {pkg.recipient}</p>
                   </div>
                   {pkg.status === 'pending' && (
                     <div>
                       {showModalFor === pkg.id ? (
                         <div className="flex flex-col gap-2 min-w-[240px] animate-fade-in">
-                          <input autoFocus type="text" placeholder="Nome de quem retira" className="px-3 py-2 border dark:border-gray-600 rounded text-sm w-full bg-white dark:bg-gray-700 dark:text-white" value={collectorName} onChange={(e) => setCollectorName(e.target.value)} />
-                          <input type="text" placeholder="Documento (RG/CPF)" className="px-3 py-2 border dark:border-gray-600 rounded text-sm w-full bg-white dark:bg-gray-700 dark:text-white" value={collectorDoc} onChange={(e) => setCollectorDoc(e.target.value)} />
+                          <input autoFocus type="text" placeholder="Nome de quem retira" className="px-3 py-2 border dark:border-slate-600 rounded text-sm w-full bg-white dark:bg-slate-700 dark:text-white" value={collectorName} onChange={(e) => setCollectorName(e.target.value)} />
+                          <input type="text" placeholder="Documento (RG/CPF)" className="px-3 py-2 border dark:border-slate-600 rounded text-sm w-full bg-white dark:bg-slate-700 dark:text-white" value={collectorDoc} onChange={(e) => setCollectorDoc(e.target.value)} />
                           <div className="flex gap-2">
                             <button onClick={() => confirm(pkg.id)} disabled={!collectorName || !collectorDoc} className="bg-emerald-600 text-white px-3 py-2 rounded text-sm flex-1 hover:bg-emerald-700 disabled:opacity-50">Confirmar</button>
-                            <button onClick={() => setShowModalFor(null)} className="bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-200 px-3 py-2 rounded text-sm hover:bg-gray-300 dark:hover:bg-gray-500">Voltar</button>
+                            <button onClick={() => setShowModalFor(null)} className="bg-slate-200 dark:bg-slate-600 text-slate-700 dark:text-slate-200 px-3 py-2 rounded text-sm hover:bg-slate-300 dark:hover:bg-slate-500">Voltar</button>
                           </div>
                         </div>
                       ) : (
@@ -4653,19 +4650,19 @@ function ResidentView({ onBack, initialSlug }) {
 
       {pinModalUnit && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm px-4">
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg w-full max-w-sm overflow-hidden animate-fade-in">
+          <div className="bg-white dark:bg-slate-800 rounded-xl shadow-lg w-full max-w-sm overflow-hidden animate-fade-in">
             {/* Header */}
-            <div className="bg-gradient-to-r from-emerald-600 to-emerald-500 px-6 py-4 text-center">
-              <div className="inline-flex items-center justify-center w-12 h-12 bg-white/20 backdrop-blur-sm rounded-xl mb-2">
-                <Shield className="text-white" size={24} />
+            <div className="border-b border-slate-100 dark:border-slate-700 px-6 py-4 text-center">
+              <div className="inline-flex items-center justify-center w-12 h-12 bg-emerald-50 dark:bg-emerald-900/20 rounded-xl mb-2">
+                <Shield className="text-emerald-500 dark:text-emerald-400" size={24} />
               </div>
-              <h3 className="text-lg font-bold text-white">Verificação de Segurança</h3>
-              <p className="text-emerald-100 text-sm">Unidade {pinModalUnit.toUpperCase()}</p>
+              <h3 className="text-lg font-bold text-slate-900 dark:text-white">Verificação de Segurança</h3>
+              <p className="text-slate-500 dark:text-slate-400 text-sm">Unidade {pinModalUnit.toUpperCase()}</p>
             </div>
 
             {/* Conteúdo */}
             <div className="p-6">
-              <p className="text-sm text-gray-600 dark:text-gray-300 text-center mb-4">
+              <p className="text-sm text-slate-600 dark:text-slate-300 text-center mb-4">
                 Digite o PIN de 4 dígitos para acessar suas encomendas
               </p>
 
@@ -4675,14 +4672,14 @@ function ResidentView({ onBack, initialSlug }) {
                   type="password"
                   inputMode="numeric"
                   maxLength={4}
-                  className="w-full px-4 py-4 text-center text-2xl tracking-[0.5em] font-mono border-2 border-gray-200 dark:border-gray-600 rounded-xl bg-gray-50 dark:bg-gray-700 dark:text-white focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/20 outline-none transition-all"
+                  className="w-full px-4 py-4 text-center text-2xl tracking-[0.5em] font-mono border-2 border-slate-200 dark:border-slate-600 rounded-xl bg-slate-50 dark:bg-slate-700 dark:text-white focus:border-blue-600 focus:ring-2 focus:ring-blue-600/20 outline-none transition-all"
                   placeholder="••••"
                   value={pinInput}
                   onChange={(e) => setPinInput(extractDigits(e.target.value).slice(0,4))}
                   onKeyDown={(e) => e.key === 'Enter' && submitPin()}
                   autoFocus
                 />
-                <p className="text-xs text-gray-400 dark:text-gray-500 text-center mt-2">
+                <p className="text-xs text-slate-400 dark:text-slate-500 text-center mt-2">
                   Use os 4 últimos dígitos do seu celular
                 </p>
               </div>
@@ -4698,13 +4695,13 @@ function ResidentView({ onBack, initialSlug }) {
               <div className="flex gap-3">
                 <button
                   onClick={() => setPinModalUnit(null)}
-                  className="flex-1 px-4 py-3 rounded-xl bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 font-medium hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+                  className="flex-1 px-4 py-3 rounded-xl bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 font-medium hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors"
                 >
                   Cancelar
                 </button>
                 <button
                   onClick={submitPin}
-                  className="flex-1 px-4 py-3 rounded-xl bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-700 hover:to-emerald-600 text-white font-medium shadow-lg shadow-emerald-500/30 transition-all"
+                  className="flex-1 px-4 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-medium shadow-sm transition-all"
                 >
                   Acessar
                 </button>
@@ -4736,7 +4733,7 @@ function PackageCard({ pkg, residentsIndex, compact = false, onClick }) {
 
   return (
     <div
-      className={`bg-white dark:bg-gray-800 ${compact ? 'p-2' : 'p-4'} rounded-xl shadow-sm border-2 border-gray-100 dark:border-gray-700 hover:shadow-lg hover:border-gray-200 dark:hover:border-gray-600 transition-all relative cursor-pointer`}
+      className={`bg-white dark:bg-slate-800 ${compact ? 'p-2' : 'p-4'} rounded-xl shadow-sm border-2 border-slate-100 dark:border-slate-700 hover:shadow-lg hover:border-slate-200 dark:hover:border-slate-600 transition-all relative cursor-pointer`}
       onClick={onClick}
       role="button"
       tabIndex={0}
@@ -4744,15 +4741,15 @@ function PackageCard({ pkg, residentsIndex, compact = false, onClick }) {
     >
       <div className="flex justify-between items-start mb-2">
         <div className={`${typeConfig.badge} text-white ${compact ? 'text-[10px]' : 'text-xs'} font-bold px-2.5 py-1 rounded-lg shadow-sm`}>APT {pkg.unit}</div>
-        <span className={`${compact ? 'text-[10px]' : 'text-xs'} text-gray-500 dark:text-gray-400 font-medium`}>{dateStr}</span>
+        <span className={`${compact ? 'text-[10px]' : 'text-xs'} text-slate-500 dark:text-slate-400 font-medium`}>{dateStr}</span>
       </div>
       <div className="flex items-start gap-3">
         <div className={`p-2 rounded-xl ${typeConfig.bgLight} ${typeConfig.bgDark} shadow-sm`}>
           <TypeIcon size={compact ? 18 : 24} className={`${typeConfig.textLight} ${typeConfig.textDark}`} />
         </div>
         <div className="flex-1">
-          <h4 className={`${compact ? 'text-sm' : 'text-base'} font-bold text-gray-800 dark:text-white`}>{pkg.recipient}</h4>
-          <p className={`${compact ? 'text-xs' : 'text-sm'} ${typeConfig.textLight} ${typeConfig.textDark} font-medium`}>{pkg.type} {pkg.description && <span className="text-gray-500 dark:text-gray-400">- {pkg.description}</span>}</p>
+          <h4 className={`${compact ? 'text-sm' : 'text-base'} font-bold text-slate-800 dark:text-white`}>{pkg.recipient}</h4>
+          <p className={`${compact ? 'text-xs' : 'text-sm'} ${typeConfig.textLight} ${typeConfig.textDark} font-medium`}>{pkg.type} {pkg.description && <span className="text-slate-500 dark:text-slate-400">- {pkg.description}</span>}</p>
           {pkg?.notified_at && (
             <div className={`${compact ? 'text-[10px]' : 'text-xs'} text-blue-600 dark:text-blue-400 flex items-center gap-1 mt-1 font-medium`}>
               <CheckCheck size={14} /> Avisado por {pkg.notified_by || 'Portaria'} às {notifiedTime}
@@ -4771,7 +4768,7 @@ function PackageCard({ pkg, residentsIndex, compact = false, onClick }) {
           )}
         </div>
       </div>
-      <div className={`mt-3 pt-2 border-t border-gray-100 dark:border-gray-700 flex items-center gap-1.5 ${compact ? 'text-[10px]' : 'text-xs'} text-amber-600 dark:text-amber-400 font-semibold`}>
+      <div className={`mt-3 pt-2 border-t border-slate-100 dark:border-slate-700 flex items-center gap-1.5 ${compact ? 'text-[10px]' : 'text-xs'} text-amber-600 dark:text-amber-400 font-semibold`}>
         <Clock size={compact ? 12 : 14} className="text-amber-500" /> Aguardando morador
       </div>
     </div>
@@ -4779,41 +4776,47 @@ function PackageCard({ pkg, residentsIndex, compact = false, onClick }) {
 }
 
 function TeamManager({ staff, onAddStaff, onDeleteStaff }) {
-  const [form, setForm] = useState({ name: '', username: '', password: '', role: 'concierge' });
+  const [form, setForm] = useState({ name: '', email: '', password: '', role: 'concierge' });
   const [error, setError] = useState('');
   const submit = (e) => {
     e.preventDefault();
     setError('');
-    if (!form.name || !form.username || !form.password) {
+    if (!form.name || !form.email || !form.password) {
       setError('Preencha todos os campos.');
       return;
     }
-    onAddStaff({ ...form });
-    setForm({ name: '', username: '', password: '', role: 'concierge' });
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) {
+      setError('Informe um e-mail válido.');
+      return;
+    }
+    onAddStaff({ name: form.name, username: form.email.trim().toLowerCase(), password: form.password, role: form.role });
+    setForm({ name: '', email: '', password: '', role: 'concierge' });
   };
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
-      <div className="bg-blue-500 dark:bg-blue-600 px-6 py-4 flex items-center gap-2">
-        <Shield className="text-white/80" size={20} />
-        <h2 className="font-semibold text-white">Gestão de Equipe</h2>
+    <div className="bg-white dark:bg-slate-800 rounded-xl shadow-card border border-slate-200 dark:border-slate-700 overflow-hidden">
+      <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-700 flex items-center gap-3">
+        <div className="p-2.5 bg-blue-50 dark:bg-blue-900/20 rounded-xl">
+          <Shield className="text-blue-500 dark:text-blue-400" size={20} />
+        </div>
+        <h2 className="font-semibold text-slate-900 dark:text-white">Gestão de Equipe</h2>
       </div>
       <div className="p-6 space-y-6">
         <form onSubmit={submit} className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Nome</label>
-            <input className="w-full px-3 py-2 border dark:border-gray-600 rounded bg-white dark:bg-gray-700 dark:text-white" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} />
+            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Nome</label>
+            <input className="w-full px-3 py-2 border dark:border-slate-600 rounded bg-white dark:bg-slate-700 dark:text-white" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Usuário</label>
-            <input className="w-full px-3 py-2 border dark:border-gray-600 rounded bg-white dark:bg-gray-700 dark:text-white" value={form.username} onChange={e => setForm({ ...form, username: e.target.value })} />
+            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">E-mail</label>
+            <input type="email" placeholder="porteiro@email.com" className="w-full px-3 py-2 border dark:border-slate-600 rounded bg-white dark:bg-slate-700 dark:text-white" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Senha</label>
-            <input type="password" className="w-full px-3 py-2 border dark:border-gray-600 rounded bg-white dark:bg-gray-700 dark:text-white" value={form.password} onChange={e => setForm({ ...form, password: e.target.value })} />
+            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Senha</label>
+            <input type="password" className="w-full px-3 py-2 border dark:border-slate-600 rounded bg-white dark:bg-slate-700 dark:text-white" value={form.password} onChange={e => setForm({ ...form, password: e.target.value })} />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Função</label>
-            <select className="w-full px-3 py-2 border dark:border-gray-600 rounded bg-white dark:bg-gray-700 dark:text-white" value={form.role} onChange={e => setForm({ ...form, role: e.target.value })}>
+            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Função</label>
+            <select className="w-full px-3 py-2 border dark:border-slate-600 rounded bg-white dark:bg-slate-700 dark:text-white" value={form.role} onChange={e => setForm({ ...form, role: e.target.value })}>
               <option value="concierge">concierge</option>
               <option value="admin">admin</option>
             </select>
@@ -4824,20 +4827,20 @@ function TeamManager({ staff, onAddStaff, onDeleteStaff }) {
           </div>
         </form>
 
-        <div className="border-t dark:border-gray-700 pt-4">
-          <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Equipe ({staff?.length || 0})</h3>
+        <div className="border-t dark:border-slate-700 pt-4">
+          <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-3">Equipe ({staff?.length || 0})</h3>
           {(!staff || staff.length === 0) ? (
-            <div className="text-gray-400 dark:text-gray-500 text-sm">Nenhum funcionário.</div>
+            <div className="text-slate-400 dark:text-slate-500 text-sm">Nenhum funcionário.</div>
           ) : (
-            <div className="divide-y dark:divide-gray-700">
+            <div className="divide-y dark:divide-slate-700">
               {staff.map(s => (
                 <div key={s.id} className="py-3 flex items-center justify-between">
                   <div className="text-sm">
-                    <span className="font-medium text-gray-800 dark:text-gray-200">{s.name}</span>
-                    <span className="mx-2 text-gray-400">•</span>
-                    <span className="text-gray-600 dark:text-gray-400">@{s.username}</span>
-                    <span className="mx-2 text-gray-400">•</span>
-                    <span className="text-gray-600 dark:text-gray-400">{s.role}</span>
+                    <span className="font-medium text-slate-800 dark:text-slate-200">{s.name}</span>
+                    <span className="mx-2 text-slate-400">•</span>
+                    <span className="text-slate-600 dark:text-slate-400">{s.username}</span>
+                    <span className="mx-2 text-slate-400">•</span>
+                    <span className="text-slate-600 dark:text-slate-400">{s.role}</span>
                   </div>
                   <button onClick={() => onDeleteStaff(s.id)} className="text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30 px-2 py-1 rounded text-sm">Excluir</button>
                 </div>
@@ -5036,37 +5039,39 @@ function ReportQueryManager({ packages }) {
   return (
     <div className="space-y-6">
       {/* Painel de Filtros */}
-      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
-        <div className="bg-blue-500 dark:bg-blue-600 px-6 py-4 flex items-center gap-2">
-          <FileText className="text-white/80" size={20} />
-          <h2 className="font-semibold text-white">Consulta Histórico de Encomendas</h2>
+      <div className="bg-white dark:bg-slate-800 rounded-xl shadow-card border border-slate-200 dark:border-slate-700 overflow-hidden">
+        <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-700 flex items-center gap-3">
+          <div className="p-2.5 bg-blue-50 dark:bg-blue-900/20 rounded-xl">
+            <FileText className="text-blue-500 dark:text-blue-400" size={20} />
+          </div>
+          <h2 className="font-semibold text-slate-900 dark:text-white">Consulta Histórico de Encomendas</h2>
         </div>
         <div className="p-6">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Unidade</label>
+              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Unidade</label>
               <input
                 type="text"
                 placeholder="Ex: 104, 201-B"
-                className="w-full px-4 py-2 border dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-slate-500 outline-none bg-white dark:bg-gray-700 dark:text-white"
+                className="w-full px-4 py-2 border dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-slate-500 outline-none bg-white dark:bg-slate-700 dark:text-white"
                 value={filters.unit}
                 onChange={e => setFilters(prev => ({ ...prev, unit: e.target.value }))}
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Nome / Destinatário</label>
+              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Nome / Destinatário</label>
               <input
                 type="text"
                 placeholder="Nome do morador"
-                className="w-full px-4 py-2 border dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-slate-500 outline-none bg-white dark:bg-gray-700 dark:text-white"
+                className="w-full px-4 py-2 border dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-slate-500 outline-none bg-white dark:bg-slate-700 dark:text-white"
                 value={filters.recipient}
                 onChange={e => setFilters(prev => ({ ...prev, recipient: e.target.value }))}
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Status</label>
+              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Status</label>
               <select
-                className="w-full px-4 py-2 border dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-slate-500 outline-none bg-white dark:bg-gray-700 dark:text-white"
+                className="w-full px-4 py-2 border dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-slate-500 outline-none bg-white dark:bg-slate-700 dark:text-white"
                 value={filters.status}
                 onChange={e => setFilters(prev => ({ ...prev, status: e.target.value }))}
               >
@@ -5085,7 +5090,7 @@ function ReportQueryManager({ packages }) {
               </button>
               <button
                 onClick={handleClear}
-                className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
+                className="px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700"
                 title="Limpar filtros"
               >
                 <X size={18} />
@@ -5097,10 +5102,10 @@ function ReportQueryManager({ packages }) {
 
       {/* Resultados */}
       {hasSearched && (
-        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
+        <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
           {/* Barra de Exportação */}
-          <div className="bg-slate-50 dark:bg-gray-700 px-6 py-3 border-b border-slate-100 dark:border-gray-600 flex flex-wrap items-center justify-between gap-4">
-            <div className="text-sm text-gray-600 dark:text-gray-300">
+          <div className="bg-slate-50 dark:bg-slate-700 px-6 py-3 border-b border-slate-100 dark:border-slate-600 flex flex-wrap items-center justify-between gap-4">
+            <div className="text-sm text-slate-600 dark:text-slate-300">
               <span className="font-semibold">{results.length}</span> registro(s) encontrado(s)
             </div>
             {results.length > 0 && (
@@ -5133,14 +5138,14 @@ function ReportQueryManager({ packages }) {
           {/* Tabela de Resultados */}
           <div className="overflow-x-auto">
             {results.length === 0 ? (
-              <div className="p-8 text-center text-gray-500 dark:text-gray-400">
+              <div className="p-8 text-center text-slate-500 dark:text-slate-400">
                 <Search size={48} className="mx-auto mb-3 opacity-30" />
                 <p>Nenhum registro encontrado com os filtros aplicados.</p>
               </div>
             ) : (
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="bg-slate-100 dark:bg-gray-700">
+                  <tr className="bg-slate-100 dark:bg-slate-700">
                     <th className="px-4 py-3 text-left font-semibold text-slate-700 dark:text-slate-200">Unidade</th>
                     <th className="px-4 py-3 text-left font-semibold text-slate-700 dark:text-slate-200">Destinatário</th>
                     <th className="px-4 py-3 text-left font-semibold text-slate-700 dark:text-slate-200">Tipo</th>
@@ -5150,12 +5155,12 @@ function ReportQueryManager({ packages }) {
                     <th className="px-4 py-3 text-left font-semibold text-slate-700 dark:text-slate-200">Documento</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
                   {results.map(pkg => (
-                    <tr key={pkg.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50">
-                      <td className="px-4 py-3 text-gray-800 dark:text-gray-200 font-medium">{pkg.unit || '-'}</td>
-                      <td className="px-4 py-3 text-gray-700 dark:text-gray-300">{pkg.recipient || '-'}</td>
-                      <td className="px-4 py-3 text-gray-600 dark:text-gray-400">{pkg.type || '-'}</td>
+                    <tr key={pkg.id} className="hover:bg-slate-50 dark:hover:bg-slate-700/50">
+                      <td className="px-4 py-3 text-slate-800 dark:text-slate-200 font-medium">{pkg.unit || '-'}</td>
+                      <td className="px-4 py-3 text-slate-700 dark:text-slate-300">{pkg.recipient || '-'}</td>
+                      <td className="px-4 py-3 text-slate-600 dark:text-slate-400">{pkg.type || '-'}</td>
                       <td className="px-4 py-3">
                         <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
                           pkg.status === 'pending'
@@ -5167,17 +5172,17 @@ function ReportQueryManager({ packages }) {
                           {pkg.status === 'pending' ? 'Pendente' : pkg.status === 'deleted' ? 'Excluído' : 'Retirado'}
                         </span>
                       </td>
-                      <td className="px-4 py-3 text-gray-600 dark:text-gray-400">
+                      <td className="px-4 py-3 text-slate-600 dark:text-slate-400">
                         {pkg.created_at ? new Date(pkg.created_at).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : '-'}
                       </td>
-                      <td className="px-4 py-3 text-gray-600 dark:text-gray-400">
+                      <td className="px-4 py-3 text-slate-600 dark:text-slate-400">
                         {pkg.status === 'deleted' ? (
                           <span className="text-red-600 dark:text-red-400">{pkg.deleted_by || '-'}</span>
                         ) : (
                           pkg.collected_by || '-'
                         )}
                       </td>
-                      <td className="px-4 py-3 text-gray-600 dark:text-gray-400">
+                      <td className="px-4 py-3 text-slate-600 dark:text-slate-400">
                         {pkg.status === 'deleted' ? (
                           pkg.deleted_at ? new Date(pkg.deleted_at).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : '-'
                         ) : (
