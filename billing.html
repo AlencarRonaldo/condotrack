@@ -477,33 +477,21 @@
                 </div>
             </div>
 
-            <!-- Formulário de Cartão (apenas se Cartão selecionado) -->
-            <div id="cardForm" class="space-y-4 mb-6 hidden">
-                <div class="bg-blue-50 border-l-4 border-blue-500 rounded-lg p-3 mb-4">
-                    <p class="text-xs text-blue-800">
-                        <strong>Nota:</strong> Para pagamento com cartão, você será redirecionado para a página segura do <strong>Asaas</strong> para finalizar o pagamento.
-                    </p>
-                </div>
-                <div>
-                    <label class="block text-sm font-semibold text-gray-800 mb-2">Número do Cartão</label>
-                    <input type="text" id="cardNumber" placeholder="0000 0000 0000 0000" maxlength="19"
-                        class="w-full px-4 py-3 bg-white border-2 border-gray-300 rounded-xl text-gray-900 placeholder-gray-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all">
-                </div>
-                <div class="grid grid-cols-2 gap-4">
-                    <div>
-                        <label class="block text-sm font-semibold text-gray-800 mb-2">Validade</label>
-                        <input type="text" id="cardExpiry" placeholder="MM/AA" maxlength="5"
-                            class="w-full px-4 py-3 bg-white border-2 border-gray-300 rounded-xl text-gray-900 placeholder-gray-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all">
-                    </div>
-                    <div>
-                        <label class="block text-sm font-semibold text-gray-800 mb-2">CVV</label>
-                        <input type="text" id="cardCvv" placeholder="123" maxlength="4"
-                            class="w-full px-4 py-3 bg-white border-2 border-gray-300 rounded-xl text-gray-900 placeholder-gray-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all">
+            <!-- Mensagem de redirecionamento para Cartão -->
+            <div id="cardForm" class="mb-6 hidden">
+                <div class="bg-blue-50 border-l-4 border-blue-500 rounded-lg p-4">
+                    <div class="flex items-start gap-3">
+                        <svg class="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path>
+                        </svg>
+                        <div>
+                            <p class="text-sm font-medium text-blue-800 mb-1">Pagamento seguro via Asaas</p>
+                            <p class="text-xs text-blue-700">
+                                Clique em "Assinar Agora" para ser redirecionado ao checkout seguro do <strong>Asaas</strong>, onde você poderá inserir os dados do cartão com total segurança.
+                            </p>
+                        </div>
                     </div>
                 </div>
-                <p class="text-xs text-gray-500 text-center mt-2">
-                    Você será redirecionado para o checkout seguro do <strong class="text-blue-600">Asaas</strong>
-                </p>
             </div>
 
             <!-- Mensagem para PIX (placeholder) -->
@@ -575,7 +563,7 @@
             </div>
 
             <div class="space-y-3">
-                <button onclick="processPayment()" id="payBtn" class="w-full bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white px-4 py-3 rounded-xl font-semibold transition-all shadow-lg hover:shadow-xl flex items-center justify-center gap-2 text-sm">
+                <button onclick="processPayment()" id="payBtn" class="w-full bg-blue-600 hover:bg-blue-700 text-white px-4 py-3 rounded-xl font-semibold transition-all shadow-sm active:scale-[0.98] flex items-center justify-center gap-2 text-sm">
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
                     </svg>
@@ -855,27 +843,18 @@
             currentPaymentId = null;
         }
 
+        // Rate limiting: máximo de tentativas por sessão
+        let paymentAttempts = 0;
+        const MAX_PAYMENT_ATTEMPTS = 3;
+
         // Processar pagamento (função global)
         async function processPayment() {
-            // Validar método de pagamento selecionado
-            if (selectedPaymentMethod === 'CREDIT_CARD') {
-                const cardNumber = document.getElementById('cardNumber').value.replace(/\s/g, '');
-                const cardExpiry = document.getElementById('cardExpiry').value;
-                const cardCvv = document.getElementById('cardCvv').value;
-
-                if (!cardNumber || cardNumber.length < 13) {
-                    alert('Por favor, preencha o número do cartão corretamente.');
-                    return;
-                }
-                if (!cardExpiry || cardExpiry.length < 5) {
-                    alert('Por favor, preencha a validade do cartão.');
-                    return;
-                }
-                if (!cardCvv || cardCvv.length < 3) {
-                    alert('Por favor, preencha o CVV do cartão.');
-                    return;
-                }
+            // Rate limiting
+            if (paymentAttempts >= MAX_PAYMENT_ATTEMPTS) {
+                alert('Você atingiu o limite de tentativas de pagamento. Recarregue a página para tentar novamente.');
+                return;
             }
+            paymentAttempts++;
 
             const btn = document.getElementById('payBtn');
             btn.disabled = true;
@@ -1151,8 +1130,15 @@
                 try {
                     console.log(`🔄 Verificando status do pagamento (tentativa ${attempts}/${maxAttempts})...`);
                     
+                    // Obter condoId para validação de ownership
+                    let pollingCondoId = null;
+                    try {
+                        const sd = localStorage.getItem('condotrack_session');
+                        if (sd) pollingCondoId = JSON.parse(sd).condo_id || JSON.parse(sd).condoId;
+                    } catch (_) {}
+
                     const response = await fetch(
-                        `${SUPABASE_URL}/functions/v1/check-payment-status?paymentId=${paymentId}`,
+                        `${SUPABASE_URL}/functions/v1/check-payment-status?paymentId=${paymentId}&condoId=${encodeURIComponent(pollingCondoId || '')}`,
                         {
                             method: 'GET',
                             headers: {
@@ -1329,21 +1315,7 @@
             if (e.target === this) closeModal();
         });
 
-        // Card number formatting
-        document.getElementById('cardNumber')?.addEventListener('input', function(e) {
-            let value = e.target.value.replace(/\D/g, '');
-            value = value.replace(/(\d{4})(?=\d)/g, '$1 ');
-            e.target.value = value.substring(0, 19);
-        });
-
-        // Expiry formatting
-        document.getElementById('cardExpiry')?.addEventListener('input', function(e) {
-            let value = e.target.value.replace(/\D/g, '');
-            if (value.length >= 2) {
-                value = value.substring(0, 2) + '/' + value.substring(2);
-            }
-            e.target.value = value.substring(0, 5);
-        });
+        // Card inputs removidos - pagamento por cartão é processado no checkout seguro do Asaas
 
         // Inicializar Supabase Client (tentar carregar dinamicamente)
         (async function initSupabase() {

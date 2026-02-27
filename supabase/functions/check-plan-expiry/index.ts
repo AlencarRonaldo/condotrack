@@ -1,53 +1,49 @@
 // ==================================================================================
 // SUPABASE EDGE FUNCTION: check-plan-expiry
 //
-// Descrição:
-// Edge Function para ser executada via cron que verifica planos vencidos
-// e atualiza subscription_status para 'expired' automaticamente.
+// Cron job que verifica planos vencidos e atualiza subscription_status.
+// Segurança: CRON_SECRET obrigatório.
 //
 // Variáveis de Ambiente Obrigatórias:
 // - SUPABASE_URL
 // - SUPABASE_SERVICE_ROLE_KEY
-// - CRON_SECRET (opcional, para segurança)
+// - CRON_SECRET (obrigatório)
 // ==================================================================================
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Methods': 'POST, GET, OPTIONS',
-  'Content-Type': 'application/json',
-};
-
 Deno.serve(async (req) => {
-  // Tratar requisição OPTIONS para CORS
-  if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders });
-  }
+  // Sem CORS para cron job (não chamado pelo browser)
+  const headers = { 'Content-Type': 'application/json' };
 
   try {
-    // ✅ Opcional: Validar secret do cron (segurança)
+    // 1. CRON_SECRET é obrigatório
     const cronSecret = Deno.env.get('CRON_SECRET');
-    if (cronSecret) {
-      const providedSecret = req.headers.get('authorization')?.replace('Bearer ', '');
-      if (providedSecret !== cronSecret) {
-        return new Response(
-          JSON.stringify({ error: 'Unauthorized' }),
-          { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
-      }
+    if (!cronSecret) {
+      console.error('[check-plan-expiry] CRON_SECRET não configurado');
+      return new Response(
+        JSON.stringify({ error: 'CRON_SECRET not configured' }),
+        { status: 500, headers }
+      );
     }
 
-    // ✅ Inicializar cliente admin
+    const providedSecret = req.headers.get('authorization')?.replace('Bearer ', '');
+    if (providedSecret !== cronSecret) {
+      return new Response(
+        JSON.stringify({ error: 'Unauthorized' }),
+        { status: 401, headers }
+      );
+    }
+
+    // 2. Inicializar cliente admin
     const supabaseAdmin = createClient(
       Deno.env.get('SUPABASE_URL')!,
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     );
 
-    console.log('[check-plan-expiry] 🔍 Verificando planos vencidos...');
+    console.log('[check-plan-expiry] Verificando planos vencidos...');
 
-    // ✅ Buscar condomínios com plan_end_date no passado e subscription_status = 'active'
+    // 3. Buscar condomínios com plano vencido
     const { data: expiredCondos, error: selectError } = await supabaseAdmin
       .from('condos')
       .select('id, name, plan_end_date, subscription_status')
@@ -56,28 +52,21 @@ Deno.serve(async (req) => {
       .lt('plan_end_date', new Date().toISOString());
 
     if (selectError) {
-      console.error('[check-plan-expiry] ❌ Erro ao buscar condomínios:', selectError);
+      console.error('[check-plan-expiry] Erro ao buscar:', selectError.message);
       throw selectError;
     }
 
     if (!expiredCondos || expiredCondos.length === 0) {
-      console.log('[check-plan-expiry] ✅ Nenhum plano vencido encontrado');
+      console.log('[check-plan-expiry] Nenhum plano vencido');
       return new Response(
-        JSON.stringify({
-          success: true,
-          expiredCount: 0,
-          message: 'Nenhum plano vencido encontrado'
-        }),
-        {
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-          status: 200,
-        }
+        JSON.stringify({ success: true, expiredCount: 0 }),
+        { headers, status: 200 }
       );
     }
 
-    console.log(`[check-plan-expiry] ⚠️ Encontrados ${expiredCondos.length} planos vencidos`);
+    console.log(`[check-plan-expiry] ${expiredCondos.length} planos vencidos`);
 
-    // ✅ Atualizar subscription_status para 'expired'
+    // 4. Atualizar para expired
     const condoIds = expiredCondos.map(c => c.id);
     const { data: updatedCondos, error: updateError } = await supabaseAdmin
       .from('condos')
@@ -89,36 +78,23 @@ Deno.serve(async (req) => {
       .select('id, name');
 
     if (updateError) {
-      console.error('[check-plan-expiry] ❌ Erro ao atualizar condomínios:', updateError);
+      console.error('[check-plan-expiry] Erro ao atualizar:', updateError.message);
       throw updateError;
     }
 
-    console.log(`[check-plan-expiry] ✅ ${updatedCondos?.length || 0} condomínios atualizados para 'expired'`);
+    const count = updatedCondos?.length || 0;
+    console.log(`[check-plan-expiry] ${count} condomínios atualizados para 'expired'`);
 
     return new Response(
-      JSON.stringify({
-        success: true,
-        expiredCount: updatedCondos?.length || 0,
-        condos: updatedCondos,
-        message: `Atualizados ${updatedCondos?.length || 0} condomínios para 'expired'`
-      }),
-      {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: 200,
-      }
+      JSON.stringify({ success: true, expiredCount: count }),
+      { headers, status: 200 }
     );
 
   } catch (error: any) {
-    console.error('❌ Erro na Edge Function check-plan-expiry:', error);
+    console.error('[check-plan-expiry] Erro:', error?.message || error);
     return new Response(
-      JSON.stringify({
-        error: error?.message || 'Erro interno do servidor',
-        details: error?.details || null
-      }),
-      {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: error?.status || 500,
-      }
+      JSON.stringify({ error: 'Erro interno do servidor' }),
+      { headers: { 'Content-Type': 'application/json' }, status: 500 }
     );
   }
 });
