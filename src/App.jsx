@@ -1468,7 +1468,7 @@ export default function CondoTrackApp() {
         )}
 
         {/* ===== MAIN CONTENT AREA ===== */}
-        <div className={`flex-1 ${isConcierge && isConciergeAuthed ? 'md:pl-72' : ''} flex flex-col min-h-screen`}>
+        <div className={`flex-1 min-w-0 ${isConcierge && isConciergeAuthed ? 'md:pl-72' : ''} flex flex-col min-h-screen`}>
           {/* Top bar */}
           <header className="sticky top-0 z-20 bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 px-4 sm:px-6 h-16 flex items-center justify-between flex-shrink-0">
             <div className="flex items-center gap-3">
@@ -1481,16 +1481,16 @@ export default function CondoTrackApp() {
                 {isConcierge && isConciergeAuthed ? (tabTitles[activeTab] || 'Dashboard') : isConcierge ? 'Portaria' : 'Area do Morador'}
               </h2>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1 sm:gap-2">
               <button onClick={() => setTheme(prev => prev === 'dark' ? 'light' : 'dark')} className="p-2 rounded-lg text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors duration-150" title="Alternar tema">
                 {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
               </button>
               {isConciergeAuthed && (
-                <div className="flex bg-slate-100 dark:bg-slate-700 rounded-lg p-1">
-                  <button onClick={() => setViewMode('concierge')} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition-all duration-150 ${isConcierge ? 'bg-white dark:bg-slate-600 text-blue-600 dark:text-blue-400 shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700'}`}>
+                <div className="flex flex-shrink-0 bg-slate-100 dark:bg-slate-700 rounded-lg p-1">
+                  <button onClick={() => setViewMode('concierge')} className={`flex items-center gap-1.5 px-2 sm:px-3 py-1.5 rounded-md text-xs font-semibold transition-all duration-150 ${isConcierge ? 'bg-white dark:bg-slate-600 text-blue-600 dark:text-blue-400 shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700'}`}>
                     <Shield size={14} /><span className="hidden sm:inline">Portaria</span>
                   </button>
-                  <button onClick={() => setViewMode('resident')} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition-all duration-150 ${!isConcierge ? 'bg-white dark:bg-slate-600 text-emerald-600 dark:text-emerald-400 shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700'}`}>
+                  <button onClick={() => setViewMode('resident')} className={`flex items-center gap-1.5 px-2 sm:px-3 py-1.5 rounded-md text-xs font-semibold transition-all duration-150 ${!isConcierge ? 'bg-white dark:bg-slate-600 text-emerald-600 dark:text-emerald-400 shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700'}`}>
                     <User size={14} /><span className="hidden sm:inline">Morador</span>
                   </button>
                 </div>
@@ -1505,7 +1505,7 @@ export default function CondoTrackApp() {
           </header>
 
           {/* Page content */}
-          <main className="flex-1 overflow-y-auto p-4 sm:p-6 pb-24 md:pb-6">
+          <main className="flex-1 overflow-y-auto overflow-x-hidden p-4 sm:p-6 pb-24 md:pb-6">
         {/* Verifica se conta está expirada/inativa - mostra Checkout de Billing (padrão) OU Perfil */}
         {isConciergeAuthed && (condoStatus === 'expired' || condoStatus === 'inactive') ? (
           <>
@@ -2073,7 +2073,7 @@ function BillingCheckout({ condoInfo, onPaymentSuccess, onLogout, isAdmin = fals
                   console.log('💳 Método de pagamento alterado para: PIX');
                   setPaymentMethod('PIX');
                 }}
-                className={`px-8 py-3 rounded-lg text-base font-bold transition-all min-w-[120px] ${
+                className={`px-4 sm:px-8 py-3 rounded-lg text-base font-bold transition-all min-w-0 sm:min-w-[120px] ${
                   paymentMethod === 'PIX'
                     ? 'bg-emerald-600 text-white shadow-lg scale-105'
                     : 'bg-transparent text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700'
@@ -2088,7 +2088,7 @@ function BillingCheckout({ condoInfo, onPaymentSuccess, onLogout, isAdmin = fals
                   console.log('💳 Método de pagamento alterado para: CREDIT_CARD');
                   setPaymentMethod('CREDIT_CARD');
                 }}
-                className={`px-8 py-3 rounded-lg text-base font-bold transition-all min-w-[120px] ${
+                className={`px-4 sm:px-8 py-3 rounded-lg text-base font-bold transition-all min-w-0 sm:min-w-[120px] ${
                   paymentMethod === 'CREDIT_CARD'
                     ? 'bg-emerald-600 text-white shadow-lg scale-105'
                     : 'bg-transparent text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700'
@@ -2108,7 +2108,7 @@ function BillingCheckout({ condoInfo, onPaymentSuccess, onLogout, isAdmin = fals
               key={key}
               className={`relative bg-white dark:bg-slate-800 rounded-xl border-2 p-6 transition-all hover:shadow-md ${
                 plan.popular
-                  ? 'border-cyan-500 shadow-lg shadow-cyan-500/20 scale-105'
+                  ? 'border-cyan-500 shadow-lg shadow-cyan-500/20 md:scale-105'
                   : 'border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'
               }`}
             >
@@ -2314,44 +2314,12 @@ function BillingCheckout({ condoInfo, onPaymentSuccess, onLogout, isAdmin = fals
               </p>
             </div>
 
-            {/* Formulário de Cartão (Apenas se Cartão selecionado) */}
+            {/* Mensagem para Cartão */}
             {paymentMethod === 'CREDIT_CARD' && (
-              <div className="space-y-4 mb-6">
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-                    Número do Cartão
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="4242 4242 4242 4242"
-                    maxLength={19}
-                    className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-xl text-slate-800 dark:text-white placeholder-slate-400 focus:border-blue-600 focus:ring-2 focus:ring-blue-600/20 outline-none"
-                  />
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-                      Validade
-                    </label>
-                    <input
-                      type="text"
-                      placeholder="12/25"
-                      maxLength={5}
-                      className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-xl text-slate-800 dark:text-white placeholder-slate-400 focus:border-blue-600 focus:ring-2 focus:ring-blue-600/20 outline-none"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-                      CVV
-                    </label>
-                    <input
-                      type="text"
-                      placeholder="123"
-                      maxLength={4}
-                      className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-xl text-slate-800 dark:text-white placeholder-slate-400 focus:border-blue-600 focus:ring-2 focus:ring-blue-600/20 outline-none"
-                    />
-                  </div>
-                </div>
+              <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-300 dark:border-blue-700 rounded-lg p-4 mb-6">
+                <p className="text-sm text-blue-700 dark:text-blue-400 text-center">
+                  💳 Em produção, você será redirecionado ao checkout seguro para inserir os dados do cartão
+                </p>
               </div>
             )}
 
@@ -3078,52 +3046,52 @@ function ConciergeView({ onAdd, packages, onDelete, onCollect, residents, reside
         <div className="space-y-6 animate-fade-in">
           {/* Widgets de Estatísticas - Cards brancos com ícones coloridos suaves */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            <div className="bg-white dark:bg-slate-800 rounded-xl shadow-card border border-slate-200 dark:border-slate-700 p-6 hover:shadow-card-hover hover:border-slate-300 dark:hover:border-slate-600 transition-all duration-150">
+            <div className="bg-white dark:bg-slate-800 rounded-xl shadow-card border border-slate-200 dark:border-slate-700 p-3 sm:p-6 hover:shadow-card-hover hover:border-slate-300 dark:hover:border-slate-600 transition-all duration-150">
               <div className="flex items-start justify-between">
                 <div>
                   <p className="text-sm text-slate-500 dark:text-slate-400 font-medium">Pendentes</p>
-                  <p className="text-3xl font-bold text-slate-900 dark:text-white mt-1">{pendingPackages.length}</p>
+                  <p className="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white mt-1">{pendingPackages.length}</p>
                 </div>
-                <div className="p-3 bg-amber-50 dark:bg-amber-900/20 rounded-xl">
+                <div className="p-2 sm:p-3 bg-amber-50 dark:bg-amber-900/20 rounded-xl">
                   <Clock size={22} className="text-amber-500 dark:text-amber-400" />
                 </div>
               </div>
               <p className="text-xs text-slate-400 dark:text-slate-500 mt-3">Aguardando retirada</p>
             </div>
 
-            <div className="bg-white dark:bg-slate-800 rounded-xl shadow-card border border-slate-200 dark:border-slate-700 p-6 hover:shadow-card-hover hover:border-slate-300 dark:hover:border-slate-600 transition-all duration-150">
+            <div className="bg-white dark:bg-slate-800 rounded-xl shadow-card border border-slate-200 dark:border-slate-700 p-3 sm:p-6 hover:shadow-card-hover hover:border-slate-300 dark:hover:border-slate-600 transition-all duration-150">
               <div className="flex items-start justify-between">
                 <div>
                   <p className="text-sm text-slate-500 dark:text-slate-400 font-medium">Entregues Hoje</p>
-                  <p className="text-3xl font-bold text-slate-900 dark:text-white mt-1">{todayDeliveries.length}</p>
+                  <p className="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white mt-1">{todayDeliveries.length}</p>
                 </div>
-                <div className="p-3 bg-emerald-50 dark:bg-emerald-900/20 rounded-xl">
+                <div className="p-2 sm:p-3 bg-emerald-50 dark:bg-emerald-900/20 rounded-xl">
                   <CheckCircle size={22} className="text-emerald-500 dark:text-emerald-400" />
                 </div>
               </div>
               <p className="text-xs text-slate-400 dark:text-slate-500 mt-3">Retiradas concluídas</p>
             </div>
 
-            <div className="bg-white dark:bg-slate-800 rounded-xl shadow-card border border-slate-200 dark:border-slate-700 p-6 hover:shadow-card-hover hover:border-slate-300 dark:hover:border-slate-600 transition-all duration-150">
+            <div className="bg-white dark:bg-slate-800 rounded-xl shadow-card border border-slate-200 dark:border-slate-700 p-3 sm:p-6 hover:shadow-card-hover hover:border-slate-300 dark:hover:border-slate-600 transition-all duration-150">
               <div className="flex items-start justify-between">
                 <div>
                   <p className="text-sm text-slate-500 dark:text-slate-400 font-medium">Moradores</p>
-                  <p className="text-3xl font-bold text-slate-900 dark:text-white mt-1">{residents?.length || 0}</p>
+                  <p className="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white mt-1">{residents?.length || 0}</p>
                 </div>
-                <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-xl">
+                <div className="p-2 sm:p-3 bg-blue-50 dark:bg-blue-900/20 rounded-xl">
                   <Users size={22} className="text-blue-500 dark:text-blue-400" />
                 </div>
               </div>
               <p className="text-xs text-slate-400 dark:text-slate-500 mt-3">Cadastrados</p>
             </div>
 
-            <div className="bg-white dark:bg-slate-800 rounded-xl shadow-card border border-slate-200 dark:border-slate-700 p-6 hover:shadow-card-hover hover:border-slate-300 dark:hover:border-slate-600 transition-all duration-150">
+            <div className="bg-white dark:bg-slate-800 rounded-xl shadow-card border border-slate-200 dark:border-slate-700 p-3 sm:p-6 hover:shadow-card-hover hover:border-slate-300 dark:hover:border-slate-600 transition-all duration-150">
               <div className="flex items-start justify-between">
                 <div>
                   <p className="text-sm text-slate-500 dark:text-slate-400 font-medium">Total do Mês</p>
-                  <p className="text-3xl font-bold text-slate-900 dark:text-white mt-1">{historyPackages.length}</p>
+                  <p className="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white mt-1">{historyPackages.length}</p>
                 </div>
-                <div className="p-3 bg-indigo-50 dark:bg-indigo-900/20 rounded-xl">
+                <div className="p-2 sm:p-3 bg-indigo-50 dark:bg-indigo-900/20 rounded-xl">
                   <BarChart3 size={22} className="text-indigo-500 dark:text-indigo-400" />
                 </div>
               </div>
@@ -3324,17 +3292,17 @@ function ConciergeView({ onAdd, packages, onDelete, onCollect, residents, reside
         <>
           {/* Formulário Encomenda */}
           <div className="bg-white dark:bg-slate-800 rounded-xl shadow-card border border-slate-200 dark:border-slate-700 overflow-hidden">
-            <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-700 flex items-center justify-between gap-3">
+            <div className="px-4 sm:px-6 py-4 border-b border-slate-100 dark:border-slate-700 flex flex-wrap items-center justify-between gap-3">
               <div className="flex items-center gap-3">
                 <div className="p-2.5 bg-blue-50 dark:bg-blue-900/20 rounded-xl">
                   <Package className="text-blue-500 dark:text-blue-400" size={20} />
                 </div>
                 <div>
-                  <h2 className="font-semibold text-slate-900 dark:text-white">Registrar Encomenda</h2>
-                  <p className="text-xs text-slate-500 dark:text-slate-400">Preencha os dados ou tire foto da etiqueta</p>
+                  <h2 className="font-semibold text-slate-900 dark:text-white text-sm sm:text-base">Registrar Encomenda</h2>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 hidden sm:block">Preencha os dados ou tire foto da etiqueta</p>
                 </div>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <label className={`flex items-center gap-2 px-3 py-1.5 ${ocrLoading ? 'bg-slate-200 dark:bg-slate-600 cursor-wait text-slate-400' : 'border border-slate-200 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700 cursor-pointer text-slate-600 dark:text-slate-300'} rounded-lg text-sm font-medium transition-colors duration-150`}>
                   {ocrLoading ? (<><Loader2 size={16} className="animate-spin" /> Lendo...</>) : (<><Camera size={16} /><span className="hidden sm:inline">Ler Etiqueta</span></>)}
                   <input type="file" accept="image/*" capture="environment" onChange={handleOcrCapture} disabled={ocrLoading} className="hidden" />
@@ -3347,16 +3315,16 @@ function ConciergeView({ onAdd, packages, onDelete, onCollect, residents, reside
                 )}
               </div>
             </div>
-            <div className="p-5 sm:p-6">
+            <div className="p-3 sm:p-6">
               {ocrError && (
-                <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl flex items-center gap-2 text-red-700 dark:text-red-300 text-sm">
+                <div className="mb-3 sm:mb-4 p-2.5 sm:p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl flex items-center gap-2 text-red-700 dark:text-red-300 text-sm">
                   <AlertTriangle size={16} />
                   <span className="flex-1">{ocrError}</span>
                   <button onClick={() => setOcrError(null)}><X size={14} /></button>
                 </div>
               )}
               {ocrRawText && !ocrError && (
-                <div className="mb-4 p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-xl text-green-700 dark:text-green-300 text-sm">
+                <div className="mb-3 sm:mb-4 p-2.5 sm:p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-xl text-green-700 dark:text-green-300 text-sm">
                   <div className="flex items-center gap-2 font-semibold mb-1">
                     <CheckCircle size={16} />
                     Texto detectado na etiqueta
@@ -3365,10 +3333,10 @@ function ConciergeView({ onAdd, packages, onDelete, onCollect, residents, reside
                   <button onClick={() => setOcrRawText(null)} className="text-xs underline mt-1">Fechar</button>
                 </div>
               )}
-              <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-5">
+              <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-2.5 sm:gap-5">
                 <div className="relative">
-                  <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">Unidade *</label>
-                  <input type="text" placeholder="Ex: 104-B" className="w-full px-4 py-3 border border-slate-200 dark:border-slate-600 rounded-xl focus:border-blue-600 focus:ring-2 focus:ring-blue-600/20 outline-none bg-white dark:bg-slate-700 text-slate-900 dark:text-white transition-all placeholder:text-slate-400" value={form.unit} onChange={handleUnitChange} onBlur={handleUnitBlur} onFocus={() => { const s = searchResidentsByUnit(form.unit); setUnitSuggestions(s); setShowUnitDropdown(form.unit.length >= 1); }} required />
+                  <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1 sm:mb-2">Unidade *</label>
+                  <input type="text" placeholder="Ex: 104-B" className="w-full px-3 sm:px-4 py-2 sm:py-3 border border-slate-200 dark:border-slate-600 rounded-xl focus:border-blue-600 focus:ring-2 focus:ring-blue-600/20 outline-none bg-white dark:bg-slate-700 text-slate-900 dark:text-white transition-all placeholder:text-slate-400" value={form.unit} onChange={handleUnitChange} onBlur={handleUnitBlur} onFocus={() => { const s = searchResidentsByUnit(form.unit); setUnitSuggestions(s); setShowUnitDropdown(form.unit.length >= 1); }} required />
                   {showUnitDropdown && form.unit.length >= 1 && (
                     <div className="absolute z-20 mt-1 w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-xl shadow-lg max-h-48 overflow-y-auto">
                       {unitSuggestions.length > 0 ? (
@@ -3398,8 +3366,8 @@ function ConciergeView({ onAdd, packages, onDelete, onCollect, residents, reside
                   )}
                 </div>
                 <div className="relative">
-                  <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">Destinatário *</label>
-                  <input type="text" placeholder="Nome do morador" className="w-full px-4 py-3 border border-slate-200 dark:border-slate-600 rounded-xl focus:border-blue-600 focus:ring-2 focus:ring-blue-600/20 outline-none bg-white dark:bg-slate-700 text-slate-900 dark:text-white transition-all placeholder:text-slate-400" value={form.recipient} onChange={handleRecipientChange} onBlur={handleRecipientBlur} onFocus={() => { const s = searchResidentsByName(form.recipient); setRecipientSuggestions(s); setShowRecipientDropdown(form.recipient.length >= 2); }} required />
+                  <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1 sm:mb-2">Destinatário *</label>
+                  <input type="text" placeholder="Nome do morador" className="w-full px-3 sm:px-4 py-2 sm:py-3 border border-slate-200 dark:border-slate-600 rounded-xl focus:border-blue-600 focus:ring-2 focus:ring-blue-600/20 outline-none bg-white dark:bg-slate-700 text-slate-900 dark:text-white transition-all placeholder:text-slate-400" value={form.recipient} onChange={handleRecipientChange} onBlur={handleRecipientBlur} onFocus={() => { const s = searchResidentsByName(form.recipient); setRecipientSuggestions(s); setShowRecipientDropdown(form.recipient.length >= 2); }} required />
                   {showRecipientDropdown && form.recipient.length >= 2 && (
                     <div className="absolute z-20 mt-1 w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-xl shadow-lg max-h-48 overflow-y-auto">
                       {recipientSuggestions.length > 0 ? (
@@ -3433,24 +3401,24 @@ function ConciergeView({ onAdd, packages, onDelete, onCollect, residents, reside
                   )}
                 </div>
                 <div>
-                  <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2 flex items-center gap-1.5">
+                  <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1 sm:mb-2 flex items-center gap-1.5">
                     <Phone size={14} className="text-emerald-500" /> WhatsApp
                   </label>
-                  <input type="tel" placeholder="(11) 9XXXX-XXXX" className="w-full px-4 py-3 border border-slate-200 dark:border-slate-600 rounded-xl focus:border-blue-600 focus:ring-2 focus:ring-blue-600/20 outline-none bg-white dark:bg-slate-700 text-slate-900 dark:text-white transition-all placeholder:text-slate-400" value={form.phone} onChange={handlePhoneChange} />
+                  <input type="tel" placeholder="(11) 9XXXX-XXXX" className="w-full px-3 sm:px-4 py-2 sm:py-3 border border-slate-200 dark:border-slate-600 rounded-xl focus:border-blue-600 focus:ring-2 focus:ring-blue-600/20 outline-none bg-white dark:bg-slate-700 text-slate-900 dark:text-white transition-all placeholder:text-slate-400" value={form.phone} onChange={handlePhoneChange} />
                 </div>
                 <div>
-                  <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">Tipo de Encomenda</label>
-                  <select className="w-full px-4 py-3 border border-slate-200 dark:border-slate-600 rounded-xl focus:border-blue-600 focus:ring-2 focus:ring-blue-600/20 outline-none bg-white dark:bg-slate-700 text-slate-900 dark:text-white transition-all cursor-pointer font-medium" value={form.type} onChange={e => setForm({ ...form, type: e.target.value })}>
+                  <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1 sm:mb-2">Tipo de Encomenda</label>
+                  <select className="w-full px-3 sm:px-4 py-2 sm:py-3 border border-slate-200 dark:border-slate-600 rounded-xl focus:border-blue-600 focus:ring-2 focus:ring-blue-600/20 outline-none bg-white dark:bg-slate-700 text-slate-900 dark:text-white transition-all cursor-pointer font-medium" value={form.type} onChange={e => setForm({ ...form, type: e.target.value })}>
                     <option>Caixa</option><option>Pacote</option><option>Envelope</option><option>Mercado Livre/Shopee</option><option>Delivery / Comida</option><option>Outro</option>
                   </select>
                 </div>
                 <div className="md:col-span-2">
-                  <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">Descrição</label>
-                  <input type="text" placeholder="Informações adicionais (opcional)" className="w-full px-4 py-3 border border-slate-200 dark:border-slate-600 rounded-xl focus:border-blue-600 focus:ring-2 focus:ring-blue-600/20 outline-none bg-white dark:bg-slate-700 text-slate-900 dark:text-white transition-all placeholder:text-slate-400" value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} />
+                  <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1 sm:mb-2">Descrição</label>
+                  <input type="text" placeholder="Informações adicionais (opcional)" className="w-full px-3 sm:px-4 py-2 sm:py-3 border border-slate-200 dark:border-slate-600 rounded-xl focus:border-blue-600 focus:ring-2 focus:ring-blue-600/20 outline-none bg-white dark:bg-slate-700 text-slate-900 dark:text-white transition-all placeholder:text-slate-400" value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} />
                 </div>
-                <div className="md:col-span-2 pt-2">
-                  <button type="submit" className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3.5 rounded-xl shadow-sm transition-all duration-150 active:scale-[0.98] flex justify-center items-center gap-2 text-base">
-                    <CheckCircle size={22} /> Registrar Chegada
+                <div className="md:col-span-2 pt-1 sm:pt-2">
+                  <button type="submit" className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2.5 sm:py-3.5 rounded-xl shadow-sm transition-all duration-150 active:scale-[0.98] flex justify-center items-center gap-2 text-sm sm:text-base">
+                    <CheckCircle size={20} /> Registrar Chegada
                   </button>
                 </div>
               </form>
@@ -3488,7 +3456,8 @@ function ConciergeView({ onAdd, packages, onDelete, onCollect, residents, reside
               </div>
             ) : (
               <div className="bg-white dark:bg-slate-800 rounded-xl shadow-card border border-slate-200 dark:border-slate-700 overflow-hidden">
-                <div className="overflow-x-auto">
+                {/* Desktop: Tabela */}
+                <div className="hidden sm:block overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="border-b border-slate-100 dark:border-slate-700">
@@ -3539,6 +3508,46 @@ function ConciergeView({ onAdd, packages, onDelete, onCollect, residents, reside
                       })}
                     </tbody>
                   </table>
+                </div>
+
+                {/* Mobile: Cards */}
+                <div className="sm:hidden divide-y divide-slate-100 dark:divide-slate-700">
+                  {filteredPackages.map((pkg) => {
+                    const phoneDigits = String(pkg.phone || '').replace(/\D/g,'');
+                    const box = String.fromCodePoint(0x1F4E6);
+                    const waMsg = encodeURIComponent(`Olá ${pkg.recipient}! Chegou uma encomenda (${pkg.type}) para você na portaria. ${box} Disponível para retirada.`);
+                    const wa = phoneDigits ? `https://wa.me/55${phoneDigits}?text=${waMsg}` : null;
+                    return (
+                      <div key={pkg.id} className="p-4 space-y-3">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <span className="font-semibold text-slate-900 dark:text-white">Apt {pkg.unit}</span>
+                            <span className="mx-2 text-slate-300 dark:text-slate-600">•</span>
+                            <span className="text-slate-700 dark:text-slate-300">{pkg.recipient}</span>
+                          </div>
+                          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400">
+                            <span className="w-1.5 h-1.5 bg-amber-500 rounded-full animate-pulse-soft"></span>
+                            Pendente
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-medium bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300">{pkg.type}</span>
+                          <div className="flex gap-2">
+                            {wa && (
+                              <a href={wa} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 rounded-lg transition-colors duration-150 border border-emerald-200 dark:border-emerald-800">
+                                <MessageCircle size={14} />
+                                WhatsApp
+                              </a>
+                            )}
+                            <button onClick={() => setCollectTarget(pkg.id)} className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-blue-600 text-white hover:bg-blue-700 rounded-lg transition-colors duration-150 active:scale-[0.98]">
+                              <CheckCircle size={14} />
+                              Entregar
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             )}
@@ -3635,13 +3644,13 @@ function CondoSettingsManager({ condoSettings, onUpdateSettings, condoInfo }) {
 
   return (
     <div className="bg-white dark:bg-slate-800 rounded-xl shadow-card border border-slate-200 dark:border-slate-700 overflow-hidden">
-      <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-700 flex items-center gap-3">
+      <div className="px-4 sm:px-6 py-4 border-b border-slate-100 dark:border-slate-700 flex items-center gap-3">
         <div className="p-2.5 bg-blue-50 dark:bg-blue-900/20 rounded-xl">
           <Building2 className="text-blue-500 dark:text-blue-400" size={20} />
         </div>
-        <h2 className="font-semibold text-slate-900 dark:text-white">Configurações do Condomínio</h2>
+        <h2 className="font-semibold text-slate-900 dark:text-white text-sm sm:text-base">Configurações do Condomínio</h2>
       </div>
-      <div className="p-6">
+      <div className="p-4 sm:p-6">
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
@@ -3701,39 +3710,41 @@ function CondoSettingsManager({ condoSettings, onUpdateSettings, condoInfo }) {
 
       {/* Link compartilhável para moradores */}
       {localSlug && (
-        <div className="mt-4 border-t border-slate-200 dark:border-slate-700 pt-4 px-6 pb-6">
+        <div className="mt-4 border-t border-slate-200 dark:border-slate-700 pt-4 px-4 sm:px-6 pb-4 sm:pb-6">
           <div className="flex items-center gap-2 mb-2">
             <Link2 size={16} className="text-emerald-600 dark:text-emerald-400" />
             <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300">Link para Moradores</h3>
           </div>
           <p className="text-xs text-slate-500 dark:text-slate-400 mb-2">Compartilhe este link com os moradores para acesso direto às encomendas</p>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-col sm:flex-row gap-2">
             <input
               type="text"
               readOnly
               value={`${window.location.origin}/app.html?condo=${localSlug}`}
-              className="flex-1 px-3 py-2 text-sm border dark:border-slate-600 rounded-lg bg-slate-50 dark:bg-slate-700 dark:text-white select-all"
+              className="flex-1 px-3 py-2 text-sm border dark:border-slate-600 rounded-lg bg-slate-50 dark:bg-slate-700 dark:text-white select-all min-w-0"
               onClick={e => e.target.select()}
             />
-            <button
-              type="button"
-              onClick={() => {
-                navigator.clipboard.writeText(`${window.location.origin}/app.html?condo=${localSlug}`);
-                setCopied(true);
-                setTimeout(() => setCopied(false), 2000);
-              }}
-              className="px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium transition-colors flex items-center gap-1"
-            >
-              {copied ? <><CheckCircle size={14} /> Copiado!</> : <><Copy size={14} /> Copiar</>}
-            </button>
-            <a
-              href={`https://wa.me/?text=${encodeURIComponent(`Acesse suas encomendas pelo CondoTrack:\n${window.location.origin}/app.html?condo=${localSlug}`)}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="px-3 py-2 rounded-lg bg-green-500 hover:bg-green-600 text-white text-sm font-medium transition-colors flex items-center gap-1"
-            >
-              <MessageCircle size={14} /> WhatsApp
-            </a>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  navigator.clipboard.writeText(`${window.location.origin}/app.html?condo=${localSlug}`);
+                  setCopied(true);
+                  setTimeout(() => setCopied(false), 2000);
+                }}
+                className="flex-1 sm:flex-none px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium transition-colors flex items-center justify-center gap-1"
+              >
+                {copied ? <><CheckCircle size={14} /> Copiado!</> : <><Copy size={14} /> Copiar</>}
+              </button>
+              <a
+                href={`https://wa.me/?text=${encodeURIComponent(`Acesse suas encomendas pelo CondoTrack:\n${window.location.origin}/app.html?condo=${localSlug}`)}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex-1 sm:flex-none px-3 py-2 rounded-lg bg-green-500 hover:bg-green-600 text-white text-sm font-medium transition-colors flex items-center justify-center gap-1"
+              >
+                <MessageCircle size={14} /> WhatsApp
+              </a>
+            </div>
           </div>
         </div>
       )}
@@ -3835,7 +3846,7 @@ function BillingManager({ condoInfo, staff }) {
   return (
     <div className="space-y-6">
       {/* Header do Plano Atual / Trial */}
-      <div className={`rounded-xl p-6 border ${
+      <div className={`rounded-xl p-4 sm:p-6 border ${
         isTrial && !isTrialExpired
           ? 'bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800'
           : isTrialExpired
@@ -3855,7 +3866,7 @@ function BillingManager({ condoInfo, staff }) {
               <p className="text-slate-500 dark:text-slate-400 text-sm">
                 {isTrial && !isTrialExpired ? 'Período de teste' : isTrialExpired ? 'Trial expirado' : 'Seu plano atual'}
               </p>
-              <h2 className="text-2xl font-bold text-slate-900 dark:text-white">
+              <h2 className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white">
                 {isTrial && !isTrialExpired
                   ? `Trial - ${trialDaysRemaining} ${trialDaysRemaining === 1 ? 'dia restante' : 'dias restantes'}`
                   : isTrialExpired
@@ -3878,7 +3889,7 @@ function BillingManager({ condoInfo, staff }) {
           <div className="text-left sm:text-right">
             {isTrial && !isTrialExpired ? (
               <div>
-                <p className="text-3xl font-bold text-emerald-600 dark:text-emerald-400">Grátis</p>
+                <p className="text-2xl sm:text-3xl font-bold text-emerald-600 dark:text-emerald-400">Grátis</p>
                 <p className="text-slate-500 dark:text-slate-400 text-sm">Por {trialDaysRemaining} {trialDaysRemaining === 1 ? 'dia' : 'dias'}</p>
               </div>
             ) : isTrialExpired ? (
@@ -3887,16 +3898,16 @@ function BillingManager({ condoInfo, staff }) {
                 <p className="text-slate-500 dark:text-slate-400 text-sm">Escolha um plano</p>
               </div>
             ) : (
-              <p className="text-3xl font-bold text-slate-900 dark:text-white">R$ {currentPlan.price}<span className="text-lg font-normal text-slate-500 dark:text-slate-400">/mês</span></p>
+              <p className="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white">R$ {currentPlan.price}<span className="text-lg font-normal text-slate-500 dark:text-slate-400">/mês</span></p>
             )}
           </div>
         </div>
       </div>
 
       {/* Uso de Porteiros */}
-      <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-6">
+      <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-4 sm:p-6">
         <div className="flex items-center justify-between mb-4">
-          <h3 className="font-semibold text-slate-900 dark:text-white flex items-center gap-2">
+          <h3 className="font-semibold text-slate-900 dark:text-white flex items-center gap-2 text-sm sm:text-base">
             <Users size={18} className="text-blue-500" />
             Uso de Porteiros
           </h3>
@@ -3916,27 +3927,27 @@ function BillingManager({ condoInfo, staff }) {
         )}
 
         {/* Stats */}
-        <div className="grid grid-cols-2 gap-4 mt-4">
-          <div className="bg-blue-50 dark:bg-blue-900/30 p-4 rounded-xl text-center">
-            <p className="text-3xl font-bold text-blue-600 dark:text-blue-400">{adminCount}</p>
-            <p className="text-sm text-slate-600 dark:text-slate-400">Administradores</p>
+        <div className="grid grid-cols-2 gap-3 sm:gap-4 mt-4">
+          <div className="bg-blue-50 dark:bg-blue-900/30 p-3 sm:p-4 rounded-xl text-center">
+            <p className="text-2xl sm:text-3xl font-bold text-blue-600 dark:text-blue-400">{adminCount}</p>
+            <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400">Administradores</p>
           </div>
-          <div className="bg-emerald-50 dark:bg-emerald-900/30 p-4 rounded-xl text-center">
-            <p className="text-3xl font-bold text-emerald-600 dark:text-emerald-400">{porteiroCount}</p>
-            <p className="text-sm text-slate-600 dark:text-slate-400">Porteiros</p>
+          <div className="bg-emerald-50 dark:bg-emerald-900/30 p-3 sm:p-4 rounded-xl text-center">
+            <p className="text-2xl sm:text-3xl font-bold text-emerald-600 dark:text-emerald-400">{porteiroCount}</p>
+            <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400">Porteiros</p>
           </div>
         </div>
       </div>
 
       {/* Todos os Planos */}
       <div className="bg-white dark:bg-slate-800 rounded-xl shadow-card border border-slate-200 dark:border-slate-700 overflow-hidden">
-        <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-700 flex items-center gap-3">
+        <div className="px-4 sm:px-6 py-4 border-b border-slate-100 dark:border-slate-700 flex items-center gap-3">
           <div className="p-2.5 bg-blue-50 dark:bg-blue-900/20 rounded-xl">
             <TrendingUp size={18} className="text-blue-500 dark:text-blue-400" />
           </div>
-          <h3 className="font-semibold text-slate-900 dark:text-white">Planos Disponíveis</h3>
+          <h3 className="font-semibold text-slate-900 dark:text-white text-sm sm:text-base">Planos Disponíveis</h3>
         </div>
-        <div className="p-6">
+        <div className="p-4 sm:p-6">
           <div className="grid md:grid-cols-3 gap-4">
             {plans.map((plan) => {
               const isCurrent = plan.id === currentPlanType;
@@ -3971,7 +3982,7 @@ function BillingManager({ condoInfo, staff }) {
                   <div className="text-center mb-4 mt-2">
                     <h4 className="font-bold text-slate-900 dark:text-white text-lg">{plan.name}</h4>
                     <div className="mt-2">
-                      <span className="text-3xl font-bold text-slate-900 dark:text-white">R$ {plan.price}</span>
+                      <span className="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white">R$ {plan.price}</span>
                       <span className="text-slate-500 dark:text-slate-400">/mês</span>
                     </div>
                   </div>
@@ -4223,19 +4234,21 @@ function ResidentsManager({ residents, onAddResident, onDeleteResident, onUpdate
                       </div>
                     </form>
                   ) : (
-                    <div className="flex items-center justify-between">
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
                       <div className="text-sm">
                         <span className="font-medium text-slate-800 dark:text-slate-200">Apt {r.unit}</span>
-                        <span className="mx-2 text-slate-400">•</span>
+                        <span className="hidden sm:inline mx-2 text-slate-400">•</span>
+                        <br className="sm:hidden" />
                         <span className="text-slate-700 dark:text-slate-300">{r.name}</span>
-                        {r.phone && <span className="mx-2 text-slate-400">•</span>}
-                        {r.phone && <span className="text-slate-600 dark:text-slate-400">{formatPhoneMask(r.phone)}</span>}
+                        {r.phone && <span className="hidden sm:inline mx-2 text-slate-400">•</span>}
+                        {r.phone && <><br className="sm:hidden" /><span className="text-slate-600 dark:text-slate-400">{formatPhoneMask(r.phone)}</span></>}
                         {r.document && <>
-                          <span className="mx-2 text-slate-400">•</span>
+                          <span className="hidden sm:inline mx-2 text-slate-400">•</span>
+                          <br className="sm:hidden" />
                           <span className="text-slate-600 dark:text-slate-400">{r.document}</span>
                         </>}
                       </div>
-                      <div className="flex gap-2">
+                      <div className="flex gap-2 flex-shrink-0">
                         <button onClick={() => startEdit(r)} className="text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 px-2 py-1 rounded text-sm">Editar</button>
                         <button onClick={() => onDeleteResident(r.id)} className="text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30 px-2 py-1 rounded text-sm">Excluir</button>
                       </div>
@@ -4628,7 +4641,7 @@ function ResidentView({ onBack, initialSlug }) {
                   {pkg.status === 'pending' && (
                     <div>
                       {showModalFor === pkg.id ? (
-                        <div className="flex flex-col gap-2 min-w-[240px] animate-fade-in">
+                        <div className="flex flex-col gap-2 w-full sm:min-w-[240px] animate-fade-in">
                           <input autoFocus type="text" placeholder="Nome de quem retira" className="px-3 py-2 border dark:border-slate-600 rounded text-sm w-full bg-white dark:bg-slate-700 dark:text-white" value={collectorName} onChange={(e) => setCollectorName(e.target.value)} />
                           <input type="text" placeholder="Documento (RG/CPF)" className="px-3 py-2 border dark:border-slate-600 rounded text-sm w-full bg-white dark:bg-slate-700 dark:text-white" value={collectorDoc} onChange={(e) => setCollectorDoc(e.target.value)} />
                           <div className="flex gap-2">
@@ -4794,13 +4807,13 @@ function TeamManager({ staff, onAddStaff, onDeleteStaff }) {
   };
   return (
     <div className="bg-white dark:bg-slate-800 rounded-xl shadow-card border border-slate-200 dark:border-slate-700 overflow-hidden">
-      <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-700 flex items-center gap-3">
+      <div className="px-4 sm:px-6 py-4 border-b border-slate-100 dark:border-slate-700 flex items-center gap-3">
         <div className="p-2.5 bg-blue-50 dark:bg-blue-900/20 rounded-xl">
           <Shield className="text-blue-500 dark:text-blue-400" size={20} />
         </div>
-        <h2 className="font-semibold text-slate-900 dark:text-white">Gestão de Equipe</h2>
+        <h2 className="font-semibold text-slate-900 dark:text-white text-sm sm:text-base">Gestão de Equipe</h2>
       </div>
-      <div className="p-6 space-y-6">
+      <div className="p-4 sm:p-6 space-y-6">
         <form onSubmit={submit} className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div>
             <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Nome</label>
@@ -4834,15 +4847,17 @@ function TeamManager({ staff, onAddStaff, onDeleteStaff }) {
           ) : (
             <div className="divide-y dark:divide-slate-700">
               {staff.map(s => (
-                <div key={s.id} className="py-3 flex items-center justify-between">
-                  <div className="text-sm">
+                <div key={s.id} className="py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                  <div className="text-sm min-w-0">
                     <span className="font-medium text-slate-800 dark:text-slate-200">{s.name}</span>
-                    <span className="mx-2 text-slate-400">•</span>
-                    <span className="text-slate-600 dark:text-slate-400">{s.username}</span>
-                    <span className="mx-2 text-slate-400">•</span>
+                    <span className="hidden sm:inline mx-2 text-slate-400">•</span>
+                    <br className="sm:hidden" />
+                    <span className="text-slate-600 dark:text-slate-400 break-all">{s.username}</span>
+                    <span className="hidden sm:inline mx-2 text-slate-400">•</span>
+                    <br className="sm:hidden" />
                     <span className="text-slate-600 dark:text-slate-400">{s.role}</span>
                   </div>
-                  <button onClick={() => onDeleteStaff(s.id)} className="text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30 px-2 py-1 rounded text-sm">Excluir</button>
+                  <button onClick={() => onDeleteStaff(s.id)} className="text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30 px-2 py-1 rounded text-sm flex-shrink-0 self-start sm:self-auto">Excluir</button>
                 </div>
               ))}
             </div>
@@ -5112,21 +5127,21 @@ function ReportQueryManager({ packages }) {
               <div className="flex gap-2 flex-wrap">
                 <button
                   onClick={exportToCSV}
-                  className="flex items-center gap-1.5 px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white text-sm font-medium rounded-lg shadow-sm"
+                  className="flex items-center gap-1.5 px-2 sm:px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white text-xs sm:text-sm font-medium rounded-lg shadow-sm"
                   title="Exportar para CSV/Excel"
                 >
                   <FileSpreadsheet size={16} /> CSV/Excel
                 </button>
                 <button
                   onClick={exportToJSON}
-                  className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg shadow-sm"
+                  className="flex items-center gap-1.5 px-2 sm:px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs sm:text-sm font-medium rounded-lg shadow-sm"
                   title="Exportar para JSON"
                 >
                   <FileJson size={16} /> JSON
                 </button>
                 <button
                   onClick={handlePrint}
-                  className="flex items-center gap-1.5 px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white text-sm font-medium rounded-lg shadow-sm"
+                  className="flex items-center gap-1.5 px-2 sm:px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white text-xs sm:text-sm font-medium rounded-lg shadow-sm"
                   title="Imprimir / PDF"
                 >
                   <Printer size={16} /> Imprimir/PDF
@@ -5136,65 +5151,103 @@ function ReportQueryManager({ packages }) {
           </div>
 
           {/* Tabela de Resultados */}
-          <div className="overflow-x-auto">
-            {results.length === 0 ? (
-              <div className="p-8 text-center text-slate-500 dark:text-slate-400">
-                <Search size={48} className="mx-auto mb-3 opacity-30" />
-                <p>Nenhum registro encontrado com os filtros aplicados.</p>
-              </div>
-            ) : (
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="bg-slate-100 dark:bg-slate-700">
-                    <th className="px-4 py-3 text-left font-semibold text-slate-700 dark:text-slate-200">Unidade</th>
-                    <th className="px-4 py-3 text-left font-semibold text-slate-700 dark:text-slate-200">Destinatário</th>
-                    <th className="px-4 py-3 text-left font-semibold text-slate-700 dark:text-slate-200">Tipo</th>
-                    <th className="px-4 py-3 text-left font-semibold text-slate-700 dark:text-slate-200">Status</th>
-                    <th className="px-4 py-3 text-left font-semibold text-slate-700 dark:text-slate-200">Data Chegada</th>
-                    <th className="px-4 py-3 text-left font-semibold text-slate-700 dark:text-slate-200">Retirado por</th>
-                    <th className="px-4 py-3 text-left font-semibold text-slate-700 dark:text-slate-200">Documento</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
-                  {results.map(pkg => (
-                    <tr key={pkg.id} className="hover:bg-slate-50 dark:hover:bg-slate-700/50">
-                      <td className="px-4 py-3 text-slate-800 dark:text-slate-200 font-medium">{pkg.unit || '-'}</td>
-                      <td className="px-4 py-3 text-slate-700 dark:text-slate-300">{pkg.recipient || '-'}</td>
-                      <td className="px-4 py-3 text-slate-600 dark:text-slate-400">{pkg.type || '-'}</td>
-                      <td className="px-4 py-3">
-                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
-                          pkg.status === 'pending'
-                            ? 'bg-amber-100 dark:bg-amber-900/50 text-amber-700 dark:text-amber-400'
-                            : pkg.status === 'deleted'
-                            ? 'bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-400'
-                            : 'bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-400'
-                        }`}>
-                          {pkg.status === 'pending' ? 'Pendente' : pkg.status === 'deleted' ? 'Excluído' : 'Retirado'}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-slate-600 dark:text-slate-400">
-                        {pkg.created_at ? new Date(pkg.created_at).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : '-'}
-                      </td>
-                      <td className="px-4 py-3 text-slate-600 dark:text-slate-400">
-                        {pkg.status === 'deleted' ? (
-                          <span className="text-red-600 dark:text-red-400">{pkg.deleted_by || '-'}</span>
-                        ) : (
-                          pkg.collected_by || '-'
-                        )}
-                      </td>
-                      <td className="px-4 py-3 text-slate-600 dark:text-slate-400">
-                        {pkg.status === 'deleted' ? (
-                          pkg.deleted_at ? new Date(pkg.deleted_at).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : '-'
-                        ) : (
-                          pkg.receiver_doc || '-'
-                        )}
-                      </td>
+          {results.length === 0 ? (
+            <div className="p-8 text-center text-slate-500 dark:text-slate-400">
+              <Search size={48} className="mx-auto mb-3 opacity-30" />
+              <p>Nenhum registro encontrado com os filtros aplicados.</p>
+            </div>
+          ) : (
+            <>
+              {/* Desktop: Tabela */}
+              <div className="hidden sm:block overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-slate-100 dark:bg-slate-700">
+                      <th className="px-4 py-3 text-left font-semibold text-slate-700 dark:text-slate-200">Unidade</th>
+                      <th className="px-4 py-3 text-left font-semibold text-slate-700 dark:text-slate-200">Destinatário</th>
+                      <th className="px-4 py-3 text-left font-semibold text-slate-700 dark:text-slate-200">Tipo</th>
+                      <th className="px-4 py-3 text-left font-semibold text-slate-700 dark:text-slate-200">Status</th>
+                      <th className="px-4 py-3 text-left font-semibold text-slate-700 dark:text-slate-200">Data Chegada</th>
+                      <th className="px-4 py-3 text-left font-semibold text-slate-700 dark:text-slate-200">Retirado por</th>
+                      <th className="px-4 py-3 text-left font-semibold text-slate-700 dark:text-slate-200">Documento</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-          </div>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
+                    {results.map(pkg => (
+                      <tr key={pkg.id} className="hover:bg-slate-50 dark:hover:bg-slate-700/50">
+                        <td className="px-4 py-3 text-slate-800 dark:text-slate-200 font-medium">{pkg.unit || '-'}</td>
+                        <td className="px-4 py-3 text-slate-700 dark:text-slate-300">{pkg.recipient || '-'}</td>
+                        <td className="px-4 py-3 text-slate-600 dark:text-slate-400">{pkg.type || '-'}</td>
+                        <td className="px-4 py-3">
+                          <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
+                            pkg.status === 'pending'
+                              ? 'bg-amber-100 dark:bg-amber-900/50 text-amber-700 dark:text-amber-400'
+                              : pkg.status === 'deleted'
+                              ? 'bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-400'
+                              : 'bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-400'
+                          }`}>
+                            {pkg.status === 'pending' ? 'Pendente' : pkg.status === 'deleted' ? 'Excluído' : 'Retirado'}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-slate-600 dark:text-slate-400">
+                          {pkg.created_at ? new Date(pkg.created_at).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : '-'}
+                        </td>
+                        <td className="px-4 py-3 text-slate-600 dark:text-slate-400">
+                          {pkg.status === 'deleted' ? (
+                            <span className="text-red-600 dark:text-red-400">{pkg.deleted_by || '-'}</span>
+                          ) : (
+                            pkg.collected_by || '-'
+                          )}
+                        </td>
+                        <td className="px-4 py-3 text-slate-600 dark:text-slate-400">
+                          {pkg.status === 'deleted' ? (
+                            pkg.deleted_at ? new Date(pkg.deleted_at).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : '-'
+                          ) : (
+                            pkg.receiver_doc || '-'
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Mobile: Cards */}
+              <div className="sm:hidden divide-y divide-slate-100 dark:divide-slate-700">
+                {results.map(pkg => (
+                  <div key={pkg.id} className="p-4 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="font-medium text-slate-800 dark:text-slate-200">Apt {pkg.unit || '-'}</span>
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
+                        pkg.status === 'pending'
+                          ? 'bg-amber-100 dark:bg-amber-900/50 text-amber-700 dark:text-amber-400'
+                          : pkg.status === 'deleted'
+                          ? 'bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-400'
+                          : 'bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-400'
+                      }`}>
+                        {pkg.status === 'pending' ? 'Pendente' : pkg.status === 'deleted' ? 'Excluído' : 'Retirado'}
+                      </span>
+                    </div>
+                    <p className="text-sm text-slate-700 dark:text-slate-300">{pkg.recipient || '-'}</p>
+                    <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+                      <span>{pkg.type || '-'}</span>
+                      <span>•</span>
+                      <span>{pkg.created_at ? new Date(pkg.created_at).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : '-'}</span>
+                    </div>
+                    {(pkg.collected_by || pkg.deleted_by) && (
+                      <p className="text-xs text-slate-500 dark:text-slate-400">
+                        {pkg.status === 'deleted' ? (
+                          <span className="text-red-600 dark:text-red-400">Excluído por: {pkg.deleted_by || '-'}</span>
+                        ) : (
+                          <>Retirado por: {pkg.collected_by}</>
+                        )}
+                      </p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
         </div>
       )}
 
