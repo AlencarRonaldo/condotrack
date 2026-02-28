@@ -4207,50 +4207,52 @@ function ResidentsManager({ residents, onAddResident, onDeleteResident, onUpdate
           {(!residents || residents.length === 0) ? (
             <div className="text-slate-400 dark:text-slate-500 text-sm">Nenhum morador cadastrado.</div>
           ) : (
-            <div className="divide-y dark:divide-slate-700">
+            <div className="space-y-1">
               {residents.map(r => (
-                <div key={r.id} className="py-3">
+                <div key={r.id}>
                   {editId === r.id ? (
-                    <form onSubmit={saveEdit} className="grid grid-cols-1 md:grid-cols-4 gap-2 items-center">
-                      <div>
-                        <input type="text" className="w-full px-3 py-2 border dark:border-slate-600 rounded bg-white dark:bg-slate-700 dark:text-white" value={editForm.unit} onChange={e => setEditForm({ ...editForm, unit: e.target.value })} />
-                        {editErrors.unit && <p className="text-red-600 text-xs mt-1">{editErrors.unit}</p>}
-                      </div>
-                      <div>
-                        <input type="text" className="w-full px-3 py-2 border dark:border-slate-600 rounded bg-white dark:bg-slate-700 dark:text-white" value={editForm.name} onChange={e => setEditForm({ ...editForm, name: e.target.value })} />
-                        {editErrors.name && <p className="text-red-600 text-xs mt-1">{editErrors.name}</p>}
-                      </div>
-                      <div>
-                        <input type="tel" className="w-full px-3 py-2 border dark:border-slate-600 rounded bg-white dark:bg-slate-700 dark:text-white" value={editForm.phone} onChange={e => setEditForm({ ...editForm, phone: formatPhoneMask(e.target.value) })} />
-                        {editErrors.phone && <p className="text-red-600 text-xs mt-1">{editErrors.phone}</p>}
-                      </div>
-                      <div>
-                        <input type="text" className="w-full px-3 py-2 border dark:border-slate-600 rounded bg-white dark:bg-slate-700 dark:text-white" value={editForm.document} onChange={e => setEditForm({ ...editForm, document: e.target.value })} />
-                        {editErrors.document && <p className="text-red-600 text-xs mt-1">{editErrors.document}</p>}
-                      </div>
-                      <div className="md:col-span-4 flex gap-2 mt-2">
-                        <button type="submit" className="px-3 py-2 rounded bg-slate-700 text-white text-sm">Salvar</button>
-                        <button type="button" onClick={cancelEdit} className="px-3 py-2 rounded bg-slate-200 dark:bg-slate-600 text-slate-800 dark:text-slate-200 text-sm">Cancelar</button>
-                      </div>
-                    </form>
+                    <div className="bg-slate-50 dark:bg-slate-700/50 rounded-lg p-3">
+                      <form onSubmit={saveEdit} className="grid grid-cols-1 md:grid-cols-4 gap-2 items-center">
+                        <div>
+                          <input type="text" placeholder="Unidade" className="w-full px-3 py-2 border dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 dark:text-white text-sm" value={editForm.unit} onChange={e => setEditForm({ ...editForm, unit: e.target.value })} />
+                          {editErrors.unit && <p className="text-red-600 text-xs mt-1">{editErrors.unit}</p>}
+                        </div>
+                        <div>
+                          <input type="text" placeholder="Nome" className="w-full px-3 py-2 border dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 dark:text-white text-sm" value={editForm.name} onChange={e => setEditForm({ ...editForm, name: e.target.value })} />
+                          {editErrors.name && <p className="text-red-600 text-xs mt-1">{editErrors.name}</p>}
+                        </div>
+                        <div>
+                          <input type="tel" placeholder="Telefone" className="w-full px-3 py-2 border dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 dark:text-white text-sm" value={editForm.phone} onChange={e => setEditForm({ ...editForm, phone: formatPhoneMask(e.target.value) })} />
+                          {editErrors.phone && <p className="text-red-600 text-xs mt-1">{editErrors.phone}</p>}
+                        </div>
+                        <div>
+                          <input type="text" placeholder="Documento" className="w-full px-3 py-2 border dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 dark:text-white text-sm" value={editForm.document} onChange={e => setEditForm({ ...editForm, document: e.target.value })} />
+                          {editErrors.document && <p className="text-red-600 text-xs mt-1">{editErrors.document}</p>}
+                        </div>
+                        <div className="md:col-span-4 flex gap-2">
+                          <button type="submit" className="px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium">Salvar</button>
+                          <button type="button" onClick={cancelEdit} className="px-3 py-1.5 rounded-lg bg-slate-200 dark:bg-slate-600 text-slate-700 dark:text-slate-200 text-sm font-medium">Cancelar</button>
+                        </div>
+                      </form>
+                    </div>
                   ) : (
-                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-                      <div className="text-sm">
-                        <span className="font-medium text-slate-800 dark:text-slate-200">Apt {r.unit}</span>
-                        <span className="hidden sm:inline mx-2 text-slate-400">•</span>
-                        <br className="sm:hidden" />
-                        <span className="text-slate-700 dark:text-slate-300">{r.name}</span>
-                        {r.phone && <span className="hidden sm:inline mx-2 text-slate-400">•</span>}
-                        {r.phone && <><br className="sm:hidden" /><span className="text-slate-600 dark:text-slate-400">{formatPhoneMask(r.phone)}</span></>}
-                        {r.document && <>
-                          <span className="hidden sm:inline mx-2 text-slate-400">•</span>
-                          <br className="sm:hidden" />
-                          <span className="text-slate-600 dark:text-slate-400">{r.document}</span>
-                        </>}
+                    <div className="flex items-center justify-between px-3 py-2 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors group">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <span className="inline-flex items-center justify-center w-9 h-9 rounded-lg bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 text-xs font-bold flex-shrink-0">{r.unit}</span>
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium text-slate-800 dark:text-slate-200 truncate">{r.name}</p>
+                          <p className="text-xs text-slate-500 dark:text-slate-400 truncate hidden sm:block">
+                            {r.phone ? formatPhoneMask(r.phone) : ''}{r.phone && r.document ? ' · ' : ''}{r.document || ''}
+                          </p>
+                        </div>
                       </div>
-                      <div className="flex gap-2 flex-shrink-0">
-                        <button onClick={() => startEdit(r)} className="text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 px-2 py-1 rounded text-sm">Editar</button>
-                        <button onClick={() => onDeleteResident(r.id)} className="text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30 px-2 py-1 rounded text-sm">Excluir</button>
+                      <div className="flex items-center gap-1.5 flex-shrink-0">
+                        <button onClick={() => startEdit(r)} className="p-1.5 rounded-md hover:bg-blue-50 dark:hover:bg-blue-900/20 text-blue-500 dark:text-blue-400 hover:text-blue-600 dark:hover:text-blue-300 transition-colors" title="Editar">
+                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>
+                        </button>
+                        <button onClick={() => onDeleteResident(r.id)} className="p-1.5 rounded-md hover:bg-red-50 dark:hover:bg-red-900/20 text-red-400 dark:text-red-500 hover:text-red-600 dark:hover:text-red-400 transition-colors" title="Excluir">
+                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
+                        </button>
                       </div>
                     </div>
                   )}
