@@ -1,0 +1,1075 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="noindex, nofollow">
+    <title>Admin - CondoTrack</title>
+    <link rel="icon" href="/favicon-32x32.png" type="image/png">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: { sans: ['Inter', 'sans-serif'] },
+                    boxShadow: { card: '0 1px 3px 0 rgb(0 0 0 / 0.06)' }
+                }
+            }
+        }
+    </script>
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .tab-active { color: #2563eb; border-color: #2563eb; background: #eff6ff; }
+        .fade-in { animation: fadeIn 0.3s ease-in; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+        .sortable { cursor: pointer; user-select: none; }
+        .sortable:hover { color: #2563eb; }
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+        .dark ::-webkit-scrollbar-thumb { background: #475569; }
+    </style>
+</head>
+<body class="bg-slate-50 dark:bg-slate-900 min-h-screen text-slate-800 dark:text-slate-200 transition-colors">
+
+<!-- App Container -->
+<div id="app"></div>
+
+<script>
+// ============================================================
+// CONFIG
+// ============================================================
+const SUPABASE_URL = 'https://bfrglggolflajotpcpwb.supabase.co';
+const FUNCTIONS_BASE = `${SUPABASE_URL}/functions/v1`;
+
+// ============================================================
+// STATE
+// ============================================================
+let state = {
+    token: sessionStorage.getItem('admin_token') || null,
+    activeTab: 'dashboard',
+    overview: null,
+    subscribers: null,
+    subscriberDetail: null,
+    revenue: null,
+    loading: false,
+    error: null,
+    // Subscribers filters
+    subPage: 1,
+    subStatus: '',
+    subPlan: '',
+    subSearch: '',
+    subSortBy: 'created_at',
+    subSortDir: 'desc',
+    // UI
+    darkMode: localStorage.getItem('admin_dark') === 'true',
+    showDetailModal: false,
+};
+
+// ============================================================
+// API HELPERS
+// ============================================================
+async function apiCall(fnName, body = {}, method = 'POST') {
+    const headers = { 'Content-Type': 'application/json' };
+    if (state.token) headers['Authorization'] = `Bearer ${state.token}`;
+
+    const res = await fetch(`${FUNCTIONS_BASE}/${fnName}`, {
+        method,
+        headers,
+        body: JSON.stringify(body),
+    });
+
+    const data = await res.json();
+    if (!res.ok) {
+        if (res.status === 401) {
+            state.token = null;
+            sessionStorage.removeItem('admin_token');
+            render();
+        }
+        throw new Error(data.error || 'Erro na requisição');
+    }
+    return data;
+}
+
+// ============================================================
+// DATA FETCHERS
+// ============================================================
+async function fetchOverview() {
+    state.loading = true;
+    state.error = null;
+    render();
+    try {
+        const res = await apiCall('admin-dashboard', { action: 'overview' });
+        state.overview = res.data;
+    } catch (e) {
+        state.error = e.message;
+    }
+    state.loading = false;
+    render();
+    renderCharts();
+}
+
+async function fetchSubscribers() {
+    state.loading = true;
+    state.error = null;
+    render();
+    try {
+        const res = await apiCall('admin-dashboard', {
+            action: 'subscribers',
+            page: state.subPage,
+            per_page: 15,
+            status: state.subStatus || undefined,
+            plan: state.subPlan || undefined,
+            search: state.subSearch || undefined,
+            sort_by: state.subSortBy,
+            sort_dir: state.subSortDir,
+        });
+        state.subscribers = res.data;
+    } catch (e) {
+        state.error = e.message;
+    }
+    state.loading = false;
+    render();
+}
+
+async function fetchSubscriberDetail(condoId) {
+    state.loading = true;
+    render();
+    try {
+        const res = await apiCall('admin-dashboard', { action: 'subscriber_detail', condo_id: condoId });
+        state.subscriberDetail = res.data;
+        state.showDetailModal = true;
+    } catch (e) {
+        state.error = e.message;
+    }
+    state.loading = false;
+    render();
+}
+
+async function fetchRevenue() {
+    state.loading = true;
+    state.error = null;
+    render();
+    try {
+        const res = await apiCall('admin-dashboard', { action: 'revenue' });
+        state.revenue = res.data;
+    } catch (e) {
+        state.error = e.message;
+    }
+    state.loading = false;
+    render();
+    renderRevenueCharts();
+}
+
+async function toggleCondo(condoId) {
+    try {
+        const res = await apiCall('admin-toggle-condo', { condo_id: condoId });
+        // Refresh subscriber detail if open
+        if (state.showDetailModal && state.subscriberDetail?.condo?.id === condoId) {
+            state.subscriberDetail.condo.is_active = res.data.is_active;
+        }
+        // Refresh subscribers list
+        fetchSubscribers();
+        render();
+    } catch (e) {
+        alert('Erro: ' + e.message);
+    }
+}
+
+async function handleLogin(e) {
+    e.preventDefault();
+    const form = e.target;
+    const email = form.email.value;
+    const password = form.password.value;
+    state.loading = true;
+    state.error = null;
+    render();
+
+    try {
+        const res = await fetch(`${FUNCTIONS_BASE}/admin-auth`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email, password }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Erro no login');
+        state.token = data.token;
+        sessionStorage.setItem('admin_token', data.token);
+        state.loading = false;
+        render();
+        fetchOverview();
+    } catch (e) {
+        state.error = e.message;
+        state.loading = false;
+        render();
+    }
+}
+
+function logout() {
+    state.token = null;
+    state.overview = null;
+    state.subscribers = null;
+    state.revenue = null;
+    sessionStorage.removeItem('admin_token');
+    render();
+}
+
+// ============================================================
+// TAB NAVIGATION
+// ============================================================
+function setTab(tab) {
+    state.activeTab = tab;
+    state.error = null;
+    state.showDetailModal = false;
+    render();
+
+    if (tab === 'dashboard' && !state.overview) fetchOverview();
+    if (tab === 'subscribers' && !state.subscribers) fetchSubscribers();
+    if (tab === 'revenue' && !state.revenue) fetchRevenue();
+}
+
+// ============================================================
+// DARK MODE
+// ============================================================
+function toggleDarkMode() {
+    state.darkMode = !state.darkMode;
+    localStorage.setItem('admin_dark', state.darkMode);
+    document.documentElement.classList.toggle('dark', state.darkMode);
+    render();
+    // Re-render charts
+    if (state.activeTab === 'dashboard') renderCharts();
+    if (state.activeTab === 'revenue') renderRevenueCharts();
+}
+
+// ============================================================
+// SORTING
+// ============================================================
+function sortSubscribers(col) {
+    if (state.subSortBy === col) {
+        state.subSortDir = state.subSortDir === 'desc' ? 'asc' : 'desc';
+    } else {
+        state.subSortBy = col;
+        state.subSortDir = 'desc';
+    }
+    state.subPage = 1;
+    fetchSubscribers();
+}
+
+// ============================================================
+// HELPERS
+// ============================================================
+function formatDate(d) {
+    if (!d) return '—';
+    return new Date(d).toLocaleDateString('pt-BR');
+}
+
+function formatCurrency(v) {
+    return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
+}
+
+function statusBadge(status) {
+    const map = {
+        trial: 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400',
+        active: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400',
+        expired: 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300',
+        canceled: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400',
+        inactive: 'bg-slate-100 text-slate-500 dark:bg-slate-700 dark:text-slate-400',
+        past_due: 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400',
+    };
+    const cls = map[status] || 'bg-slate-100 text-slate-600';
+    const labels = { trial: 'Trial', active: 'Ativo', expired: 'Expirado', canceled: 'Cancelado', inactive: 'Inativo', past_due: 'Inadimplente' };
+    return `<span class="px-2 py-0.5 rounded-full text-xs font-medium ${cls}">${labels[status] || status}</span>`;
+}
+
+function invoiceStatusBadge(status) {
+    const map = {
+        PAID: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400',
+        PENDING: 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400',
+        OVERDUE: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400',
+        CANCELED: 'bg-slate-100 text-slate-500 dark:bg-slate-700 dark:text-slate-400',
+        REFUNDED: 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400',
+    };
+    const cls = map[status] || 'bg-slate-100 text-slate-600';
+    return `<span class="px-2 py-0.5 rounded-full text-xs font-medium ${cls}">${status}</span>`;
+}
+
+function planLabel(plan) {
+    const labels = { trial: 'Trial', basic: 'Básico', professional: 'Pro', premium: 'Premium' };
+    return labels[plan] || plan || '—';
+}
+
+function sortIcon(col) {
+    if (state.subSortBy !== col) return '<svg class="w-3 h-3 opacity-30" fill="currentColor" viewBox="0 0 20 20"><path d="M7 7l3-3 3 3M7 13l3 3 3-3"/></svg>';
+    return state.subSortDir === 'asc'
+        ? '<svg class="w-3 h-3 text-blue-600" fill="currentColor" viewBox="0 0 20 20"><path d="M7 13l3-3 3 3"/></svg>'
+        : '<svg class="w-3 h-3 text-blue-600" fill="currentColor" viewBox="0 0 20 20"><path d="M7 7l3 3 3-3"/></svg>';
+}
+
+// ============================================================
+// RENDER: LOGIN
+// ============================================================
+function renderLogin() {
+    return `
+    <div class="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-900 px-4">
+        <div class="w-full max-w-sm">
+            <div class="text-center mb-8">
+                <div class="w-12 h-12 bg-blue-600 rounded-xl flex items-center justify-center mx-auto mb-4">
+                    <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
+                    </svg>
+                </div>
+                <h1 class="text-xl font-bold text-slate-900 dark:text-white">Admin CondoTrack</h1>
+                <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">Acesso restrito</p>
+            </div>
+            <form onsubmit="handleLogin(event)" class="bg-white dark:bg-slate-800 rounded-xl shadow-card border border-slate-200 dark:border-slate-700 p-6 space-y-4">
+                ${state.error ? `<div class="bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400 text-sm rounded-lg px-3 py-2">${state.error}</div>` : ''}
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Email</label>
+                    <input name="email" type="email" required autocomplete="email"
+                        class="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:border-blue-600 focus:ring-2 focus:ring-blue-600/20 outline-none text-sm">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Senha</label>
+                    <input name="password" type="password" required autocomplete="current-password"
+                        class="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:border-blue-600 focus:ring-2 focus:ring-blue-600/20 outline-none text-sm">
+                </div>
+                <button type="submit" ${state.loading ? 'disabled' : ''}
+                    class="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-lg shadow-sm active:scale-[0.98] transition-all text-sm disabled:opacity-50">
+                    ${state.loading ? 'Entrando...' : 'Entrar'}
+                </button>
+            </form>
+        </div>
+    </div>`;
+}
+
+// ============================================================
+// RENDER: KPI CARD
+// ============================================================
+function kpiCard(label, value, icon, color = 'blue') {
+    const colors = {
+        blue: 'bg-blue-50 text-blue-600 dark:bg-blue-900/20 dark:text-blue-400',
+        emerald: 'bg-emerald-50 text-emerald-600 dark:bg-emerald-900/20 dark:text-emerald-400',
+        amber: 'bg-amber-50 text-amber-600 dark:bg-amber-900/20 dark:text-amber-400',
+        red: 'bg-red-50 text-red-600 dark:bg-red-900/20 dark:text-red-400',
+        purple: 'bg-purple-50 text-purple-600 dark:bg-purple-900/20 dark:text-purple-400',
+    };
+    return `
+    <div class="bg-white dark:bg-slate-800 rounded-xl shadow-card border border-slate-200 dark:border-slate-700 p-5">
+        <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-lg ${colors[color]} flex items-center justify-center flex-shrink-0">
+                ${icon}
+            </div>
+            <div>
+                <p class="text-sm text-slate-500 dark:text-slate-400">${label}</p>
+                <p class="text-xl font-bold text-slate-900 dark:text-white">${value}</p>
+            </div>
+        </div>
+    </div>`;
+}
+
+// ============================================================
+// RENDER: DASHBOARD TAB
+// ============================================================
+function renderDashboard() {
+    const d = state.overview;
+    if (!d) return '<div class="text-center py-12 text-slate-400">Carregando...</div>';
+
+    const k = d.kpis;
+    return `
+    <div class="fade-in space-y-6">
+        <!-- KPIs -->
+        <div class="grid grid-cols-2 lg:grid-cols-5 gap-4">
+            ${kpiCard('Total Condos', k.total_condos,
+                '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/></svg>',
+                'blue')}
+            ${kpiCard('Trials Ativos', k.active_trials,
+                '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>',
+                'amber')}
+            ${kpiCard('Pagantes', k.paying,
+                '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>',
+                'emerald')}
+            ${kpiCard('Churned', k.churned,
+                '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 17h8m0 0V9m0 8l-8-8-4 4-6-6"/></svg>',
+                'red')}
+            ${kpiCard('MRR', formatCurrency(k.mrr),
+                '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>',
+                'purple')}
+        </div>
+
+        <!-- Charts Row -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div class="bg-white dark:bg-slate-800 rounded-xl shadow-card border border-slate-200 dark:border-slate-700 p-5">
+                <h3 class="text-sm font-semibold text-slate-900 dark:text-white mb-4">Cadastros por Mês</h3>
+                <div class="h-56"><canvas id="chart-signups"></canvas></div>
+            </div>
+            <div class="bg-white dark:bg-slate-800 rounded-xl shadow-card border border-slate-200 dark:border-slate-700 p-5">
+                <h3 class="text-sm font-semibold text-slate-900 dark:text-white mb-4">Receita por Mês</h3>
+                <div class="h-56"><canvas id="chart-revenue"></canvas></div>
+            </div>
+        </div>
+
+        <!-- Plan Distribution + Funnel -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div class="bg-white dark:bg-slate-800 rounded-xl shadow-card border border-slate-200 dark:border-slate-700 p-5">
+                <h3 class="text-sm font-semibold text-slate-900 dark:text-white mb-4">Distribuição de Planos</h3>
+                <div class="h-56 flex items-center justify-center"><canvas id="chart-plans"></canvas></div>
+            </div>
+            <div class="bg-white dark:bg-slate-800 rounded-xl shadow-card border border-slate-200 dark:border-slate-700 p-5">
+                <h3 class="text-sm font-semibold text-slate-900 dark:text-white mb-4">Funil de Conversão</h3>
+                ${renderFunnel(d.funnel)}
+            </div>
+        </div>
+
+        <!-- Recent Activity -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div class="bg-white dark:bg-slate-800 rounded-xl shadow-card border border-slate-200 dark:border-slate-700 p-5">
+                <h3 class="text-sm font-semibold text-slate-900 dark:text-white mb-3">Últimos Cadastros</h3>
+                <div class="space-y-2">
+                    ${d.recent_signups.map(c => `
+                        <div class="flex items-center justify-between py-2 border-b border-slate-100 dark:border-slate-700 last:border-0">
+                            <div>
+                                <p class="text-sm font-medium text-slate-800 dark:text-slate-200">${c.name}</p>
+                                <p class="text-xs text-slate-400">${formatDate(c.created_at)}</p>
+                            </div>
+                            ${statusBadge(c.status)}
+                        </div>
+                    `).join('')}
+                    ${d.recent_signups.length === 0 ? '<p class="text-sm text-slate-400 py-4 text-center">Nenhum cadastro recente</p>' : ''}
+                </div>
+            </div>
+            <div class="bg-white dark:bg-slate-800 rounded-xl shadow-card border border-slate-200 dark:border-slate-700 p-5">
+                <h3 class="text-sm font-semibold text-slate-900 dark:text-white mb-3">Últimos Pagamentos</h3>
+                <div class="space-y-2">
+                    ${d.recent_payments.map(p => `
+                        <div class="flex items-center justify-between py-2 border-b border-slate-100 dark:border-slate-700 last:border-0">
+                            <div>
+                                <p class="text-sm font-medium text-slate-800 dark:text-slate-200">${p.condo_name}</p>
+                                <p class="text-xs text-slate-400">${planLabel(p.plan)} &middot; ${formatDate(p.paid_at)}</p>
+                            </div>
+                            <span class="text-sm font-semibold text-emerald-600 dark:text-emerald-400">${formatCurrency(p.amount)}</span>
+                        </div>
+                    `).join('')}
+                    ${d.recent_payments.length === 0 ? '<p class="text-sm text-slate-400 py-4 text-center">Nenhum pagamento recente</p>' : ''}
+                </div>
+            </div>
+        </div>
+    </div>`;
+}
+
+function renderFunnel(f) {
+    const steps = [
+        { label: 'Registrados', value: f.registered, pct: '100%' },
+        { label: 'Trial', value: f.trial, pct: f.registered > 0 ? ((f.trial/f.registered)*100).toFixed(0)+'%' : '0%' },
+        { label: 'Pagos', value: f.paid, pct: `${f.trial_to_paid}%` },
+        { label: 'Churned', value: f.churned, pct: `${f.paid_to_churned}%` },
+    ];
+    const widths = [100, 80, 55, 35];
+    return `
+    <div class="space-y-3 py-2">
+        ${steps.map((s, i) => `
+            <div class="flex items-center gap-3">
+                <div class="w-20 text-right">
+                    <p class="text-xs font-medium text-slate-500 dark:text-slate-400">${s.label}</p>
+                </div>
+                <div class="flex-1">
+                    <div class="bg-blue-${i === 3 ? '200' : (600 - i*100)} dark:bg-blue-${i === 3 ? '800' : (700 - i*100)} rounded-full h-8 flex items-center justify-center transition-all" style="width: ${widths[i]}%">
+                        <span class="text-xs font-bold text-white">${s.value}</span>
+                    </div>
+                </div>
+                <div class="w-12 text-xs font-medium text-slate-500 dark:text-slate-400">${s.pct}</div>
+            </div>
+        `).join('')}
+    </div>`;
+}
+
+// ============================================================
+// RENDER: SUBSCRIBERS TAB
+// ============================================================
+function renderSubscribers() {
+    const s = state.subscribers;
+
+    return `
+    <div class="fade-in space-y-4">
+        <!-- Filters -->
+        <div class="bg-white dark:bg-slate-800 rounded-xl shadow-card border border-slate-200 dark:border-slate-700 p-4">
+            <div class="flex flex-wrap gap-3">
+                <div class="flex-1 min-w-[200px]">
+                    <input type="text" placeholder="Buscar por nome..." value="${state.subSearch}"
+                        oninput="state.subSearch=this.value"
+                        onkeydown="if(event.key==='Enter'){state.subPage=1;fetchSubscribers()}"
+                        class="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:border-blue-600 focus:ring-2 focus:ring-blue-600/20 outline-none text-sm">
+                </div>
+                <select onchange="state.subStatus=this.value;state.subPage=1;fetchSubscribers()"
+                    class="px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-sm outline-none">
+                    <option value="" ${!state.subStatus ? 'selected' : ''}>Todos Status</option>
+                    <option value="trial" ${state.subStatus==='trial' ? 'selected' : ''}>Trial</option>
+                    <option value="active" ${state.subStatus==='active' ? 'selected' : ''}>Ativo</option>
+                    <option value="expired" ${state.subStatus==='expired' ? 'selected' : ''}>Expirado</option>
+                    <option value="canceled" ${state.subStatus==='canceled' ? 'selected' : ''}>Cancelado</option>
+                </select>
+                <select onchange="state.subPlan=this.value;state.subPage=1;fetchSubscribers()"
+                    class="px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-sm outline-none">
+                    <option value="" ${!state.subPlan ? 'selected' : ''}>Todos Planos</option>
+                    <option value="trial" ${state.subPlan==='trial' ? 'selected' : ''}>Trial</option>
+                    <option value="basic" ${state.subPlan==='basic' ? 'selected' : ''}>Básico</option>
+                    <option value="professional" ${state.subPlan==='professional' ? 'selected' : ''}>Pro</option>
+                    <option value="premium" ${state.subPlan==='premium' ? 'selected' : ''}>Premium</option>
+                </select>
+                <button onclick="state.subPage=1;fetchSubscribers()"
+                    class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium shadow-sm active:scale-[0.98] transition-all">
+                    Buscar
+                </button>
+            </div>
+        </div>
+
+        <!-- Table -->
+        <div class="bg-white dark:bg-slate-800 rounded-xl shadow-card border border-slate-200 dark:border-slate-700 overflow-hidden">
+            <div class="overflow-x-auto">
+                <table class="w-full text-sm">
+                    <thead>
+                        <tr class="border-b border-slate-200 dark:border-slate-700 text-left">
+                            <th class="px-4 py-3 font-medium text-slate-500 dark:text-slate-400 sortable" onclick="sortSubscribers('name')">
+                                <span class="flex items-center gap-1">Nome ${sortIcon('name')}</span>
+                            </th>
+                            <th class="px-4 py-3 font-medium text-slate-500 dark:text-slate-400">Plano</th>
+                            <th class="px-4 py-3 font-medium text-slate-500 dark:text-slate-400">Status</th>
+                            <th class="px-4 py-3 font-medium text-slate-500 dark:text-slate-400 sortable" onclick="sortSubscribers('created_at')">
+                                <span class="flex items-center gap-1">Criado ${sortIcon('created_at')}</span>
+                            </th>
+                            <th class="px-4 py-3 font-medium text-slate-500 dark:text-slate-400 hidden md:table-cell">Fim</th>
+                            <th class="px-4 py-3 font-medium text-slate-500 dark:text-slate-400 hidden lg:table-cell">Staff</th>
+                            <th class="px-4 py-3 font-medium text-slate-500 dark:text-slate-400 hidden lg:table-cell sortable" onclick="sortSubscribers('plan_type')">
+                                <span class="flex items-center gap-1">MRR ${sortIcon('plan_type')}</span>
+                            </th>
+                            <th class="px-4 py-3 font-medium text-slate-500 dark:text-slate-400 w-10"></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${!s ? '<tr><td colspan="8" class="text-center py-8 text-slate-400">Carregando...</td></tr>' :
+                          s.subscribers.length === 0 ? '<tr><td colspan="8" class="text-center py-8 text-slate-400">Nenhum resultado encontrado</td></tr>' :
+                          s.subscribers.map(sub => `
+                            <tr class="border-b border-slate-100 dark:border-slate-700/50 hover:bg-slate-50 dark:hover:bg-slate-700/30 transition-colors cursor-pointer" onclick="fetchSubscriberDetail('${sub.id}')">
+                                <td class="px-4 py-3">
+                                    <p class="font-medium text-slate-800 dark:text-slate-200">${sub.name}</p>
+                                    <p class="text-xs text-slate-400 truncate max-w-[200px]">${sub.id}</p>
+                                </td>
+                                <td class="px-4 py-3">${planLabel(sub.plan_type)}</td>
+                                <td class="px-4 py-3">${statusBadge(sub.subscription_status)}</td>
+                                <td class="px-4 py-3 text-slate-500 dark:text-slate-400">${formatDate(sub.created_at)}</td>
+                                <td class="px-4 py-3 text-slate-500 dark:text-slate-400 hidden md:table-cell">${formatDate(sub.subscription_status === 'trial' ? sub.trial_end_date : sub.plan_end_date)}</td>
+                                <td class="px-4 py-3 hidden lg:table-cell">${sub.staff_count}</td>
+                                <td class="px-4 py-3 hidden lg:table-cell font-medium text-slate-700 dark:text-slate-300">${sub.mrr > 0 ? formatCurrency(sub.mrr) : '—'}</td>
+                                <td class="px-4 py-3 text-slate-400">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+                                </td>
+                            </tr>
+                          `).join('')}
+                    </tbody>
+                </table>
+            </div>
+            ${s && s.total_pages > 1 ? renderPagination(s) : ''}
+        </div>
+    </div>
+    ${state.showDetailModal ? renderDetailModal() : ''}`;
+}
+
+function renderPagination(s) {
+    const pages = [];
+    for (let i = 1; i <= s.total_pages; i++) pages.push(i);
+    return `
+    <div class="flex items-center justify-between px-4 py-3 border-t border-slate-200 dark:border-slate-700">
+        <p class="text-xs text-slate-500 dark:text-slate-400">${s.total} resultado${s.total !== 1 ? 's' : ''}</p>
+        <div class="flex gap-1">
+            ${pages.map(p => `
+                <button onclick="state.subPage=${p};fetchSubscribers()"
+                    class="px-3 py-1 rounded text-xs font-medium transition-colors ${p === s.page
+                        ? 'bg-blue-600 text-white'
+                        : 'text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700'}">
+                    ${p}
+                </button>
+            `).join('')}
+        </div>
+    </div>`;
+}
+
+// ============================================================
+// RENDER: DETAIL MODAL
+// ============================================================
+function renderDetailModal() {
+    const d = state.subscriberDetail;
+    if (!d) return '';
+    const c = d.condo;
+
+    return `
+    <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4" onclick="if(event.target===this){state.showDetailModal=false;render()}">
+        <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-700 w-full max-w-2xl max-h-[85vh] overflow-y-auto">
+            <!-- Header -->
+            <div class="flex items-center justify-between p-5 border-b border-slate-200 dark:border-slate-700">
+                <div>
+                    <h2 class="text-lg font-bold text-slate-900 dark:text-white">${c.name}</h2>
+                    <p class="text-xs text-slate-400 mt-0.5">${c.id}</p>
+                </div>
+                <div class="flex items-center gap-2">
+                    <button onclick="event.stopPropagation();toggleCondo('${c.id}')"
+                        class="px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${c.is_active
+                            ? 'bg-red-50 text-red-600 hover:bg-red-100 dark:bg-red-900/20 dark:text-red-400'
+                            : 'bg-emerald-50 text-emerald-600 hover:bg-emerald-100 dark:bg-emerald-900/20 dark:text-emerald-400'}">
+                        ${c.is_active ? 'Desativar' : 'Ativar'}
+                    </button>
+                    <button onclick="state.showDetailModal=false;render()"
+                        class="p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-400">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                    </button>
+                </div>
+            </div>
+
+            <div class="p-5 space-y-5">
+                <!-- Info Grid -->
+                <div class="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                    <div><p class="text-xs text-slate-400">Plano</p><p class="text-sm font-medium">${planLabel(c.plan_type)}</p></div>
+                    <div><p class="text-xs text-slate-400">Status</p><div class="mt-0.5">${statusBadge(c.subscription_status)}</div></div>
+                    <div><p class="text-xs text-slate-400">Ativo</p><p class="text-sm font-medium">${c.is_active ? 'Sim' : 'Não'}</p></div>
+                    <div><p class="text-xs text-slate-400">Criado em</p><p class="text-sm">${formatDate(c.created_at)}</p></div>
+                    <div><p class="text-xs text-slate-400">Fim Trial</p><p class="text-sm">${formatDate(c.trial_end_date)}</p></div>
+                    <div><p class="text-xs text-slate-400">Fim Plano</p><p class="text-sm">${formatDate(c.plan_end_date)}</p></div>
+                    <div><p class="text-xs text-slate-400">Slug</p><p class="text-sm font-mono">${c.slug || '—'}</p></div>
+                    <div><p class="text-xs text-slate-400">Doc</p><p class="text-sm">${c.document_type ? c.document_type + ': ' + c.document_number : '—'}</p></div>
+                </div>
+
+                <!-- Usage -->
+                <div>
+                    <h3 class="text-sm font-semibold text-slate-900 dark:text-white mb-2">Uso</h3>
+                    <div class="grid grid-cols-3 gap-3">
+                        <div class="bg-slate-50 dark:bg-slate-700/50 rounded-lg p-3 text-center">
+                            <p class="text-lg font-bold text-slate-800 dark:text-white">${d.usage.units}</p>
+                            <p class="text-xs text-slate-400">Unidades</p>
+                        </div>
+                        <div class="bg-slate-50 dark:bg-slate-700/50 rounded-lg p-3 text-center">
+                            <p class="text-lg font-bold text-slate-800 dark:text-white">${d.usage.residents}</p>
+                            <p class="text-xs text-slate-400">Moradores</p>
+                        </div>
+                        <div class="bg-slate-50 dark:bg-slate-700/50 rounded-lg p-3 text-center">
+                            <p class="text-lg font-bold text-slate-800 dark:text-white">${d.usage.packages}</p>
+                            <p class="text-xs text-slate-400">Encomendas</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Staff -->
+                <div>
+                    <h3 class="text-sm font-semibold text-slate-900 dark:text-white mb-2">Staff (${d.staff.length})</h3>
+                    ${d.staff.length === 0 ? '<p class="text-sm text-slate-400">Nenhum staff cadastrado</p>' :
+                    `<div class="space-y-1">
+                        ${d.staff.map(s => `
+                            <div class="flex items-center justify-between py-1.5 border-b border-slate-100 dark:border-slate-700/50 last:border-0 text-sm">
+                                <div>
+                                    <span class="font-medium text-slate-700 dark:text-slate-300">${s.name}</span>
+                                    <span class="text-xs text-slate-400 ml-2">${s.role}</span>
+                                </div>
+                                <span class="text-xs ${s.is_active ? 'text-emerald-500' : 'text-slate-400'}">${s.is_active ? 'ativo' : 'inativo'}</span>
+                            </div>
+                        `).join('')}
+                    </div>`}
+                </div>
+
+                <!-- Invoices -->
+                <div>
+                    <h3 class="text-sm font-semibold text-slate-900 dark:text-white mb-2">Invoices (${d.invoices.length})</h3>
+                    ${d.invoices.length === 0 ? '<p class="text-sm text-slate-400">Nenhuma fatura encontrada</p>' :
+                    `<div class="overflow-x-auto">
+                        <table class="w-full text-xs">
+                            <thead><tr class="text-left text-slate-400 border-b border-slate-200 dark:border-slate-700">
+                                <th class="pb-1 pr-3">Valor</th><th class="pb-1 pr-3">Status</th><th class="pb-1 pr-3">Plano</th><th class="pb-1 pr-3">Vencimento</th><th class="pb-1">Pago em</th>
+                            </tr></thead>
+                            <tbody>
+                                ${d.invoices.map(inv => `
+                                    <tr class="border-b border-slate-50 dark:border-slate-700/30">
+                                        <td class="py-1.5 pr-3 font-medium">${formatCurrency(inv.amount)}</td>
+                                        <td class="py-1.5 pr-3">${invoiceStatusBadge(inv.status)}</td>
+                                        <td class="py-1.5 pr-3">${planLabel(inv.plan_slug)}</td>
+                                        <td class="py-1.5 pr-3 text-slate-500">${formatDate(inv.due_date)}</td>
+                                        <td class="py-1.5 text-slate-500">${formatDate(inv.paid_at)}</td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    </div>`}
+                </div>
+            </div>
+        </div>
+    </div>`;
+}
+
+// ============================================================
+// RENDER: REVENUE TAB
+// ============================================================
+function renderRevenue() {
+    const r = state.revenue;
+    if (!r) return '<div class="text-center py-12 text-slate-400">Carregando...</div>';
+
+    return `
+    <div class="fade-in space-y-6">
+        <!-- KPI Cards -->
+        <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            ${kpiCard('MRR Atual', formatCurrency(r.current_mrr),
+                '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/></svg>',
+                'purple')}
+            ${kpiCard('Receita Total', formatCurrency(r.total_revenue),
+                '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"/></svg>',
+                'emerald')}
+            ${kpiCard('Básico', formatCurrency(r.revenue_by_plan.basic?.total || 0) + ` (${r.revenue_by_plan.basic?.count || 0})`,
+                '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/></svg>',
+                'blue')}
+            ${kpiCard('Pro+Premium', formatCurrency((r.revenue_by_plan.professional?.total || 0) + (r.revenue_by_plan.premium?.total || 0)),
+                '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z"/></svg>',
+                'amber')}
+        </div>
+
+        <!-- MRR Trend -->
+        <div class="bg-white dark:bg-slate-800 rounded-xl shadow-card border border-slate-200 dark:border-slate-700 p-5">
+            <h3 class="text-sm font-semibold text-slate-900 dark:text-white mb-4">Trend de Receita Mensal</h3>
+            <div class="h-64"><canvas id="chart-mrr-trend"></canvas></div>
+        </div>
+
+        <!-- Revenue by Plan -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            ${['basic', 'professional', 'premium'].map(plan => {
+                const d = r.revenue_by_plan[plan] || { total: 0, count: 0 };
+                const colors = { basic: 'blue', professional: 'purple', premium: 'amber' };
+                const labels = { basic: 'Básico', professional: 'Profissional', premium: 'Premium' };
+                return `
+                <div class="bg-white dark:bg-slate-800 rounded-xl shadow-card border border-slate-200 dark:border-slate-700 p-5">
+                    <p class="text-sm text-slate-500 dark:text-slate-400">${labels[plan]}</p>
+                    <p class="text-2xl font-bold text-slate-900 dark:text-white mt-1">${formatCurrency(d.total)}</p>
+                    <p class="text-xs text-slate-400 mt-1">${d.count} pagamento${d.count !== 1 ? 's' : ''}</p>
+                </div>`;
+            }).join('')}
+        </div>
+
+        <!-- Recent Invoices -->
+        <div class="bg-white dark:bg-slate-800 rounded-xl shadow-card border border-slate-200 dark:border-slate-700 overflow-hidden">
+            <div class="p-5 border-b border-slate-200 dark:border-slate-700">
+                <h3 class="text-sm font-semibold text-slate-900 dark:text-white">Faturas Recentes</h3>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="w-full text-sm">
+                    <thead>
+                        <tr class="border-b border-slate-200 dark:border-slate-700 text-left text-slate-500 dark:text-slate-400">
+                            <th class="px-4 py-2 font-medium">Condomínio</th>
+                            <th class="px-4 py-2 font-medium">Valor</th>
+                            <th class="px-4 py-2 font-medium">Status</th>
+                            <th class="px-4 py-2 font-medium hidden sm:table-cell">Plano</th>
+                            <th class="px-4 py-2 font-medium hidden md:table-cell">Tipo</th>
+                            <th class="px-4 py-2 font-medium">Data</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${r.recent_invoices.map(inv => `
+                            <tr class="border-b border-slate-100 dark:border-slate-700/50">
+                                <td class="px-4 py-2 font-medium text-slate-800 dark:text-slate-200">${inv.condo_name}</td>
+                                <td class="px-4 py-2">${formatCurrency(inv.amount)}</td>
+                                <td class="px-4 py-2">${invoiceStatusBadge(inv.status)}</td>
+                                <td class="px-4 py-2 hidden sm:table-cell">${planLabel(inv.plan_slug)}</td>
+                                <td class="px-4 py-2 hidden md:table-cell text-slate-500">${inv.billing_type || '—'}</td>
+                                <td class="px-4 py-2 text-slate-500">${formatDate(inv.paid_at || inv.created_at)}</td>
+                            </tr>
+                        `).join('')}
+                        ${r.recent_invoices.length === 0 ? '<tr><td colspan="6" class="text-center py-8 text-slate-400">Nenhuma fatura encontrada</td></tr>' : ''}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>`;
+}
+
+// ============================================================
+// RENDER: LAYOUT
+// ============================================================
+function renderLayout(content) {
+    const tabs = [
+        { id: 'dashboard', label: 'Dashboard', icon: '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zm10 0a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zm10 0a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"/></svg>' },
+        { id: 'subscribers', label: 'Assinantes', icon: '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/></svg>' },
+        { id: 'revenue', label: 'Receita', icon: '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>' },
+    ];
+
+    return `
+    <div class="flex min-h-screen">
+        <!-- Sidebar (desktop) -->
+        <aside class="hidden md:flex flex-col w-60 bg-white dark:bg-slate-800 border-r border-slate-200 dark:border-slate-700 fixed inset-y-0 left-0 z-30">
+            <div class="flex items-center gap-3 px-5 h-14 border-b border-slate-200 dark:border-slate-700">
+                <div class="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
+                    <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
+                </div>
+                <div>
+                    <p class="text-sm font-bold text-slate-900 dark:text-white">CondoTrack</p>
+                    <p class="text-xs text-slate-400">Super Admin</p>
+                </div>
+            </div>
+            <nav class="flex-1 px-3 py-4 space-y-1">
+                ${tabs.map(t => `
+                    <button onclick="setTab('${t.id}')"
+                        class="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors
+                        ${state.activeTab === t.id
+                            ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/20 dark:text-blue-400'
+                            : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700/50'}">
+                        ${t.icon}
+                        ${t.label}
+                    </button>
+                `).join('')}
+            </nav>
+            <div class="px-3 pb-4 space-y-1">
+                <button onclick="toggleDarkMode()"
+                    class="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/></svg>
+                    ${state.darkMode ? 'Modo Claro' : 'Modo Escuro'}
+                </button>
+                <button onclick="logout()"
+                    class="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg>
+                    Sair
+                </button>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="flex-1 md:ml-60">
+            <!-- Top Header (mobile) -->
+            <header class="md:hidden flex items-center justify-between px-4 h-14 bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 sticky top-0 z-20">
+                <div class="flex items-center gap-2">
+                    <div class="w-7 h-7 bg-blue-600 rounded-lg flex items-center justify-center">
+                        <svg class="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
+                    </div>
+                    <span class="text-sm font-bold text-slate-900 dark:text-white">Admin</span>
+                </div>
+                <div class="flex items-center gap-2">
+                    <button onclick="toggleDarkMode()" class="p-2 text-slate-500 dark:text-slate-400">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/></svg>
+                    </button>
+                    <button onclick="logout()" class="p-2 text-red-500">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg>
+                    </button>
+                </div>
+            </header>
+
+            <!-- Page Content -->
+            <div class="p-4 md:p-6 pb-24 md:pb-6">
+                ${state.error && !state.loading ? `
+                    <div class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 text-sm rounded-xl px-4 py-3 mb-4">
+                        ${state.error}
+                    </div>
+                ` : ''}
+                ${state.loading ? `
+                    <div class="flex items-center justify-center py-12">
+                        <div class="w-8 h-8 border-3 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+                    </div>
+                ` : ''}
+                ${content}
+            </div>
+
+            <!-- Bottom Nav (mobile) -->
+            <nav class="md:hidden fixed bottom-0 inset-x-0 bg-white dark:bg-slate-800 border-t border-slate-200 dark:border-slate-700 flex z-20">
+                ${tabs.map(t => `
+                    <button onclick="setTab('${t.id}')"
+                        class="flex-1 flex flex-col items-center gap-0.5 py-2 text-xs font-medium transition-colors
+                        ${state.activeTab === t.id
+                            ? 'text-blue-600 dark:text-blue-400'
+                            : 'text-slate-400 dark:text-slate-500'}">
+                        ${t.icon}
+                        ${t.label}
+                    </button>
+                `).join('')}
+            </nav>
+        </main>
+    </div>`;
+}
+
+// ============================================================
+// MAIN RENDER
+// ============================================================
+function render() {
+    const app = document.getElementById('app');
+    if (!state.token) {
+        app.innerHTML = renderLogin();
+        return;
+    }
+
+    let content = '';
+    switch (state.activeTab) {
+        case 'dashboard': content = renderDashboard(); break;
+        case 'subscribers': content = renderSubscribers(); break;
+        case 'revenue': content = renderRevenue(); break;
+    }
+
+    app.innerHTML = renderLayout(content);
+}
+
+// ============================================================
+// CHARTS
+// ============================================================
+let chartInstances = {};
+
+function destroyCharts() {
+    Object.values(chartInstances).forEach(c => c.destroy());
+    chartInstances = {};
+}
+
+function getChartColors() {
+    const isDark = state.darkMode;
+    return {
+        grid: isDark ? 'rgba(148,163,184,0.1)' : 'rgba(148,163,184,0.2)',
+        text: isDark ? '#94a3b8' : '#64748b',
+        blue: '#2563eb',
+        emerald: '#059669',
+        amber: '#d97706',
+        red: '#dc2626',
+        purple: '#7c3aed',
+    };
+}
+
+function renderCharts() {
+    if (!state.overview) return;
+    destroyCharts();
+
+    setTimeout(() => {
+        const colors = getChartColors();
+        const d = state.overview;
+
+        // Signups chart
+        const signupsEl = document.getElementById('chart-signups');
+        if (signupsEl) {
+            chartInstances.signups = new Chart(signupsEl, {
+                type: 'bar',
+                data: {
+                    labels: d.signups_by_month.map(s => s.month),
+                    datasets: [{
+                        label: 'Cadastros',
+                        data: d.signups_by_month.map(s => s.count),
+                        backgroundColor: colors.blue + '80',
+                        borderColor: colors.blue,
+                        borderWidth: 1,
+                        borderRadius: 4,
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        y: { beginAtZero: true, ticks: { color: colors.text, stepSize: 1 }, grid: { color: colors.grid } },
+                        x: { ticks: { color: colors.text }, grid: { display: false } }
+                    }
+                }
+            });
+        }
+
+        // Revenue chart
+        const revenueEl = document.getElementById('chart-revenue');
+        if (revenueEl) {
+            chartInstances.revenue = new Chart(revenueEl, {
+                type: 'line',
+                data: {
+                    labels: d.revenue_by_month.map(r => r.month),
+                    datasets: [{
+                        label: 'Receita',
+                        data: d.revenue_by_month.map(r => r.total),
+                        borderColor: colors.emerald,
+                        backgroundColor: colors.emerald + '20',
+                        fill: true,
+                        tension: 0.3,
+                        pointRadius: 3,
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        y: { beginAtZero: true, ticks: { color: colors.text, callback: v => 'R$ ' + v }, grid: { color: colors.grid } },
+                        x: { ticks: { color: colors.text }, grid: { display: false } }
+                    }
+                }
+            });
+        }
+
+        // Plans donut
+        const plansEl = document.getElementById('chart-plans');
+        if (plansEl) {
+            const pd = d.plan_distribution;
+            chartInstances.plans = new Chart(plansEl, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Trial', 'Básico', 'Pro', 'Premium'],
+                    datasets: [{
+                        data: [pd.trial, pd.basic, pd.professional, pd.premium],
+                        backgroundColor: [colors.amber, colors.blue, colors.purple, colors.emerald],
+                        borderWidth: 0,
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'right',
+                            labels: { color: colors.text, padding: 12, usePointStyle: true, pointStyleWidth: 8 }
+                        }
+                    },
+                    cutout: '65%',
+                }
+            });
+        }
+    }, 50);
+}
+
+function renderRevenueCharts() {
+    if (!state.revenue) return;
+    // Destroy only the MRR trend chart
+    if (chartInstances.mrrTrend) chartInstances.mrrTrend.destroy();
+
+    setTimeout(() => {
+        const colors = getChartColors();
+        const r = state.revenue;
+
+        const mrrEl = document.getElementById('chart-mrr-trend');
+        if (mrrEl) {
+            chartInstances.mrrTrend = new Chart(mrrEl, {
+                type: 'line',
+                data: {
+                    labels: r.revenue_by_month.map(m => m.month),
+                    datasets: [{
+                        label: 'Receita Mensal',
+                        data: r.revenue_by_month.map(m => m.total),
+                        borderColor: colors.purple,
+                        backgroundColor: colors.purple + '15',
+                        fill: true,
+                        tension: 0.3,
+                        pointRadius: 4,
+                        pointBackgroundColor: colors.purple,
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        y: { beginAtZero: true, ticks: { color: colors.text, callback: v => 'R$ ' + v }, grid: { color: colors.grid } },
+                        x: { ticks: { color: colors.text }, grid: { display: false } }
+                    }
+                }
+            });
+        }
+    }, 50);
+}
+
+// ============================================================
+// INIT
+// ============================================================
+document.documentElement.classList.toggle('dark', state.darkMode);
+render();
+if (state.token) fetchOverview();
+</script>
+</body>
+</html>

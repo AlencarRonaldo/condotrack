@@ -92,6 +92,7 @@ export default defineConfig({
         register: resolve(__dirname, 'register.html'),
         register_success: resolve(__dirname, 'register_success.html'),
         billing: resolve(__dirname, 'billing.html'),
+        admin: resolve(__dirname, 'admin.html'),
       },
       output: {
         manualChunks: {

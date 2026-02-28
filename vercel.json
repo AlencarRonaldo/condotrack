@@ -18,6 +18,10 @@
     {
       "source": "/register_success",
       "destination": "/register_success.html"
+    },
+    {
+      "source": "/admin",
+      "destination": "/admin.html"
     }
   ],
   "headers": [
