@@ -442,6 +442,23 @@ async function handleRevenue(supabase: ReturnType<typeof createClient>) {
   }
 }
 
+async function handleCancelInvoice(
+  supabase: ReturnType<typeof createClient>,
+  invoiceId: string
+) {
+  const { data, error } = await supabase
+    .from('invoices')
+    .update({ status: 'CANCELED' })
+    .eq('id', invoiceId)
+    .eq('status', 'PENDING')
+    .select('id, status')
+    .single()
+
+  if (error) throw new Error('Fatura não encontrada ou já processada')
+
+  return { invoice: data }
+}
+
 // ========== MAIN HANDLER ==========
 
 serve(async (req) => {
@@ -493,6 +510,15 @@ serve(async (req) => {
         break
       case 'revenue':
         result = await handleRevenue(supabase)
+        break
+      case 'cancel_invoice':
+        if (!params.invoice_id) {
+          return new Response(
+            JSON.stringify({ error: 'invoice_id é obrigatório' }),
+            { status: 400, headers: cors }
+          )
+        }
+        result = await handleCancelInvoice(supabase, params.invoice_id)
         break
       default:
         return new Response(
