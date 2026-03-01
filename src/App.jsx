@@ -86,9 +86,9 @@ const PACKAGE_TYPE_CONFIG = {
 // ==================================================================================
 
 // ==================================================================================
-// 🖼️ LOGO DO CONDOTRACK
+// 🖼️ LOGO DO RECEBCONTROL
 // ==================================================================================
-const LOGO_PATH = '/assets/condotrack_logo.png';
+const LOGO_PATH = '/logo-recebcontrol.png';
 
 // ==================================================================================
 // ⚠️ SUPABASE CLIENT - PRODUÇÃO
@@ -335,7 +335,7 @@ const mockSupabase = (() => {
     write('settings', [{
       id: 1,
       condo_id: DEMO_CONDO_ID,
-      condo_name: 'CondoTrack Demo',
+      condo_name: 'RecebControl Demo',
       condo_address: '',
       condo_phone: '',
       created_at: now,
@@ -753,7 +753,7 @@ export default function CondoTrackApp() {
   const [packages, setPackages] = useState([]);
   const [residents, setResidents] = useState([]);
   const [staff, setStaff] = useState([]);
-  const [condoSettings, setCondoSettings] = useState({ condo_name: 'CondoTrack', condo_address: '', condo_phone: '' });
+  const [condoSettings, setCondoSettings] = useState({ condo_name: 'RecebControl', condo_address: '', condo_phone: '' });
   const [loading, setLoading] = useState(true);
   const [notification, setNotification] = useState(null);
   const [showInactivityModal, setShowInactivityModal] = useState(false);
@@ -922,7 +922,7 @@ export default function CondoTrackApp() {
               setCondoStatus(status);
               setCondoInfo(condoData);
               setCondoSettings({
-                condo_name: condoData.name || 'CondoTrack',
+                condo_name: condoData.name || 'RecebControl',
                 condo_address: condoData.address || '',
                 condo_phone: condoData.phone || ''
               });
@@ -1055,7 +1055,7 @@ export default function CondoTrackApp() {
     setPackages([]);
     setResidents([]);
     setStaff([]);
-    setCondoSettings({ condo_name: 'CondoTrack', condo_address: '', condo_phone: '' });
+    setCondoSettings({ condo_name: 'RecebControl', condo_address: '', condo_phone: '' });
   };
 
   // ---------- Ações (Multi-Tenant: todas incluem condo_id) ----------
@@ -1325,9 +1325,9 @@ export default function CondoTrackApp() {
         <div className="min-h-screen flex flex-col items-center justify-center px-4 py-10 bg-slate-50 dark:bg-slate-950">
           <div className="w-full max-w-sm">
             <div className="relative text-center bg-white/90 dark:bg-slate-900/70 backdrop-blur rounded-2xl border border-slate-200/70 dark:border-slate-800 shadow-xl px-6 py-8">
-              <img src={LOGO_PATH} alt="CondoTrack Logo" className="h-20 sm:h-24 w-auto mx-auto mb-5" onError={(e) => { e.target.style.display = 'none'; }} />
-              <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white mb-2">CondoTrack</h1>
-              <p className="text-sm text-slate-500 dark:text-slate-400 mb-8">Gestão de Encomendas para Condomínios</p>
+              <img src={LOGO_PATH} alt="RecebControl Logo" className="h-20 sm:h-24 w-auto mx-auto mb-5" onError={(e) => { e.target.style.display = 'none'; }} />
+              <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white mb-2">RecebControl</h1>
+              <p className="text-sm text-slate-500 dark:text-slate-400 mb-8">Seu controle de recebimentos inteligente</p>
 
               <p className="text-base font-medium text-slate-700 dark:text-slate-300 mb-5">Como deseja acessar?</p>
 
@@ -1370,8 +1370,8 @@ export default function CondoTrackApp() {
             <div className="h-16 flex items-center gap-3 px-6 border-b border-slate-100 dark:border-slate-700 flex-shrink-0">
               <img src={LOGO_PATH} className="h-8 w-auto" alt="Logo" onError={(e) => { e.target.style.display = 'none'; }} />
               <div>
-                <h1 className="text-sm font-bold text-slate-900 dark:text-white">CondoTrack</h1>
-                <p className="text-xs text-slate-400">Gestao de Encomendas</p>
+                <h1 className="text-sm font-bold text-slate-900 dark:text-white">RecebControl</h1>
+                <p className="text-xs text-slate-400">Recebimentos Inteligente</p>
               </div>
             </div>
             {/* Condo name */}
@@ -1439,7 +1439,7 @@ export default function CondoTrackApp() {
               <div className="h-16 flex items-center justify-between px-6 border-b border-slate-100 dark:border-slate-700">
                 <div className="flex items-center gap-3">
                   <img src={LOGO_PATH} className="h-8 w-auto" alt="Logo" onError={(e) => { e.target.style.display = 'none'; }} />
-                  <span className="text-sm font-bold text-slate-900 dark:text-white">CondoTrack</span>
+                  <span className="text-sm font-bold text-slate-900 dark:text-white">RecebControl</span>
                 </div>
                 <button onClick={() => setMobileSidebarOpen(false)} className="p-2 rounded-lg text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700"><X size={18} /></button>
               </div>
@@ -1683,7 +1683,7 @@ export default function CondoTrackApp() {
               }
               setCondoInfo(finalCondoData);
               setCondoSettings({
-                condo_name: finalCondoData?.name || 'CondoTrack',
+                condo_name: finalCondoData?.name || 'RecebControl',
                 condo_address: finalCondoData?.address || '',
                 condo_phone: finalCondoData?.phone || ''
               });
@@ -1712,7 +1712,7 @@ export default function CondoTrackApp() {
           {/* Footer minimal */}
           <footer className="border-t border-slate-200 dark:border-slate-700 py-4 px-6 text-center flex-shrink-0">
             <p className="text-xs text-slate-400">
-              CondoTrack &middot; Desenvolvido por{' '}
+              RecebControl &middot; Desenvolvido por{' '}
               <a href="https://playcodeagency.xyz" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-700 font-medium transition-colors duration-150">PlayCodeAgency</a>
             </p>
           </footer>
@@ -2526,7 +2526,7 @@ function ConciergeLogin({ onSuccess, onBack }) {
           <div className="border-b border-slate-100 dark:border-slate-700 px-6 py-8 text-center">
             <img
               src={LOGO_PATH}
-              alt="CondoTrack Logo"
+              alt="RecebControl Logo"
               className="h-16 sm:h-20 w-auto mx-auto mb-4"
               onError={(e) => {
                 e.target.style.display = 'none';
@@ -3131,7 +3131,7 @@ function ConciergeView({ onAdd, packages, onDelete, onCollect, residents, reside
                   {shareCopied ? <><CheckCircle size={14} /> Copiado!</> : <><Copy size={14} /> Copiar</>}
                 </button>
                 <a
-                  href={`https://wa.me/?text=${encodeURIComponent(`Acesse suas encomendas pelo CondoTrack:\n${window.location.origin}/app.html?condo=${shareSlug}`)}`}
+                  href={`https://wa.me/?text=${encodeURIComponent(`Acesse suas encomendas pelo RecebControl:\n${window.location.origin}/app.html?condo=${shareSlug}`)}`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium transition-colors duration-150 flex items-center gap-1.5 flex-shrink-0"
@@ -3737,7 +3737,7 @@ function CondoSettingsManager({ condoSettings, onUpdateSettings, condoInfo }) {
                 {copied ? <><CheckCircle size={14} /> Copiado!</> : <><Copy size={14} /> Copiar</>}
               </button>
               <a
-                href={`https://wa.me/?text=${encodeURIComponent(`Acesse suas encomendas pelo CondoTrack:\n${window.location.origin}/app.html?condo=${localSlug}`)}`}
+                href={`https://wa.me/?text=${encodeURIComponent(`Acesse suas encomendas pelo RecebControl:\n${window.location.origin}/app.html?condo=${localSlug}`)}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="flex-1 sm:flex-none px-3 py-2 rounded-lg bg-green-500 hover:bg-green-600 text-white text-sm font-medium transition-colors flex items-center justify-center gap-1"
@@ -4329,7 +4329,7 @@ function ResidentView({ onBack, initialSlug }) {
     return idx;
   }, [localResidents]);
 
-  const condoName = condoData?.name || 'CondoTrack';
+  const condoName = condoData?.name || 'RecebControl';
 
   // Buscar condomínio pelo ID ou slug
   const handleCondoSubmit = async (e) => {
@@ -4596,7 +4596,7 @@ function ResidentView({ onBack, initialSlug }) {
                   <Package className="text-emerald-500 dark:text-emerald-400" size={24} />
                 </div>
                 <div>
-                  <h1 className="text-lg sm:text-xl font-bold text-slate-900 dark:text-white">{condoName || 'CondoTrack'}</h1>
+                  <h1 className="text-lg sm:text-xl font-bold text-slate-900 dark:text-white">{condoName || 'RecebControl'}</h1>
                   <p className="text-slate-500 dark:text-slate-400 text-sm">Unidade {authorizedUnit.toUpperCase()}</p>
                 </div>
               </div>
@@ -4988,7 +4988,7 @@ function ReportQueryManager({ packages }) {
       <!DOCTYPE html>
       <html>
       <head>
-        <title>CondoTrack - Relatório de Encomendas</title>
+        <title>RecebControl - Relatório de Encomendas</title>
         <style>
           body { font-family: Arial, sans-serif; padding: 20px; }
           h1 { color: #1e293b; border-bottom: 2px solid #1e293b; padding-bottom: 10px; }
@@ -5004,7 +5004,7 @@ function ReportQueryManager({ packages }) {
         </style>
       </head>
       <body>
-        <h1>📦 CondoTrack - Relatório de Encomendas</h1>
+        <h1>📦 RecebControl - Relatório de Encomendas</h1>
         <div class="info">
           <strong>Data do Relatório:</strong> ${new Date().toLocaleString('pt-BR')}<br>
           <strong>Total de Registros:</strong> ${results.length}
@@ -5038,7 +5038,7 @@ function ReportQueryManager({ packages }) {
           </tbody>
         </table>
         <div class="footer">
-          CondoTrack Pro - Sistema de Gestão de Encomendas
+          RecebControl - Sistema de Gestão de Encomendas
         </div>
       </body>
       </html>
