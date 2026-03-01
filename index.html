@@ -429,5 +429,16 @@
         <p class="mt-2 text-gray-600">Desenvolvido por <a href="https://playcodeagency.xyz" target="_blank" class="text-cyan-500 hover:text-cyan-400 transition-colors">PlayCodeAgency</a></p>
     </footer>
 
+<!-- Site visit tracking -->
+<script>
+fetch('https://slsmtndfsydmaixsqkcj.supabase.co/rest/v1/site_visits', {
+    method: 'POST',
+    headers: {
+        'Content-Type': 'application/json',
+        'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNsc210bmRmc3lkbWFpeHNxa2NqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ0MjA4MDYsImV4cCI6MjA3OTk5NjgwNn0.GgQDXqR9UzNiDFyrDpXaMGdXEI5ZUNgLQsN5L54BEuQ'
+    },
+    body: JSON.stringify({ page: 'landing' })
+}).catch(function(){});
+</script>
 </body>
 </html>

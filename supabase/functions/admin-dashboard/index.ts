@@ -100,6 +100,16 @@ async function handleOverview(supabase: ReturnType<typeof createClient>) {
     }
   })
 
+  // Monthly site visits
+  const startOfMonth = new Date()
+  startOfMonth.setDate(1)
+  startOfMonth.setHours(0, 0, 0, 0)
+
+  const { count: monthlyVisits } = await supabase
+    .from('site_visits')
+    .select('id', { count: 'exact', head: true })
+    .gte('created_at', startOfMonth.toISOString())
+
   // Signups by month (RPC)
   const { data: signups } = await supabase.rpc('admin_signups_by_month', { months_back: 12 })
 
@@ -173,6 +183,7 @@ async function handleOverview(supabase: ReturnType<typeof createClient>) {
       paying: active.length,
       churned: churned.length,
       mrr,
+      monthly_visits: monthlyVisits || 0,
     },
     signups_by_month: signups || [],
     revenue_by_month: revenue || [],
