@@ -1325,7 +1325,7 @@ export default function CondoTrackApp() {
         <div className="min-h-screen flex flex-col items-center justify-center px-4 py-10 bg-slate-50 dark:bg-slate-950">
           <div className="w-full max-w-sm">
             <div className="relative text-center bg-white/90 dark:bg-slate-900/70 backdrop-blur rounded-2xl border border-slate-200/70 dark:border-slate-800 shadow-xl px-6 py-8">
-              <img src={LOGO_PATH} alt="RecebControl Logo" className="h-20 sm:h-24 w-auto mx-auto mb-5 scale-[2.5]" onError={(e) => { e.target.style.display = 'none'; }} />
+              <img src={LOGO_PATH} alt="RecebControl Logo" className="h-16 sm:h-20 w-auto mx-auto mb-5 scale-[3]" onError={(e) => { e.target.style.display = 'none'; }} />
               <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white mb-2">RecebControl</h1>
               <p className="text-sm text-slate-500 dark:text-slate-400 mb-8">Seu controle de recebimentos inteligente</p>
 
@@ -1368,7 +1368,7 @@ export default function CondoTrackApp() {
           <aside className="hidden md:flex md:w-72 md:flex-col md:fixed md:inset-y-0 bg-white dark:bg-slate-800 border-r border-slate-200 dark:border-slate-700 shadow-sidebar z-30">
             {/* Logo */}
             <div className="h-16 flex items-center gap-3 px-6 border-b border-slate-100 dark:border-slate-700 flex-shrink-0">
-              <img src={LOGO_PATH} className="h-8 w-auto scale-[3] origin-left" alt="Logo" onError={(e) => { e.target.style.display = 'none'; }} />
+              <img src={LOGO_PATH} className="h-6 w-auto scale-[3.5] origin-left" alt="Logo" onError={(e) => { e.target.style.display = 'none'; }} />
               <div>
                 <h1 className="text-sm font-bold text-slate-900 dark:text-white">RecebControl</h1>
                 <p className="text-xs text-slate-400">Recebimentos Inteligente</p>
@@ -1438,7 +1438,7 @@ export default function CondoTrackApp() {
             <aside className="relative w-72 h-full bg-white dark:bg-slate-800 shadow-elevated flex flex-col">
               <div className="h-16 flex items-center justify-between px-6 border-b border-slate-100 dark:border-slate-700">
                 <div className="flex items-center gap-3">
-                  <img src={LOGO_PATH} className="h-8 w-auto scale-[3] origin-left" alt="Logo" onError={(e) => { e.target.style.display = 'none'; }} />
+                  <img src={LOGO_PATH} className="h-6 w-auto scale-[3.5] origin-left" alt="Logo" onError={(e) => { e.target.style.display = 'none'; }} />
                   <span className="text-sm font-bold text-slate-900 dark:text-white">RecebControl</span>
                 </div>
                 <button onClick={() => setMobileSidebarOpen(false)} className="p-2 rounded-lg text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700"><X size={18} /></button>
