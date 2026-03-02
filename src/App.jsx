@@ -1369,10 +1369,6 @@ export default function CondoTrackApp() {
             {/* Logo */}
             <div className="h-16 flex items-center gap-3 px-6 border-b border-slate-100 dark:border-slate-700 flex-shrink-0">
               <img src={LOGO_PATH} className="h-12 w-auto" alt="Logo" onError={(e) => { e.target.style.display = 'none'; }} />
-              <div>
-                <h1 className="text-sm font-bold text-slate-900 dark:text-white">RecebControl</h1>
-                <p className="text-xs text-slate-400">Recebimentos Inteligente</p>
-              </div>
             </div>
             {/* Condo name */}
             <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-700 flex-shrink-0">
