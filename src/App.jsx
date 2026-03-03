@@ -686,6 +686,27 @@ const supabase = IS_PRODUCTION
 function extractDigits(value) {
   return String(value || '').replace(/\D/g, '');
 }
+function timeAgo(dateStr) {
+  const now = new Date();
+  const date = new Date(dateStr);
+  const diffMs = now - date;
+  const diffMin = Math.floor(diffMs / 60000);
+  const diffH = Math.floor(diffMs / 3600000);
+  const diffD = Math.floor(diffMs / 86400000);
+  if (diffMin < 60) return `Há ${Math.max(1, diffMin)} min`;
+  if (diffH < 24) return `Há ${diffH}h`;
+  return `Há ${diffD} dia${diffD > 1 ? 's' : ''}`;
+}
+
+function getUrgencyLevel(dateStr) {
+  const diffH = (new Date() - new Date(dateStr)) / 3600000;
+  if (diffH < 24) return { color: 'emerald', label: 'Recente' };
+  if (diffH < 48) return { color: 'amber', label: '1 dia' };
+  if (diffH < 72) return { color: 'orange', label: '2 dias' };
+  const days = Math.floor(diffH / 24);
+  return { color: 'red', label: `${days} dias` };
+}
+
 function formatPhoneMask(value) {
   const d = extractDigits(value).slice(0, 11);
   const p1 = d.slice(0, 2);
@@ -4314,7 +4335,12 @@ function ResidentView({ onBack, initialSlug }) {
   const [showModalFor, setShowModalFor] = useState(null);
   const [collectorName, setCollectorName] = useState('');
   const [collectorDoc, setCollectorDoc] = useState('');
+  const [collectorRelation, setCollectorRelation] = useState('');
+  const [pickupMode, setPickupMode] = useState('self'); // 'self' | 'third'
   const [notFound, setNotFound] = useState(false);
+  const [residentTab, setResidentTab] = useState('pending');
+  const [historySearch, setHistorySearch] = useState('');
+  const [historyDays, setHistoryDays] = useState(30);
 
   // Index local de moradores por unidade
   const localResidentsIndex = useMemo(() => {
@@ -4392,27 +4418,61 @@ function ResidentView({ onBack, initialSlug }) {
 
   const myPackages = localPackages.filter(p => authorizedUnit && String(p.unit).toLowerCase().includes(String(authorizedUnit)));
 
+  const pendingPackages = myPackages
+    .filter(p => p.status === 'pending')
+    .sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+
+  const collectedPackages = useMemo(() => {
+    let list = myPackages.filter(p => p.status === 'collected');
+    if (historyDays !== 'all') {
+      const cutoff = new Date();
+      cutoff.setDate(cutoff.getDate() - historyDays);
+      list = list.filter(p => new Date(p.collected_at || p.created_at) >= cutoff);
+    }
+    if (historySearch.trim()) {
+      const q = historySearch.toLowerCase();
+      list = list.filter(p =>
+        (p.sender || '').toLowerCase().includes(q) ||
+        (p.type || '').toLowerCase().includes(q) ||
+        (p.description || '').toLowerCase().includes(q) ||
+        (p.recipient || '').toLowerCase().includes(q)
+      );
+    }
+    return list;
+  }, [myPackages, historyDays, historySearch]);
+
+  const residentInfo = authorizedUnit ? localResidentsIndex[authorizedUnit] : null;
+
   const confirm = async (pkgId) => {
-    if (!collectorName || !collectorDoc) return;
+    let finalName, finalDoc;
+    if (pickupMode === 'self') {
+      finalName = residentInfo?.name || authorizedUnit.toUpperCase();
+      finalDoc = 'Morador';
+    } else {
+      if (!collectorName || !collectorDoc) return;
+      finalName = collectorName + (collectorRelation ? ` (${collectorRelation})` : '');
+      finalDoc = collectorDoc;
+    }
     try {
       const { error } = await supabase
         .from('packages')
         .update({
           status: 'collected',
           collected_at: new Date().toISOString(),
-          collected_by: collectorName,
-          receiver_doc: collectorDoc
+          collected_by: finalName,
+          receiver_doc: finalDoc
         })
         .eq('id', pkgId);
       if (error) throw error;
-      // Atualizar lista local
-      setLocalPackages(prev => prev.map(p => p.id === pkgId ? { ...p, status: 'collected', collected_at: new Date().toISOString(), collected_by: collectorName, receiver_doc: collectorDoc } : p));
+      setLocalPackages(prev => prev.map(p => p.id === pkgId ? { ...p, status: 'collected', collected_at: new Date().toISOString(), collected_by: finalName, receiver_doc: finalDoc } : p));
     } catch (err) {
       console.error(err);
     }
     setShowModalFor(null);
     setCollectorName('');
     setCollectorDoc('');
+    setCollectorRelation('');
+    setPickupMode('self');
   };
 
   return (
@@ -4606,56 +4666,316 @@ function ResidentView({ onBack, initialSlug }) {
             </div>
           </div>
 
-          {/* Título da seção */}
-          <div className="flex items-center justify-between">
-            <h3 className="text-lg font-bold text-slate-800 dark:text-white flex items-center gap-2">
-              <Box size={20} className="text-emerald-600" />
-              Suas Encomendas
-            </h3>
-            <span className="text-sm text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-700 px-3 py-1 rounded-full">
-              {myPackages.filter(p => p.status === 'pending').length} pendente(s)
-            </span>
-          </div>
-          {myPackages.length === 0 ? (
-            <div className="bg-white dark:bg-slate-800 p-8 sm:p-12 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 text-center">
-              <div className="inline-flex items-center justify-center w-16 h-16 bg-slate-100 dark:bg-slate-700 rounded-full mb-4">
-                <Package className="text-slate-400" size={32} />
-              </div>
-              <h4 className="text-lg font-semibold text-slate-700 dark:text-slate-300 mb-2">Nenhuma encomenda</h4>
-              <p className="text-slate-500 dark:text-slate-400 text-sm">Você não possui encomendas pendentes no momento.</p>
-            </div>
-          ) : (
-            <div className="grid gap-3">
-              {myPackages.map(pkg => (
-                <div key={pkg.id} className={`bg-white dark:bg-slate-800 p-5 rounded-lg shadow-sm border-l-4 ${pkg.status === 'collected' ? 'border-green-500' : 'border-emerald-500'} flex flex-col sm:flex-row justify-between items-center gap-4`}>
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className={`text-xs font-bold px-2 py-1 rounded uppercase ${pkg.status === 'collected' ? 'bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-400' : 'bg-emerald-100 dark:bg-emerald-900/50 text-emerald-700 dark:text-emerald-400'}`}>{pkg.status === 'collected' ? 'Entregue' : 'Aguardando'}</span>
-                      <span className="text-xs text-slate-400">{new Date(pkg.created_at).toLocaleDateString('pt-BR')}</span>
-                    </div>
-                    <h4 className="text-lg font-bold text-slate-800 dark:text-white">{pkg.type} - {pkg.description || 'Sem descrição'}</h4>
-                    <p className="text-slate-600 dark:text-slate-400">Para: {pkg.recipient}</p>
-                  </div>
-                  {pkg.status === 'pending' && (
-                    <div>
-                      {showModalFor === pkg.id ? (
-                        <div className="flex flex-col gap-2 w-full sm:min-w-[240px] animate-fade-in">
-                          <input autoFocus type="text" placeholder="Nome de quem retira" className="px-3 py-2 border dark:border-slate-600 rounded text-sm w-full bg-white dark:bg-slate-700 dark:text-white" value={collectorName} onChange={(e) => setCollectorName(e.target.value)} />
-                          <input type="text" placeholder="Documento (RG/CPF)" className="px-3 py-2 border dark:border-slate-600 rounded text-sm w-full bg-white dark:bg-slate-700 dark:text-white" value={collectorDoc} onChange={(e) => setCollectorDoc(e.target.value)} />
-                          <div className="flex gap-2">
-                            <button onClick={() => confirm(pkg.id)} disabled={!collectorName || !collectorDoc} className="bg-emerald-600 text-white px-3 py-2 rounded text-sm flex-1 hover:bg-emerald-700 disabled:opacity-50">Confirmar</button>
-                            <button onClick={() => setShowModalFor(null)} className="bg-slate-200 dark:bg-slate-600 text-slate-700 dark:text-slate-200 px-3 py-2 rounded text-sm hover:bg-slate-300 dark:hover:bg-slate-500">Voltar</button>
-                          </div>
-                        </div>
-                      ) : (
-                        <button onClick={() => setShowModalFor(pkg.id)} className="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-2 rounded-full font-medium shadow-sm">Confirmar Retirada</button>
-                      )}
-                    </div>
-                  )}
+          {/* Card Resumo */}
+          <div className="bg-white dark:bg-slate-800 rounded-xl shadow-card border border-slate-200 dark:border-slate-700 p-4">
+            <div className="grid grid-cols-2 divide-x divide-slate-200 dark:divide-slate-700">
+              <div className="text-center px-3">
+                <div className="flex items-center justify-center gap-2 mb-1">
+                  <Package size={18} className="text-blue-600 dark:text-blue-400" />
+                  <span className="text-2xl font-bold text-slate-900 dark:text-white">{pendingPackages.length}</span>
                 </div>
-              ))}
+                <p className="text-xs text-slate-500 dark:text-slate-400">pendente{pendingPackages.length !== 1 ? 's' : ''}</p>
+              </div>
+              <div className="text-center px-3">
+                <div className="flex items-center justify-center gap-2 mb-1">
+                  <CheckCircle size={18} className="text-emerald-600 dark:text-emerald-400" />
+                  <span className="text-2xl font-bold text-slate-900 dark:text-white">{myPackages.filter(p => p.status === 'collected').length}</span>
+                </div>
+                <p className="text-xs text-slate-500 dark:text-slate-400">retirada{myPackages.filter(p => p.status === 'collected').length !== 1 ? 's' : ''}</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Abas Pendentes / Histórico */}
+          <div className="flex border-b border-slate-200 dark:border-slate-700">
+            <button
+              onClick={() => setResidentTab('pending')}
+              className={`flex-1 py-3 text-sm font-semibold text-center transition-colors relative ${
+                residentTab === 'pending'
+                  ? 'text-blue-600 dark:text-blue-400'
+                  : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300'
+              }`}
+            >
+              Pendentes ({pendingPackages.length})
+              {residentTab === 'pending' && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-600 dark:bg-blue-400 rounded-full" />}
+            </button>
+            <button
+              onClick={() => setResidentTab('history')}
+              className={`flex-1 py-3 text-sm font-semibold text-center transition-colors relative ${
+                residentTab === 'history'
+                  ? 'text-blue-600 dark:text-blue-400'
+                  : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300'
+              }`}
+            >
+              Histórico
+              {residentTab === 'history' && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-600 dark:bg-blue-400 rounded-full" />}
+            </button>
+          </div>
+
+          {/* Aba Pendentes */}
+          {residentTab === 'pending' && (
+            <div className="space-y-3">
+              {pendingPackages.length === 0 ? (
+                <div className="bg-white dark:bg-slate-800 p-8 sm:p-12 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 text-center">
+                  <div className="inline-flex items-center justify-center w-16 h-16 bg-slate-100 dark:bg-slate-700 rounded-full mb-4">
+                    <Package className="text-slate-400" size={32} />
+                  </div>
+                  <h4 className="text-lg font-semibold text-slate-700 dark:text-slate-300 mb-2">Nenhuma encomenda pendente</h4>
+                  <p className="text-slate-500 dark:text-slate-400 text-sm">Você será notificado quando chegar algo na portaria.</p>
+                </div>
+              ) : (
+                pendingPackages.map(pkg => {
+                  const urgency = getUrgencyLevel(pkg.created_at);
+                  const typeConfig = PACKAGE_TYPE_CONFIG[pkg.type] || PACKAGE_TYPE_CONFIG['Outro'];
+                  const TypeIcon = typeConfig.icon;
+                  const borderColor = {
+                    emerald: 'border-emerald-500',
+                    amber: 'border-amber-500',
+                    orange: 'border-orange-500',
+                    red: 'border-red-500'
+                  }[urgency.color];
+                  const pillBg = {
+                    emerald: 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400',
+                    amber: 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400',
+                    orange: 'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400',
+                    red: 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400'
+                  }[urgency.color];
+
+                  return (
+                    <div key={pkg.id} className={`bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 border-l-4 ${borderColor} overflow-hidden`}>
+                      <div className="p-4 sm:p-5">
+                        <div className="flex items-start justify-between mb-3">
+                          <div className="flex items-center gap-3">
+                            <div className={`p-2 rounded-xl ${typeConfig.bgLight} ${typeConfig.bgDark}`}>
+                              <TypeIcon size={20} className={`${typeConfig.textLight} ${typeConfig.textDark}`} />
+                            </div>
+                            <div>
+                              <h4 className="font-semibold text-slate-900 dark:text-white">{pkg.type}</h4>
+                              <p className="text-sm text-slate-500 dark:text-slate-400">{pkg.description || 'Sem descrição'}</p>
+                            </div>
+                          </div>
+                          <span className={`text-xs font-medium px-2.5 py-1 rounded-full whitespace-nowrap ${pillBg}`}>
+                            {timeAgo(pkg.created_at)}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-4 text-sm text-slate-600 dark:text-slate-400 mb-3">
+                          {pkg.sender && <span>Remetente: <span className="font-medium text-slate-700 dark:text-slate-300">{pkg.sender}</span></span>}
+                          {pkg.recipient && <span>Para: <span className="font-medium text-slate-700 dark:text-slate-300">{pkg.recipient}</span></span>}
+                        </div>
+                        <button
+                          onClick={() => { setShowModalFor(pkg.id); setCollectorName(''); setCollectorDoc(''); setCollectorRelation(''); setPickupMode('self'); }}
+                          className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white px-6 py-2.5 rounded-lg font-medium shadow-sm transition-all duration-150 active:scale-[0.98] flex items-center justify-center gap-2"
+                        >
+                          <CheckCircle size={16} />
+                          Confirmar Retirada
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
             </div>
           )}
+
+          {/* Aba Histórico */}
+          {residentTab === 'history' && (
+            <div className="space-y-3">
+              {/* Busca e filtros */}
+              <div className="space-y-3">
+                <div className="relative">
+                  <input
+                    type="text"
+                    placeholder="Buscar por remetente, tipo..."
+                    className="w-full pl-10 pr-4 py-2.5 text-sm border border-slate-200 dark:border-slate-600 rounded-lg focus:border-blue-600 focus:ring-2 focus:ring-blue-600/20 outline-none transition-all bg-white dark:bg-slate-800 dark:text-white placeholder-slate-400"
+                    value={historySearch}
+                    onChange={e => setHistorySearch(e.target.value)}
+                  />
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+                </div>
+                <div className="flex gap-2 flex-wrap">
+                  {[{ label: '7 dias', value: 7 }, { label: '30 dias', value: 30 }, { label: '90 dias', value: 90 }, { label: 'Tudo', value: 'all' }].map(opt => (
+                    <button
+                      key={opt.value}
+                      onClick={() => setHistoryDays(opt.value)}
+                      className={`px-3 py-1.5 text-xs font-medium rounded-full transition-colors ${
+                        historyDays === opt.value
+                          ? 'bg-blue-600 text-white'
+                          : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600'
+                      }`}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {collectedPackages.length === 0 ? (
+                <div className="bg-white dark:bg-slate-800 p-8 sm:p-12 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 text-center">
+                  <div className="inline-flex items-center justify-center w-16 h-16 bg-slate-100 dark:bg-slate-700 rounded-full mb-4">
+                    <Search className="text-slate-400" size={32} />
+                  </div>
+                  <h4 className="text-lg font-semibold text-slate-700 dark:text-slate-300 mb-2">Nenhuma encomenda encontrada</h4>
+                  <p className="text-slate-500 dark:text-slate-400 text-sm">Nenhuma encomenda encontrada para o período selecionado.</p>
+                </div>
+              ) : (
+                collectedPackages.map(pkg => {
+                  const typeConfig = PACKAGE_TYPE_CONFIG[pkg.type] || PACKAGE_TYPE_CONFIG['Outro'];
+                  const TypeIcon = typeConfig.icon;
+                  return (
+                    <div key={pkg.id} className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 border-l-4 border-l-green-500 overflow-hidden">
+                      <div className="p-4">
+                        <div className="flex items-start justify-between mb-2">
+                          <div className="flex items-center gap-3">
+                            <div className={`p-2 rounded-xl ${typeConfig.bgLight} ${typeConfig.bgDark}`}>
+                              <TypeIcon size={18} className={`${typeConfig.textLight} ${typeConfig.textDark}`} />
+                            </div>
+                            <div>
+                              <h4 className="font-semibold text-slate-900 dark:text-white text-sm">{pkg.type} - {pkg.description || 'Sem descrição'}</h4>
+                              <div className="flex items-center gap-3 text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                                <span>Chegou: {new Date(pkg.created_at).toLocaleDateString('pt-BR')}</span>
+                                {pkg.collected_at && <span>Retirado: {new Date(pkg.collected_at).toLocaleDateString('pt-BR')}</span>}
+                              </div>
+                            </div>
+                          </div>
+                          <span className="text-xs font-medium px-2.5 py-1 rounded-full bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 whitespace-nowrap">
+                            Entregue
+                          </span>
+                        </div>
+                        {pkg.collected_by && (
+                          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Retirado por: <span className="font-medium text-slate-600 dark:text-slate-300">{pkg.collected_by}</span></p>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Modal de Confirmação de Retirada */}
+      {showModalFor && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm px-4" onClick={() => setShowModalFor(null)}>
+          <div className="bg-white dark:bg-slate-800 rounded-xl shadow-lg w-full max-w-sm overflow-hidden animate-fade-in" onClick={e => e.stopPropagation()}>
+            <div className="border-b border-slate-100 dark:border-slate-700 px-6 py-4 flex items-center justify-between">
+              <h3 className="text-lg font-bold text-slate-900 dark:text-white">Confirmar Retirada</h3>
+              <button onClick={() => setShowModalFor(null)} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors">
+                <X size={20} />
+              </button>
+            </div>
+            {(() => {
+              const modalPkg = myPackages.find(p => p.id === showModalFor);
+              if (!modalPkg) return null;
+              const typeConfig = PACKAGE_TYPE_CONFIG[modalPkg.type] || PACKAGE_TYPE_CONFIG['Outro'];
+              const TypeIcon = typeConfig.icon;
+              return (
+                <div className="p-6 space-y-4">
+                  {/* Info do pacote */}
+                  <div className="flex items-center gap-3 bg-slate-50 dark:bg-slate-700/50 p-3 rounded-lg">
+                    <div className={`p-2 rounded-xl ${typeConfig.bgLight} ${typeConfig.bgDark}`}>
+                      <TypeIcon size={20} className={`${typeConfig.textLight} ${typeConfig.textDark}`} />
+                    </div>
+                    <div>
+                      <p className="font-semibold text-slate-900 dark:text-white text-sm">{modalPkg.type}</p>
+                      <p className="text-xs text-slate-500 dark:text-slate-400">{modalPkg.description || 'Sem descrição'}</p>
+                    </div>
+                  </div>
+
+                  {/* Toggle Eu / Terceiro */}
+                  <div className="flex rounded-lg bg-slate-100 dark:bg-slate-700 p-1">
+                    <button
+                      onClick={() => setPickupMode('self')}
+                      className={`flex-1 py-2 text-sm font-medium rounded-md transition-all ${
+                        pickupMode === 'self'
+                          ? 'bg-white dark:bg-slate-600 text-slate-900 dark:text-white shadow-sm'
+                          : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300'
+                      }`}
+                    >
+                      <User size={14} className="inline mr-1.5 -mt-0.5" />
+                      Eu mesmo
+                    </button>
+                    <button
+                      onClick={() => setPickupMode('third')}
+                      className={`flex-1 py-2 text-sm font-medium rounded-md transition-all ${
+                        pickupMode === 'third'
+                          ? 'bg-white dark:bg-slate-600 text-slate-900 dark:text-white shadow-sm'
+                          : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300'
+                      }`}
+                    >
+                      <Users size={14} className="inline mr-1.5 -mt-0.5" />
+                      Terceiro
+                    </button>
+                  </div>
+
+                  {/* Modo Eu mesmo */}
+                  {pickupMode === 'self' && (
+                    <div className="bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-lg p-4 text-center">
+                      <div className="inline-flex items-center justify-center w-10 h-10 bg-emerald-100 dark:bg-emerald-900/40 rounded-full mb-2">
+                        <User size={18} className="text-emerald-600 dark:text-emerald-400" />
+                      </div>
+                      <p className="font-semibold text-slate-900 dark:text-white text-sm">{residentInfo?.name || `Morador ${authorizedUnit.toUpperCase()}`}</p>
+                      <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Unidade {authorizedUnit.toUpperCase()}</p>
+                    </div>
+                  )}
+
+                  {/* Modo Terceiro */}
+                  {pickupMode === 'third' && (
+                    <div className="space-y-3">
+                      <div>
+                        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Nome do terceiro</label>
+                        <input
+                          autoFocus
+                          type="text"
+                          placeholder="Nome completo"
+                          className="w-full px-3 py-2.5 border border-slate-200 dark:border-slate-600 rounded-lg text-sm bg-white dark:bg-slate-700 dark:text-white focus:border-blue-600 focus:ring-2 focus:ring-blue-600/20 outline-none transition-all"
+                          value={collectorName}
+                          onChange={e => setCollectorName(e.target.value)}
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Documento (RG/CPF)</label>
+                        <input
+                          type="text"
+                          placeholder="Número do documento"
+                          className="w-full px-3 py-2.5 border border-slate-200 dark:border-slate-600 rounded-lg text-sm bg-white dark:bg-slate-700 dark:text-white focus:border-blue-600 focus:ring-2 focus:ring-blue-600/20 outline-none transition-all"
+                          value={collectorDoc}
+                          onChange={e => setCollectorDoc(e.target.value)}
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Parentesco / Relação <span className="text-slate-400 font-normal">(opcional)</span></label>
+                        <input
+                          type="text"
+                          placeholder="Ex: Cônjuge, Filho, Porteiro"
+                          className="w-full px-3 py-2.5 border border-slate-200 dark:border-slate-600 rounded-lg text-sm bg-white dark:bg-slate-700 dark:text-white focus:border-blue-600 focus:ring-2 focus:ring-blue-600/20 outline-none transition-all"
+                          value={collectorRelation}
+                          onChange={e => setCollectorRelation(e.target.value)}
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Botões */}
+                  <div className="flex gap-3 pt-2">
+                    <button
+                      onClick={() => setShowModalFor(null)}
+                      className="flex-1 px-4 py-2.5 rounded-lg bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 font-medium hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors"
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      onClick={() => confirm(showModalFor)}
+                      disabled={pickupMode === 'third' && (!collectorName || !collectorDoc)}
+                      className="flex-1 px-4 py-2.5 rounded-lg bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-medium shadow-sm transition-all active:scale-[0.98]"
+                    >
+                      Confirmar
+                    </button>
+                  </div>
+                </div>
+              );
+            })()}
+          </div>
         </div>
       )}
 
