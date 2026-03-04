@@ -7,7 +7,7 @@ import {
   Mail, MailOpen, ShoppingBag, ShoppingCart, UtensilsCrossed, CookingPot, HelpCircle, PackageOpen, Package2, Gift,
   Inbox, PackageCheck, UsersRound, CalendarRange,
   LayoutDashboard, PackageSearch, History, ShieldCheck, Wrench, Wallet,
-  Camera, Loader2, UserPlus, ArrowLeft, Link2, Copy, Menu, ChevronDown, MoreHorizontal
+  Camera, Loader2, UserPlus, ArrowLeft, Link2, Copy, Menu, ChevronDown, MoreHorizontal, Lock
 } from 'lucide-react';
 
 // ==================================================================================
@@ -444,6 +444,10 @@ const PLANS_CONFIG = {
     priceFormatted: 'R$ 99',
     staffLimit: 2,
     unitLimit: 50,
+    hasOcr: false,
+    hasReports: false,
+    hasExport: false,
+    historyDays: 90,
     features: ['Até 2 porteiros', 'Até 50 unidades', 'Gestão de encomendas', 'Notificação WhatsApp', 'Histórico 90 dias']
   },
   professional: {
@@ -452,7 +456,11 @@ const PLANS_CONFIG = {
     priceFormatted: 'R$ 199',
     staffLimit: 5,
     unitLimit: 150,
-    features: ['Até 5 porteiros', 'Até 150 unidades', 'Tudo do Básico', 'Relatórios avançados', 'Exportação PDF', 'Histórico ilimitado', 'Suporte prioritário'],
+    hasOcr: true,
+    hasReports: true,
+    hasExport: true,
+    historyDays: 365,
+    features: ['Até 5 porteiros', 'Até 150 unidades', 'Tudo do Básico', 'Relatórios avançados', 'Exportação PDF', 'Histórico 1 ano', 'Suporte prioritário'],
     popular: true
   },
   premium: {
@@ -461,9 +469,18 @@ const PLANS_CONFIG = {
     priceFormatted: 'R$ 349',
     staffLimit: 10,
     unitLimit: 9999,
+    hasOcr: true,
+    hasReports: true,
+    hasExport: true,
+    historyDays: null, // null = ilimitado
     features: ['Até 10 porteiros', 'Unidades ilimitadas', 'Tudo do PRO', 'API de integração', 'Suporte 24/7', 'SLA 99.9%', 'Onboarding dedicado']
   }
 };
+
+// Helper: retorna config do plano baseado no condoInfo
+function getPlanFeature(condoInfo) {
+  return PLANS_CONFIG[condoInfo?.plan_type] || PLANS_CONFIG.basic;
+}
 
 // ==================================================================================
 // 💳 CREATE ASAAS CHECKOUT (RECORRENTE)
@@ -1183,6 +1200,12 @@ export default function CondoTrackApp() {
   // Multi-Tenant: handleAddResident inclui condo_id
   const handleAddResident = async (resident) => {
     if (!condoId) return;
+    // Verificar limite de unidades do plano
+    const plan = getPlanFeature(condoInfo);
+    if (residents && residents.length >= plan.unitLimit) {
+      showNotification(`Seu plano suporta até ${plan.unitLimit} unidades. Faça upgrade para cadastrar mais moradores.`, 'error');
+      return;
+    }
     try {
       const payload = {
         condo_id: condoId,
@@ -1539,7 +1562,7 @@ export default function CondoTrackApp() {
                       Período de teste expirado
                     </p>
                     <p className="text-sm text-amber-700 dark:text-amber-400 mb-3">
-                      Você pode editar seus dados, mas para usar todas as funcionalidades, é necessário fazer upgrade do plano.
+                      Enquanto isso, encomendas continuam chegando sem controle. Escolha um plano e volte a ter rastreabilidade total.
                     </p>
                     <div className="flex gap-2">
                       <button
@@ -2041,8 +2064,8 @@ function BillingCheckout({ condoInfo, onPaymentSuccess, onLogout, isAdmin = fals
               </h1>
               <p className="text-slate-700 dark:text-slate-300 mb-3">
                 {condoInfo?.is_active === false
-                  ? 'Sua conta foi suspensa. Escolha um plano para reativar o acesso.'
-                  : 'O período de teste gratuito de 15 dias chegou ao fim. Escolha um plano para continuar.'}
+                  ? 'Sua conta foi suspensa. Escolha um plano para reativar o acesso e voltar a ter controle total das encomendas.'
+                  : 'Seus moradores já se acostumaram a receber avisos de encomenda. Não deixe a portaria voltar ao caderninho — escolha um plano.'}
               </p>
               <div className="flex flex-wrap gap-4 items-center">
                 <div className="bg-white dark:bg-slate-800 rounded-lg px-4 py-2 border border-slate-200 dark:border-slate-600">
@@ -2743,6 +2766,9 @@ function ConciergeView({ onAdd, packages, onDelete, onCollect, residents, reside
     setOcrRawText(null);
     if (!file.type.startsWith('image/')) { setOcrError('Selecione uma imagem valida.'); return; }
     if (file.size > 10 * 1024 * 1024) { setOcrError('Imagem muito grande (max 10MB).'); return; }
+    // Verificar se o plano permite OCR
+    const plan = getPlanFeature(condoInfo);
+    if (!plan.hasOcr) { setOcrError('Leitura por IA disponível no plano PRO — registre encomendas sem digitar nada. Faça upgrade em Plano > Ver Planos.'); return; }
     if (!OCR_LABEL_ENDPOINT) { setOcrError('OCR nao disponivel no modo demo.'); return; }
     setOcrLoading(true);
     try {
@@ -3310,10 +3336,16 @@ function ConciergeView({ onAdd, packages, onDelete, onCollect, residents, reside
                 </div>
               </div>
               <div className="flex flex-wrap items-center gap-2">
-                <label className={`flex items-center gap-2 px-3 py-1.5 ${ocrLoading ? 'bg-slate-200 dark:bg-slate-600 cursor-wait text-slate-400' : 'bg-blue-600 hover:bg-blue-700 cursor-pointer text-white shadow-sm'} rounded-lg text-sm font-medium transition-colors duration-150`}>
-                  {ocrLoading ? (<><Loader2 size={16} className="animate-spin" /> Lendo...</>) : (<><Camera size={16} /><span className="hidden sm:inline">Ler Etiqueta</span></>)}
-                  <input type="file" accept="image/*" capture="environment" onChange={handleOcrCapture} disabled={ocrLoading} className="hidden" />
-                </label>
+                {getPlanFeature(condoInfo).hasOcr ? (
+                  <label className={`flex items-center gap-2 px-3 py-1.5 ${ocrLoading ? 'bg-slate-200 dark:bg-slate-600 cursor-wait text-slate-400' : 'bg-blue-600 hover:bg-blue-700 cursor-pointer text-white shadow-sm'} rounded-lg text-sm font-medium transition-colors duration-150`}>
+                    {ocrLoading ? (<><Loader2 size={16} className="animate-spin" /> Lendo...</>) : (<><Camera size={16} /><span className="hidden sm:inline">Ler Etiqueta</span></>)}
+                    <input type="file" accept="image/*" capture="environment" onChange={handleOcrCapture} disabled={ocrLoading} className="hidden" />
+                  </label>
+                ) : (
+                  <span className="flex items-center gap-2 px-3 py-1.5 bg-slate-100 dark:bg-slate-700 text-slate-400 dark:text-slate-500 rounded-lg text-sm font-medium cursor-not-allowed" title="Leitura por IA — disponível no plano PRO. Registre sem digitar nada!">
+                    <Lock size={14} /><Camera size={16} /><span className="hidden sm:inline">Ler Etiqueta</span>
+                  </span>
+                )}
                 {packagesNeedingReminder.length > 0 && (
                   <button type="button" onClick={() => setShowRemindersModal(true)} className="flex items-center gap-2 px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white rounded-lg text-sm font-medium shadow-sm transition-colors duration-150">
                     <Clock size={16} />
@@ -3584,7 +3616,22 @@ function ConciergeView({ onAdd, packages, onDelete, onCollect, residents, reside
       )}
 
       {tab === 'reports' && (
-        <ReportQueryManager packages={packages} />
+        getPlanFeature(condoInfo).hasReports ? (
+          <ReportQueryManager packages={packages} planConfig={getPlanFeature(condoInfo)} />
+        ) : (
+          <div className="bg-white dark:bg-slate-800 rounded-xl shadow-card border border-slate-200 dark:border-slate-700 p-8 sm:p-12 text-center">
+            <div className="mx-auto w-16 h-16 bg-slate-100 dark:bg-slate-700 rounded-2xl flex items-center justify-center mb-5">
+              <Lock className="text-slate-400 dark:text-slate-500" size={28} />
+            </div>
+            <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-2">Relatórios avançados</h3>
+            <p className="text-slate-500 dark:text-slate-400 mb-6 max-w-md mx-auto">
+              Precisa prestar contas ao síndico? Gere relatórios completos, exporte em PDF/CSV e tenha histórico detalhado de todas as encomendas.
+            </p>
+            <a href="/billing.html" className="inline-flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium shadow-sm transition-colors duration-150 active:scale-[0.98]">
+              <ArrowUpRight size={18} /> Ver Planos
+            </a>
+          </div>
+        )
       )}
 
       {tab === 'team' && currentUser?.role === 'admin' && (
@@ -3812,7 +3859,7 @@ function BillingManager({ condoInfo, staff }) {
     },
     {
       id: 'professional',
-      name: 'Profissional',
+      name: 'PRO',
       price: 199,
       staffLimit: 5,
       unitLimit: 150,
@@ -5388,7 +5435,7 @@ function TeamManager({ staff, onAddStaff, onDeleteStaff }) {
 // ==================================================================================
 // 📊 MÓDULO DE RELATÓRIOS E AUDITORIA
 // ==================================================================================
-function ReportQueryManager({ packages }) {
+function ReportQueryManager({ packages, planConfig }) {
   const [filters, setFilters] = useState({
     unit: '',
     recipient: '',
@@ -5420,6 +5467,13 @@ function ReportQueryManager({ packages }) {
     // Filtro por status
     if (filters.status !== 'todos') {
       filtered = filtered.filter(p => p.status === filters.status);
+    }
+
+    // Limitar histórico por plano (historyDays)
+    if (planConfig?.historyDays) {
+      const cutoff = new Date();
+      cutoff.setDate(cutoff.getDate() - planConfig.historyDays);
+      filtered = filtered.filter(p => p.created_at && new Date(p.created_at) >= cutoff);
     }
 
     // Ordenar por data de criação (mais recente primeiro)
@@ -5629,6 +5683,13 @@ function ReportQueryManager({ packages }) {
               </button>
             </div>
           </div>
+          {planConfig?.historyDays && (
+            <p className="mt-3 text-xs text-slate-400 dark:text-slate-500 flex items-center gap-1.5">
+              <Clock size={13} />
+              Histórico limitado aos últimos {planConfig.historyDays} dias no seu plano.
+              {planConfig.historyDays < 365 && <a href="/billing.html" className="text-blue-500 hover:underline ml-1">Precisa de mais? Veja os planos</a>}
+            </p>
+          )}
         </div>
       </div>
 
@@ -5640,7 +5701,7 @@ function ReportQueryManager({ packages }) {
             <div className="text-sm text-slate-600 dark:text-slate-300">
               <span className="font-semibold">{results.length}</span> registro(s) encontrado(s)
             </div>
-            {results.length > 0 && (
+            {results.length > 0 && planConfig?.hasExport && (
               <div className="flex gap-2 flex-wrap">
                 <button
                   onClick={exportToCSV}
