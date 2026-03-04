@@ -4,7 +4,9 @@ import {
   User, Box, Shield, Trash2, AlertTriangle, X, Phone, LogIn, CheckCheck, Briefcase, LogOut, MessageCircle, Sun, Moon,
   FileText, Download, Printer, Filter, FileSpreadsheet, FileJson, Settings, Building2, Save,
   Users, CreditCard, TrendingUp, Calendar, ArrowUpRight, ArrowDownRight, BarChart3,
-  Mail, ShoppingBag, UtensilsCrossed, HelpCircle,
+  Mail, MailOpen, ShoppingBag, ShoppingCart, UtensilsCrossed, CookingPot, HelpCircle, PackageOpen, Package2, Gift,
+  Inbox, PackageCheck, UsersRound, CalendarRange,
+  LayoutDashboard, PackageSearch, History, ShieldCheck, Wrench, Wallet,
   Camera, Loader2, UserPlus, ArrowLeft, Link2, Copy, Menu, ChevronDown, MoreHorizontal
 } from 'lucide-react';
 
@@ -13,7 +15,7 @@ import {
 // ==================================================================================
 const PACKAGE_TYPE_CONFIG = {
   'Caixa': {
-    icon: Box,
+    icon: PackageOpen,
     bgLight: 'bg-amber-100',
     bgDark: 'dark:bg-amber-900/50',
     textLight: 'text-amber-600',
@@ -21,7 +23,7 @@ const PACKAGE_TYPE_CONFIG = {
     badge: 'bg-amber-500'
   },
   'Pacote': {
-    icon: Package,
+    icon: Package2,
     bgLight: 'bg-blue-100',
     bgDark: 'dark:bg-blue-900/50',
     textLight: 'text-blue-600',
@@ -29,7 +31,7 @@ const PACKAGE_TYPE_CONFIG = {
     badge: 'bg-blue-500'
   },
   'Envelope': {
-    icon: Mail,
+    icon: MailOpen,
     bgLight: 'bg-violet-100',
     bgDark: 'dark:bg-violet-900/50',
     textLight: 'text-violet-600',
@@ -37,7 +39,7 @@ const PACKAGE_TYPE_CONFIG = {
     badge: 'bg-violet-500'
   },
   'Mercado Livre/Shopee': {
-    icon: ShoppingBag,
+    icon: ShoppingCart,
     bgLight: 'bg-orange-100',
     bgDark: 'dark:bg-orange-900/50',
     textLight: 'text-orange-600',
@@ -45,7 +47,7 @@ const PACKAGE_TYPE_CONFIG = {
     badge: 'bg-orange-500'
   },
   'Delivery / Comida': {
-    icon: UtensilsCrossed,
+    icon: CookingPot,
     bgLight: 'bg-emerald-100',
     bgDark: 'dark:bg-emerald-900/50',
     textLight: 'text-emerald-600',
@@ -53,7 +55,7 @@ const PACKAGE_TYPE_CONFIG = {
     badge: 'bg-emerald-500'
   },
   'Outro': {
-    icon: HelpCircle,
+    icon: Gift,
     bgLight: 'bg-slate-100',
     bgDark: 'dark:bg-slate-700',
     textLight: 'text-slate-600',
@@ -1294,15 +1296,15 @@ export default function CondoTrackApp() {
 
   // Sidebar nav items
   const navItems = [
-    { id: 'home', icon: Package, label: 'Inicio', badge: pendingCount > 0 ? pendingCount : null },
-    { id: 'packages', icon: Box, label: 'Encomendas' },
-    { id: 'residents', icon: Users, label: 'Moradores' },
-    { id: 'reports', icon: FileText, label: 'Historico' },
+    { id: 'home', icon: LayoutDashboard, label: 'Inicio', badge: pendingCount > 0 ? pendingCount : null },
+    { id: 'packages', icon: PackageSearch, label: 'Encomendas' },
+    { id: 'residents', icon: UsersRound, label: 'Moradores' },
+    { id: 'reports', icon: History, label: 'Historico' },
   ];
   const adminNavItems = [
-    { id: 'team', icon: Briefcase, label: 'Equipe' },
-    { id: 'settings', icon: Settings, label: 'Configuracoes' },
-    { id: 'billing', icon: CreditCard, label: 'Plano' },
+    { id: 'team', icon: ShieldCheck, label: 'Equipe' },
+    { id: 'settings', icon: Wrench, label: 'Configuracoes' },
+    { id: 'billing', icon: Wallet, label: 'Plano' },
   ];
 
   if (loading) {
@@ -1346,11 +1348,7 @@ export default function CondoTrackApp() {
         <div className="min-h-screen flex flex-col items-center justify-center px-4 py-10 bg-slate-50 dark:bg-slate-950">
           <div className="w-full max-w-sm">
             <div className="relative text-center bg-white/90 dark:bg-slate-900/70 backdrop-blur rounded-2xl border border-slate-200/70 dark:border-slate-800 shadow-xl px-6 py-8">
-              <img src={LOGO_PATH} alt="RecebControl Logo" className="h-24 sm:h-28 w-auto mx-auto mb-5" onError={(e) => { e.target.style.display = 'none'; }} />
-              <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white mb-2">RecebControl</h1>
-              <p className="text-sm text-slate-500 dark:text-slate-400 mb-8">Seu controle de recebimentos inteligente</p>
-
-              <p className="text-base font-medium text-slate-700 dark:text-slate-300 mb-5">Como deseja acessar?</p>
+              <img src={LOGO_PATH} alt="RecebControl Logo" className="h-24 sm:h-28 w-auto mx-auto mb-8" onError={(e) => { e.target.style.display = 'none'; }} />
 
               <div className="space-y-4">
                 <button onClick={() => { setAccessMode('concierge'); setViewMode('concierge'); }} className="w-full flex items-center gap-4 p-5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-sm hover:border-blue-500 hover:shadow-md transition-all duration-150 group">
@@ -1358,21 +1356,13 @@ export default function CondoTrackApp() {
                     <Shield size={28} className="text-blue-600 dark:text-blue-400 group-hover:text-white transition-colors duration-150" />
                   </div>
                   <div className="text-left">
-                    <p className="text-lg font-bold text-slate-900 dark:text-white">Portaria</p>
+                    <p className="text-lg font-bold text-slate-900 dark:text-white">Entrar</p>
                     <p className="text-sm text-slate-500 dark:text-slate-400">Acesso para porteiros e administradores</p>
                   </div>
                 </button>
-
-                <button onClick={() => { setAccessMode('resident'); setViewMode('resident'); }} className="w-full flex items-center gap-4 p-5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-sm hover:border-emerald-500 hover:shadow-md transition-all duration-150 group">
-                  <div className="flex-shrink-0 w-14 h-14 bg-emerald-50 dark:bg-emerald-900/30 rounded-xl flex items-center justify-center group-hover:bg-emerald-600 transition-colors duration-150">
-                    <User size={28} className="text-emerald-600 dark:text-emerald-400 group-hover:text-white transition-colors duration-150" />
-                  </div>
-                  <div className="text-left">
-                    <p className="text-lg font-bold text-slate-900 dark:text-white">Sou Morador</p>
-                    <p className="text-sm text-slate-500 dark:text-slate-400">Consultar minhas encomendas</p>
-                  </div>
-                </button>
               </div>
+
+              <p className="mt-5 text-xs text-slate-400 dark:text-slate-500">Moradores acessam pelo link fornecido pela administração</p>
 
               {/* Toggle de tema dentro do card (local indicado) */}
               <button onClick={() => setTheme(prev => prev === 'dark' ? 'light' : 'dark')} className="mt-7 w-full inline-flex items-center justify-center gap-2 text-sm font-medium text-slate-600 dark:text-slate-300 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 rounded-xl py-3 transition-colors duration-150">
@@ -1410,7 +1400,7 @@ export default function CondoTrackApp() {
                   className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 ${activeTab === item.id ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700/50 hover:text-slate-900 dark:hover:text-white'}`}>
                   <item.icon size={18} />
                   <span>{item.label}</span>
-                  {item.badge && <span className="ml-auto text-xs bg-amber-100 dark:bg-amber-900/50 text-amber-700 dark:text-amber-400 px-2 py-0.5 rounded-full font-semibold">{item.badge}</span>}
+                  {item.badge && <span className="ml-auto text-xs bg-red-500 text-white px-2 py-0.5 rounded-full font-semibold">{item.badge}</span>}
                 </button>
               ))}
               {currentUser?.role === 'admin' && (
@@ -1465,7 +1455,7 @@ export default function CondoTrackApp() {
                   <button key={item.id} onClick={() => { setActiveTab(item.id); setMobileSidebarOpen(false); }}
                     className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 ${activeTab === item.id ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700/50'}`}>
                     <item.icon size={18} /><span>{item.label}</span>
-                    {item.badge && <span className="ml-auto text-xs bg-amber-100 dark:bg-amber-900/50 text-amber-700 dark:text-amber-400 px-2 py-0.5 rounded-full font-semibold">{item.badge}</span>}
+                    {item.badge && <span className="ml-auto text-xs bg-red-500 text-white px-2 py-0.5 rounded-full font-semibold">{item.badge}</span>}
                   </button>
                 ))}
                 {currentUser?.role === 'admin' && (
@@ -1740,10 +1730,10 @@ export default function CondoTrackApp() {
           <nav className="md:hidden fixed bottom-0 inset-x-0 bg-white dark:bg-slate-800 border-t border-slate-200 dark:border-slate-700 z-30 px-2 pb-[env(safe-area-inset-bottom)]">
             <div className="flex justify-around py-2">
               {[
-                { id: 'home', icon: Package, label: 'Inicio' },
-                { id: 'packages', icon: Box, label: 'Encomendas' },
-                { id: 'residents', icon: Users, label: 'Moradores' },
-                { id: 'reports', icon: FileText, label: 'Historico' },
+                { id: 'home', icon: LayoutDashboard, label: 'Inicio' },
+                { id: 'packages', icon: PackageSearch, label: 'Encomendas' },
+                { id: 'residents', icon: UsersRound, label: 'Moradores' },
+                { id: 'reports', icon: History, label: 'Historico' },
               ].map(item => (
                 <button key={item.id} onClick={() => setActiveTab(item.id)}
                   className={`flex flex-col items-center gap-1 px-3 py-1.5 rounded-lg text-xs transition-colors duration-150 ${activeTab === item.id ? 'text-blue-600 dark:text-blue-400' : 'text-slate-400 hover:text-slate-600'}`}>
@@ -3070,7 +3060,7 @@ function ConciergeView({ onAdd, packages, onDelete, onCollect, residents, reside
                   <p className="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white mt-1">{pendingPackages.length}</p>
                 </div>
                 <div className="p-2 sm:p-3 bg-amber-50 dark:bg-amber-900/20 rounded-xl">
-                  <Clock size={22} className="text-amber-500 dark:text-amber-400" />
+                  <Inbox size={22} className="text-amber-500 dark:text-amber-400" />
                 </div>
               </div>
               <p className="text-xs text-slate-400 dark:text-slate-500 mt-3">Aguardando retirada</p>
@@ -3083,7 +3073,7 @@ function ConciergeView({ onAdd, packages, onDelete, onCollect, residents, reside
                   <p className="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white mt-1">{todayDeliveries.length}</p>
                 </div>
                 <div className="p-2 sm:p-3 bg-emerald-50 dark:bg-emerald-900/20 rounded-xl">
-                  <CheckCircle size={22} className="text-emerald-500 dark:text-emerald-400" />
+                  <PackageCheck size={22} className="text-emerald-500 dark:text-emerald-400" />
                 </div>
               </div>
               <p className="text-xs text-slate-400 dark:text-slate-500 mt-3">Retiradas concluídas</p>
@@ -3096,7 +3086,7 @@ function ConciergeView({ onAdd, packages, onDelete, onCollect, residents, reside
                   <p className="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white mt-1">{residents?.length || 0}</p>
                 </div>
                 <div className="p-2 sm:p-3 bg-blue-50 dark:bg-blue-900/20 rounded-xl">
-                  <Users size={22} className="text-blue-500 dark:text-blue-400" />
+                  <UsersRound size={22} className="text-blue-500 dark:text-blue-400" />
                 </div>
               </div>
               <p className="text-xs text-slate-400 dark:text-slate-500 mt-3">Cadastrados</p>
@@ -3109,7 +3099,7 @@ function ConciergeView({ onAdd, packages, onDelete, onCollect, residents, reside
                   <p className="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white mt-1">{historyPackages.length}</p>
                 </div>
                 <div className="p-2 sm:p-3 bg-indigo-50 dark:bg-indigo-900/20 rounded-xl">
-                  <BarChart3 size={22} className="text-indigo-500 dark:text-indigo-400" />
+                  <CalendarRange size={22} className="text-indigo-500 dark:text-indigo-400" />
                 </div>
               </div>
               <p className="text-xs text-slate-400 dark:text-slate-500 mt-3">Encomendas entregues</p>
@@ -3171,7 +3161,7 @@ function ConciergeView({ onAdd, packages, onDelete, onCollect, residents, reside
                   <p className="text-xs text-slate-500 dark:text-slate-400">Clique para registrar retirada</p>
                 </div>
               </div>
-              <span className="inline-flex items-center justify-center min-w-[28px] h-7 px-2.5 bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400 text-sm font-bold rounded-full">{pendingPackages.length}</span>
+              <span className="inline-flex items-center justify-center min-w-[28px] h-7 px-2.5 bg-amber-500 text-white text-sm font-bold rounded-full">{pendingPackages.length}</span>
             </div>
             <div>
               {pendingPackages.length === 0 ? (
@@ -3213,8 +3203,8 @@ function ConciergeView({ onAdd, packages, onDelete, onCollect, residents, reside
                               {new Date(pkg.arrived_at).toLocaleDateString('pt-BR')} {new Date(pkg.arrived_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap">
-                              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400">
-                                <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse-soft"></span>
+                              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium bg-amber-500 text-white">
+                                <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse-soft"></span>
                                 Pendente
                               </span>
                             </td>
@@ -3234,8 +3224,8 @@ function ConciergeView({ onAdd, packages, onDelete, onCollect, residents, reside
                       <div key={pkg.id} onClick={() => setCollectTarget(pkg.id)} className="px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-700/50 cursor-pointer transition-colors duration-150">
                         <div className="flex items-center justify-between mb-1">
                           <span className="font-semibold text-slate-900 dark:text-white">Apt {pkg.unit}</span>
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400">
-                            <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse-soft"></span>
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium bg-amber-500 text-white">
+                            <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse-soft"></span>
                             Pendente
                           </span>
                         </div>
@@ -3320,12 +3310,12 @@ function ConciergeView({ onAdd, packages, onDelete, onCollect, residents, reside
                 </div>
               </div>
               <div className="flex flex-wrap items-center gap-2">
-                <label className={`flex items-center gap-2 px-3 py-1.5 ${ocrLoading ? 'bg-slate-200 dark:bg-slate-600 cursor-wait text-slate-400' : 'border border-slate-200 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700 cursor-pointer text-slate-600 dark:text-slate-300'} rounded-lg text-sm font-medium transition-colors duration-150`}>
+                <label className={`flex items-center gap-2 px-3 py-1.5 ${ocrLoading ? 'bg-slate-200 dark:bg-slate-600 cursor-wait text-slate-400' : 'bg-blue-600 hover:bg-blue-700 cursor-pointer text-white shadow-sm'} rounded-lg text-sm font-medium transition-colors duration-150`}>
                   {ocrLoading ? (<><Loader2 size={16} className="animate-spin" /> Lendo...</>) : (<><Camera size={16} /><span className="hidden sm:inline">Ler Etiqueta</span></>)}
                   <input type="file" accept="image/*" capture="environment" onChange={handleOcrCapture} disabled={ocrLoading} className="hidden" />
                 </label>
                 {packagesNeedingReminder.length > 0 && (
-                  <button type="button" onClick={() => setShowRemindersModal(true)} className="flex items-center gap-2 px-3 py-1.5 bg-amber-50 dark:bg-amber-900/20 hover:bg-amber-100 dark:hover:bg-amber-900/30 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-700 rounded-lg text-sm font-medium transition-colors duration-150">
+                  <button type="button" onClick={() => setShowRemindersModal(true)} className="flex items-center gap-2 px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white rounded-lg text-sm font-medium shadow-sm transition-colors duration-150">
                     <Clock size={16} />
                     {packagesNeedingReminder.length} lembrete{packagesNeedingReminder.length !== 1 ? 's' : ''}
                   </button>
@@ -3501,8 +3491,8 @@ function ConciergeView({ onAdd, packages, onDelete, onCollect, residents, reside
                               <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-medium bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300">{pkg.type}</span>
                             </td>
                             <td className="px-6 py-4">
-                              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400">
-                                <span className="w-1.5 h-1.5 bg-amber-500 rounded-full animate-pulse-soft"></span>
+                              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium bg-amber-500 text-white">
+                                <span className="w-1.5 h-1.5 bg-white rounded-full animate-pulse-soft"></span>
                                 Pendente
                               </span>
                             </td>
@@ -3542,8 +3532,8 @@ function ConciergeView({ onAdd, packages, onDelete, onCollect, residents, reside
                             <span className="mx-2 text-slate-300 dark:text-slate-600">•</span>
                             <span className="text-slate-700 dark:text-slate-300">{pkg.recipient}</span>
                           </div>
-                          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400">
-                            <span className="w-1.5 h-1.5 bg-amber-500 rounded-full animate-pulse-soft"></span>
+                          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium bg-amber-500 text-white">
+                            <span className="w-1.5 h-1.5 bg-white rounded-full animate-pulse-soft"></span>
                             Pendente
                           </span>
                         </div>
@@ -4089,6 +4079,7 @@ function ResidentsManager({ residents, onAddResident, onDeleteResident, onUpdate
   const [editId, setEditId] = useState(null);
   const [editForm, setEditForm] = useState({ unit: '', name: '', phone: '', document: '' });
   const [editErrors, setEditErrors] = useState({});
+  const [residentSearch, setResidentSearch] = useState('');
 
   // Pre-preencher form com dados do OCR quando morador nao encontrado
   useEffect(() => {
@@ -4219,64 +4210,183 @@ function ResidentsManager({ residents, onAddResident, onDeleteResident, onUpdate
           O PIN de acesso do morador será gerado automaticamente (4 últimos dígitos do celular).
         </div>
 
-        <div className="border-t dark:border-slate-700 pt-4">
-          <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-3">Moradores cadastrados ({residents?.length || 0})</h3>
-          {(!residents || residents.length === 0) ? (
-            <div className="text-slate-400 dark:text-slate-500 text-sm">Nenhum morador cadastrado.</div>
-          ) : (
-            <div className="space-y-1">
-              {residents.map(r => (
-                <div key={r.id}>
-                  {editId === r.id ? (
-                    <div className="bg-slate-50 dark:bg-slate-700/50 rounded-lg p-3">
-                      <form onSubmit={saveEdit} className="grid grid-cols-1 md:grid-cols-4 gap-2 items-center">
-                        <div>
-                          <input type="text" placeholder="Unidade" className="w-full px-3 py-2 border dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 dark:text-white text-sm" value={editForm.unit} onChange={e => setEditForm({ ...editForm, unit: e.target.value })} />
-                          {editErrors.unit && <p className="text-red-600 text-xs mt-1">{editErrors.unit}</p>}
-                        </div>
-                        <div>
-                          <input type="text" placeholder="Nome" className="w-full px-3 py-2 border dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 dark:text-white text-sm" value={editForm.name} onChange={e => setEditForm({ ...editForm, name: e.target.value })} />
-                          {editErrors.name && <p className="text-red-600 text-xs mt-1">{editErrors.name}</p>}
-                        </div>
-                        <div>
-                          <input type="tel" placeholder="Telefone" className="w-full px-3 py-2 border dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 dark:text-white text-sm" value={editForm.phone} onChange={e => setEditForm({ ...editForm, phone: formatPhoneMask(e.target.value) })} />
-                          {editErrors.phone && <p className="text-red-600 text-xs mt-1">{editErrors.phone}</p>}
-                        </div>
-                        <div>
-                          <input type="text" placeholder="Documento" className="w-full px-3 py-2 border dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 dark:text-white text-sm" value={editForm.document} onChange={e => setEditForm({ ...editForm, document: e.target.value })} />
-                          {editErrors.document && <p className="text-red-600 text-xs mt-1">{editErrors.document}</p>}
-                        </div>
-                        <div className="md:col-span-4 flex gap-2">
-                          <button type="submit" className="px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium">Salvar</button>
-                          <button type="button" onClick={cancelEdit} className="px-3 py-1.5 rounded-lg bg-slate-200 dark:bg-slate-600 text-slate-700 dark:text-slate-200 text-sm font-medium">Cancelar</button>
-                        </div>
-                      </form>
-                    </div>
-                  ) : (
-                    <div className="flex items-center justify-between px-3 py-2 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors group">
-                      <div className="flex items-center gap-3 min-w-0">
-                        <span className="inline-flex items-center justify-center w-9 h-9 rounded-lg bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 text-xs font-bold flex-shrink-0">{r.unit}</span>
-                        <div className="min-w-0">
-                          <p className="text-sm font-medium text-slate-800 dark:text-slate-200 truncate">{r.name}</p>
-                          <p className="text-xs text-slate-500 dark:text-slate-400 truncate hidden sm:block">
-                            {r.phone ? formatPhoneMask(r.phone) : ''}{r.phone && r.document ? ' · ' : ''}{r.document || ''}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-1.5 flex-shrink-0">
-                        <button onClick={() => startEdit(r)} className="p-1.5 rounded-md hover:bg-blue-50 dark:hover:bg-blue-900/20 text-blue-500 dark:text-blue-400 hover:text-blue-600 dark:hover:text-blue-300 transition-colors" title="Editar">
-                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>
-                        </button>
-                        <button onClick={() => onDeleteResident(r.id)} className="p-1.5 rounded-md hover:bg-red-50 dark:hover:bg-red-900/20 text-red-400 dark:text-red-500 hover:text-red-600 dark:hover:text-red-400 transition-colors" title="Excluir">
-                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              ))}
+        <div className="border-t dark:border-slate-700 pt-5">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+            <h3 className="text-base font-semibold text-slate-900 dark:text-white flex items-center gap-2">
+              Moradores cadastrados
+              <span className="inline-flex items-center justify-center min-w-[24px] h-6 px-2 bg-blue-600 text-white text-xs font-bold rounded-full">{residents?.length || 0}</span>
+            </h3>
+            <div className="relative w-full sm:w-64">
+              <input
+                type="text"
+                placeholder="Buscar por nome ou unidade..."
+                className="w-full pl-9 pr-3 py-2 text-sm border border-slate-200 dark:border-slate-600 rounded-lg focus:border-blue-600 focus:ring-2 focus:ring-blue-600/20 outline-none bg-white dark:bg-slate-700 dark:text-white placeholder-slate-400 transition-all"
+                onChange={e => setResidentSearch(e.target.value)}
+                value={residentSearch}
+              />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={15} />
             </div>
-          )}
+          </div>
+          {(!residents || residents.length === 0) ? (
+            <div className="text-center py-10">
+              <div className="inline-flex items-center justify-center w-14 h-14 bg-slate-100 dark:bg-slate-700 rounded-full mb-3">
+                <UsersRound className="text-slate-400" size={24} />
+              </div>
+              <p className="text-slate-500 dark:text-slate-400 text-sm">Nenhum morador cadastrado.</p>
+            </div>
+          ) : (() => {
+            const q = (residentSearch || '').toLowerCase();
+            const filtered = q ? residents.filter(r => (r.name || '').toLowerCase().includes(q) || (r.unit || '').toLowerCase().includes(q)) : residents;
+            return filtered.length === 0 ? (
+              <div className="text-center py-8">
+                <p className="text-slate-500 dark:text-slate-400 text-sm">Nenhum morador encontrado para "{residentSearch}"</p>
+              </div>
+            ) : (
+              <>
+                {/* Desktop: Tabela */}
+                <div className="hidden sm:block overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-700">
+                  <table className="w-full text-left">
+                    <thead>
+                      <tr className="bg-slate-50 dark:bg-slate-700/50">
+                        <th className="px-4 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Unidade</th>
+                        <th className="px-4 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Morador</th>
+                        <th className="px-4 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">WhatsApp</th>
+                        <th className="px-4 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Documento</th>
+                        <th className="px-4 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider text-right">Ações</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
+                      {filtered.map(r => (
+                        <tr key={r.id} className="hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors">
+                          {editId === r.id ? (
+                            <td colSpan={5} className="px-4 py-3">
+                              <form onSubmit={saveEdit} className="flex items-center gap-3">
+                                <input type="text" placeholder="Unidade" className="w-20 px-3 py-2 border border-slate-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 dark:text-white text-sm focus:border-blue-600 focus:ring-2 focus:ring-blue-600/20 outline-none" value={editForm.unit} onChange={e => setEditForm({ ...editForm, unit: e.target.value })} />
+                                <input type="text" placeholder="Nome" className="flex-1 px-3 py-2 border border-slate-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 dark:text-white text-sm focus:border-blue-600 focus:ring-2 focus:ring-blue-600/20 outline-none" value={editForm.name} onChange={e => setEditForm({ ...editForm, name: e.target.value })} />
+                                <input type="tel" placeholder="Telefone" className="w-36 px-3 py-2 border border-slate-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 dark:text-white text-sm focus:border-blue-600 focus:ring-2 focus:ring-blue-600/20 outline-none" value={editForm.phone} onChange={e => setEditForm({ ...editForm, phone: formatPhoneMask(e.target.value) })} />
+                                <input type="text" placeholder="Documento" className="w-32 px-3 py-2 border border-slate-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 dark:text-white text-sm focus:border-blue-600 focus:ring-2 focus:ring-blue-600/20 outline-none" value={editForm.document} onChange={e => setEditForm({ ...editForm, document: e.target.value })} />
+                                <div className="flex gap-2 flex-shrink-0">
+                                  <button type="submit" className="px-3 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium transition-colors">Salvar</button>
+                                  <button type="button" onClick={cancelEdit} className="px-3 py-2 rounded-lg bg-slate-100 dark:bg-slate-600 text-slate-700 dark:text-slate-200 text-sm font-medium hover:bg-slate-200 dark:hover:bg-slate-500 transition-colors">Cancelar</button>
+                                </div>
+                              </form>
+                              {(editErrors.unit || editErrors.name || editErrors.phone || editErrors.document) && (
+                                <div className="flex gap-4 mt-2 text-xs text-red-600">
+                                  {editErrors.unit && <span>{editErrors.unit}</span>}
+                                  {editErrors.name && <span>{editErrors.name}</span>}
+                                  {editErrors.phone && <span>{editErrors.phone}</span>}
+                                  {editErrors.document && <span>{editErrors.document}</span>}
+                                </div>
+                              )}
+                            </td>
+                          ) : (
+                            <>
+                              <td className="px-4 py-3">
+                                <span className="inline-flex items-center justify-center w-10 h-10 rounded-lg bg-blue-600 text-white text-sm font-bold">{r.unit}</span>
+                              </td>
+                              <td className="px-4 py-3">
+                                <div className="flex items-center gap-3">
+                                  <div className="w-8 h-8 rounded-full bg-slate-200 dark:bg-slate-600 flex items-center justify-center text-xs font-semibold text-slate-600 dark:text-slate-300 flex-shrink-0">
+                                    {(r.name || '').split(' ').map(n => n[0]).slice(0, 2).join('').toUpperCase()}
+                                  </div>
+                                  <span className="text-sm font-medium text-slate-900 dark:text-white">{r.name}</span>
+                                </div>
+                              </td>
+                              <td className="px-4 py-3">
+                                {r.phone ? (
+                                  <span className="text-sm text-slate-600 dark:text-slate-300">{formatPhoneMask(r.phone)}</span>
+                                ) : (
+                                  <span className="text-xs text-slate-400">—</span>
+                                )}
+                              </td>
+                              <td className="px-4 py-3">
+                                {r.document ? (
+                                  <span className="text-sm text-slate-600 dark:text-slate-300">{r.document}</span>
+                                ) : (
+                                  <span className="text-xs text-slate-400">—</span>
+                                )}
+                              </td>
+                              <td className="px-4 py-3 text-right">
+                                <div className="flex items-center justify-end gap-1">
+                                  <button onClick={() => startEdit(r)} className="p-2 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900/20 text-blue-500 dark:text-blue-400 transition-colors" title="Editar">
+                                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>
+                                  </button>
+                                  <button onClick={() => onDeleteResident(r.id)} className="p-2 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 text-red-400 dark:text-red-500 transition-colors" title="Excluir">
+                                    <Trash2 size={15} />
+                                  </button>
+                                </div>
+                              </td>
+                            </>
+                          )}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Mobile: Cards */}
+                <div className="sm:hidden space-y-2">
+                  {filtered.map(r => (
+                    <div key={r.id}>
+                      {editId === r.id ? (
+                        <div className="bg-slate-50 dark:bg-slate-700/50 rounded-xl p-4 border border-slate-200 dark:border-slate-600">
+                          <form onSubmit={saveEdit} className="space-y-3">
+                            <div className="grid grid-cols-2 gap-2">
+                              <div>
+                                <input type="text" placeholder="Unidade" className="w-full px-3 py-2 border border-slate-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 dark:text-white text-sm focus:border-blue-600 focus:ring-2 focus:ring-blue-600/20 outline-none" value={editForm.unit} onChange={e => setEditForm({ ...editForm, unit: e.target.value })} />
+                                {editErrors.unit && <p className="text-red-600 text-xs mt-1">{editErrors.unit}</p>}
+                              </div>
+                              <div>
+                                <input type="text" placeholder="Nome" className="w-full px-3 py-2 border border-slate-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 dark:text-white text-sm focus:border-blue-600 focus:ring-2 focus:ring-blue-600/20 outline-none" value={editForm.name} onChange={e => setEditForm({ ...editForm, name: e.target.value })} />
+                                {editErrors.name && <p className="text-red-600 text-xs mt-1">{editErrors.name}</p>}
+                              </div>
+                              <div>
+                                <input type="tel" placeholder="Telefone" className="w-full px-3 py-2 border border-slate-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 dark:text-white text-sm focus:border-blue-600 focus:ring-2 focus:ring-blue-600/20 outline-none" value={editForm.phone} onChange={e => setEditForm({ ...editForm, phone: formatPhoneMask(e.target.value) })} />
+                                {editErrors.phone && <p className="text-red-600 text-xs mt-1">{editErrors.phone}</p>}
+                              </div>
+                              <div>
+                                <input type="text" placeholder="Documento" className="w-full px-3 py-2 border border-slate-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 dark:text-white text-sm focus:border-blue-600 focus:ring-2 focus:ring-blue-600/20 outline-none" value={editForm.document} onChange={e => setEditForm({ ...editForm, document: e.target.value })} />
+                                {editErrors.document && <p className="text-red-600 text-xs mt-1">{editErrors.document}</p>}
+                              </div>
+                            </div>
+                            <div className="flex gap-2">
+                              <button type="submit" className="flex-1 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium transition-colors">Salvar</button>
+                              <button type="button" onClick={cancelEdit} className="flex-1 py-2 rounded-lg bg-slate-100 dark:bg-slate-600 text-slate-700 dark:text-slate-200 text-sm font-medium transition-colors">Cancelar</button>
+                            </div>
+                          </form>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-3 p-3 rounded-xl border border-slate-100 dark:border-slate-700 hover:border-slate-200 dark:hover:border-slate-600 hover:shadow-sm transition-all">
+                          <div className="flex-shrink-0 w-11 h-11 rounded-full bg-blue-600 flex items-center justify-center text-white text-sm font-bold">
+                            {(r.name || '').split(' ').map(n => n[0]).slice(0, 2).join('').toUpperCase()}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2">
+                              <span className="text-sm font-semibold text-slate-900 dark:text-white truncate">{r.name}</span>
+                              <span className="inline-flex items-center justify-center px-2 py-0.5 rounded bg-blue-600 text-white text-[10px] font-bold flex-shrink-0">{r.unit}</span>
+                            </div>
+                            <div className="flex items-center gap-2 mt-0.5">
+                              {r.phone && <span className="text-xs text-slate-500 dark:text-slate-400">{formatPhoneMask(r.phone)}</span>}
+                              {r.phone && r.document && <span className="text-slate-300 dark:text-slate-600">·</span>}
+                              {r.document && <span className="text-xs text-slate-500 dark:text-slate-400">{r.document}</span>}
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-1 flex-shrink-0">
+                            <button onClick={() => startEdit(r)} className="p-2 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900/20 text-blue-500 dark:text-blue-400 transition-colors" title="Editar">
+                              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>
+                            </button>
+                            <button onClick={() => onDeleteResident(r.id)} className="p-2 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 text-red-400 dark:text-red-500 transition-colors" title="Excluir">
+                              <Trash2 size={15} />
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </>
+            );
+          })()}
         </div>
       </div>
     </div>
@@ -5109,6 +5219,7 @@ function PackageCard({ pkg, residentsIndex, compact = false, onClick }) {
 function TeamManager({ staff, onAddStaff, onDeleteStaff }) {
   const [form, setForm] = useState({ name: '', email: '', password: '', role: 'concierge' });
   const [error, setError] = useState('');
+  const [teamSearch, setTeamSearch] = useState('');
   const submit = (e) => {
     e.preventDefault();
     setError('');
@@ -5123,63 +5234,151 @@ function TeamManager({ staff, onAddStaff, onDeleteStaff }) {
     onAddStaff({ name: form.name, username: form.email.trim().toLowerCase(), password: form.password, role: form.role });
     setForm({ name: '', email: '', password: '', role: 'concierge' });
   };
+
+  const roleConfig = {
+    admin: { label: 'Admin', bg: 'bg-indigo-600', text: 'text-white' },
+    concierge: { label: 'Porteiro', bg: 'bg-emerald-600', text: 'text-white' },
+  };
+
   return (
     <div className="bg-white dark:bg-slate-800 rounded-xl shadow-card border border-slate-200 dark:border-slate-700 overflow-hidden">
       <div className="px-4 sm:px-6 py-4 border-b border-slate-100 dark:border-slate-700 flex items-center gap-3">
         <div className="p-2.5 bg-blue-50 dark:bg-blue-900/20 rounded-xl">
-          <Shield className="text-blue-500 dark:text-blue-400" size={20} />
+          <ShieldCheck className="text-blue-500 dark:text-blue-400" size={20} />
         </div>
-        <h2 className="font-semibold text-slate-900 dark:text-white text-sm sm:text-base">Gestão de Equipe</h2>
+        <div>
+          <h2 className="font-semibold text-slate-900 dark:text-white text-sm sm:text-base">Gestão de Equipe</h2>
+          <p className="text-xs text-slate-500 dark:text-slate-400">Adicione porteiros e administradores</p>
+        </div>
       </div>
       <div className="p-4 sm:p-6 space-y-6">
         <form onSubmit={submit} className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div>
-            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Nome</label>
-            <input className="w-full px-3 py-2 border dark:border-slate-600 rounded bg-white dark:bg-slate-700 dark:text-white" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} />
+            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Nome *</label>
+            <input placeholder="Nome completo" className="w-full px-3 py-2.5 border border-slate-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 dark:text-white text-sm focus:border-blue-600 focus:ring-2 focus:ring-blue-600/20 outline-none transition-all" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} />
           </div>
           <div>
-            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">E-mail</label>
-            <input type="email" placeholder="porteiro@email.com" className="w-full px-3 py-2 border dark:border-slate-600 rounded bg-white dark:bg-slate-700 dark:text-white" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} />
+            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">E-mail *</label>
+            <input type="email" placeholder="porteiro@email.com" className="w-full px-3 py-2.5 border border-slate-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 dark:text-white text-sm focus:border-blue-600 focus:ring-2 focus:ring-blue-600/20 outline-none transition-all" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} />
           </div>
           <div>
-            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Senha</label>
-            <input type="password" className="w-full px-3 py-2 border dark:border-slate-600 rounded bg-white dark:bg-slate-700 dark:text-white" value={form.password} onChange={e => setForm({ ...form, password: e.target.value })} />
+            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Senha *</label>
+            <input type="password" placeholder="Mínimo 6 caracteres" className="w-full px-3 py-2.5 border border-slate-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 dark:text-white text-sm focus:border-blue-600 focus:ring-2 focus:ring-blue-600/20 outline-none transition-all" value={form.password} onChange={e => setForm({ ...form, password: e.target.value })} />
           </div>
           <div>
-            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Função</label>
-            <select className="w-full px-3 py-2 border dark:border-slate-600 rounded bg-white dark:bg-slate-700 dark:text-white" value={form.role} onChange={e => setForm({ ...form, role: e.target.value })}>
-              <option value="concierge">concierge</option>
-              <option value="admin">admin</option>
+            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Função *</label>
+            <select className="w-full px-3 py-2.5 border border-slate-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 dark:text-white text-sm focus:border-blue-600 focus:ring-2 focus:ring-blue-600/20 outline-none transition-all" value={form.role} onChange={e => setForm({ ...form, role: e.target.value })}>
+              <option value="concierge">Porteiro</option>
+              <option value="admin">Administrador</option>
             </select>
           </div>
           <div className="md:col-span-4">
-            {error && <div className="text-red-600 text-sm mb-2">{error}</div>}
-            <button className="w-full bg-slate-700 hover:bg-slate-800 text-white font-semibold py-2.5 rounded-lg shadow-sm">Adicionar Funcionário</button>
+            {error && <div className="flex items-center gap-2 text-red-600 bg-red-50 dark:bg-red-900/20 py-2.5 px-3 rounded-lg text-sm mb-2"><AlertTriangle size={16} />{error}</div>}
+            <button className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2.5 rounded-lg shadow-sm transition-colors active:scale-[0.98]">Adicionar Funcionário</button>
           </div>
         </form>
 
-        <div className="border-t dark:border-slate-700 pt-4">
-          <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-3">Equipe ({staff?.length || 0})</h3>
-          {(!staff || staff.length === 0) ? (
-            <div className="text-slate-400 dark:text-slate-500 text-sm">Nenhum funcionário.</div>
-          ) : (
-            <div className="divide-y dark:divide-slate-700">
-              {staff.map(s => (
-                <div key={s.id} className="py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-                  <div className="text-sm min-w-0">
-                    <span className="font-medium text-slate-800 dark:text-slate-200">{s.name}</span>
-                    <span className="hidden sm:inline mx-2 text-slate-400">•</span>
-                    <br className="sm:hidden" />
-                    <span className="text-slate-600 dark:text-slate-400 break-all">{s.username}</span>
-                    <span className="hidden sm:inline mx-2 text-slate-400">•</span>
-                    <br className="sm:hidden" />
-                    <span className="text-slate-600 dark:text-slate-400">{s.role}</span>
-                  </div>
-                  <button onClick={() => onDeleteStaff(s.id)} className="text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30 px-2 py-1 rounded text-sm flex-shrink-0 self-start sm:self-auto">Excluir</button>
-                </div>
-              ))}
+        <div className="border-t dark:border-slate-700 pt-5">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+            <h3 className="text-base font-semibold text-slate-900 dark:text-white flex items-center gap-2">
+              Equipe
+              <span className="inline-flex items-center justify-center min-w-[24px] h-6 px-2 bg-blue-600 text-white text-xs font-bold rounded-full">{staff?.length || 0}</span>
+            </h3>
+            <div className="relative w-full sm:w-64">
+              <input
+                type="text"
+                placeholder="Buscar por nome ou e-mail..."
+                className="w-full pl-9 pr-3 py-2 text-sm border border-slate-200 dark:border-slate-600 rounded-lg focus:border-blue-600 focus:ring-2 focus:ring-blue-600/20 outline-none bg-white dark:bg-slate-700 dark:text-white placeholder-slate-400 transition-all"
+                onChange={e => setTeamSearch(e.target.value)}
+                value={teamSearch}
+              />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={15} />
             </div>
-          )}
+          </div>
+          {(!staff || staff.length === 0) ? (
+            <div className="text-center py-10">
+              <div className="inline-flex items-center justify-center w-14 h-14 bg-slate-100 dark:bg-slate-700 rounded-full mb-3">
+                <ShieldCheck className="text-slate-400" size={24} />
+              </div>
+              <p className="text-slate-500 dark:text-slate-400 text-sm">Nenhum funcionário cadastrado.</p>
+            </div>
+          ) : (() => {
+            const q = (teamSearch || '').toLowerCase();
+            const filtered = q ? staff.filter(s => (s.name || '').toLowerCase().includes(q) || (s.username || '').toLowerCase().includes(q)) : staff;
+            return filtered.length === 0 ? (
+              <div className="text-center py-8">
+                <p className="text-slate-500 dark:text-slate-400 text-sm">Nenhum funcionário encontrado para "{teamSearch}"</p>
+              </div>
+            ) : (
+              <>
+                {/* Desktop: Tabela */}
+                <div className="hidden sm:block overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-700">
+                  <table className="w-full text-left">
+                    <thead>
+                      <tr className="bg-slate-50 dark:bg-slate-700/50">
+                        <th className="px-4 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Funcionário</th>
+                        <th className="px-4 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">E-mail</th>
+                        <th className="px-4 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Função</th>
+                        <th className="px-4 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider text-right">Ações</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
+                      {filtered.map(s => {
+                        const rc = roleConfig[s.role] || roleConfig.concierge;
+                        return (
+                          <tr key={s.id} className="hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors">
+                            <td className="px-4 py-3">
+                              <div className="flex items-center gap-3">
+                                <div className="w-9 h-9 rounded-full bg-slate-200 dark:bg-slate-600 flex items-center justify-center text-xs font-semibold text-slate-600 dark:text-slate-300 flex-shrink-0">
+                                  {(s.name || '').split(' ').map(n => n[0]).slice(0, 2).join('').toUpperCase()}
+                                </div>
+                                <span className="text-sm font-medium text-slate-900 dark:text-white">{s.name}</span>
+                              </div>
+                            </td>
+                            <td className="px-4 py-3">
+                              <span className="text-sm text-slate-600 dark:text-slate-300">{s.username}</span>
+                            </td>
+                            <td className="px-4 py-3">
+                              <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold ${rc.bg} ${rc.text}`}>{rc.label}</span>
+                            </td>
+                            <td className="px-4 py-3 text-right">
+                              <button onClick={() => onDeleteStaff(s.id)} className="p-2 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 text-red-400 dark:text-red-500 transition-colors" title="Excluir">
+                                <Trash2 size={15} />
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Mobile: Cards */}
+                <div className="sm:hidden space-y-2">
+                  {filtered.map(s => {
+                    const rc = roleConfig[s.role] || roleConfig.concierge;
+                    return (
+                      <div key={s.id} className="flex items-center gap-3 p-3 rounded-xl border border-slate-100 dark:border-slate-700 hover:border-slate-200 dark:hover:border-slate-600 hover:shadow-sm transition-all">
+                        <div className="flex-shrink-0 w-11 h-11 rounded-full bg-blue-600 flex items-center justify-center text-white text-sm font-bold">
+                          {(s.name || '').split(' ').map(n => n[0]).slice(0, 2).join('').toUpperCase()}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-semibold text-slate-900 dark:text-white truncate">{s.name}</span>
+                            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold ${rc.bg} ${rc.text} flex-shrink-0`}>{rc.label}</span>
+                          </div>
+                          <p className="text-xs text-slate-500 dark:text-slate-400 truncate mt-0.5">{s.username}</p>
+                        </div>
+                        <button onClick={() => onDeleteStaff(s.id)} className="p-2 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 text-red-400 dark:text-red-500 transition-colors flex-shrink-0" title="Excluir">
+                          <Trash2 size={15} />
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              </>
+            );
+          })()}
         </div>
       </div>
     </div>
